@@ -7,3 +7,4 @@ config.json
 .photo_share_thumbs/
 tmp*/
 .idea
+test_out
