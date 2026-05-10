@@ -14,6 +14,7 @@ from photo_share.config import (
     parse_args,
 )
 from photo_share.factory import create_app
+from photo_share.warmup import warmup_thumbnail_caches
 
 
 def main() -> None:
@@ -34,6 +35,8 @@ def main() -> None:
         thumbnail_mode_settings=get_thumbnail_mode_settings(config),
         upload_password=get_upload_password(config),
     )
+    if args.mode == "warmup":
+        warmup_thumbnail_caches(app.config["photo_share_services"])
     print(f"Config: {config_path}")
     print("Sharing:")
     for folder in folders:

@@ -59,6 +59,12 @@ class ImageCacheStore:
                 self.queued.discard(dropped_key)
         return True
 
+    def warmup_one(self, photo_path: Path) -> bool:
+        rel = to_relative(self.root, photo_path)
+        before = self.get_ready(photo_path)
+        self._generate(photo_path, rel)
+        return before is None and self.get_ready(photo_path) is not None
+
     def _worker_loop(self) -> None:
         import time
 

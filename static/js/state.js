@@ -39,6 +39,7 @@ const state = {
   thumbTimers: new Map(),
   thumbQueue: [],
   thumbQueued: new Set(),
+  thumbActiveKeys: new Set(),
   thumbActive: 0,
   thumbControllers: new Map(),
   ratingTimers: new Map(),

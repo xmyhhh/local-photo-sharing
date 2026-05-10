@@ -177,5 +177,6 @@ def get_upload_password(config: dict[str, Any]) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Share a local JPG folder on your LAN.")
+    parser.add_argument("mode", nargs="?", choices=("serve", "warmup"), default="serve", help="Startup mode. Use warmup to build all thumbnail caches before serving.")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG_FILE), help="JSON config file path. Default: config.json next to app.py")
     return parser.parse_args()

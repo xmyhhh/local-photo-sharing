@@ -175,6 +175,12 @@ function isNearViewport(element, margin) {
 
 function scanVisibleWork() {
   state.visibleScanTimer = null;
+  document.querySelectorAll(".thumb-holder").forEach((holder) => {
+    const payload = holder.__thumbPayload;
+    if (payload && isNearViewport(holder, 420)) {
+      queueThumbnail(payload.entry, payload.img, payload.spinner);
+    }
+  });
   document.querySelectorAll(".rating").forEach((ratingWrap) => {
     const payload = ratingWrap.__ratingPayload;
     if (payload && isNearViewport(ratingWrap, 220)) {
@@ -195,9 +201,14 @@ function queueThumbnail(entry, img, spinner, attempt = 0) {
     return;
   }
   const key = `${entry.path}:${state.thumbMode}`;
+  if (state.thumbActiveKeys.has(key)) {
+    return;
+  }
   if (state.thumbQueued.has(key)) {
     state.thumbQueue = state.thumbQueue.filter((item) => item.key !== key);
   }
+  spinner.hidden = false;
+  spinner.classList.remove("failed");
   state.thumbQueued.add(key);
   state.thumbQueue.unshift({ entry, img, spinner, attempt, mode: state.thumbMode, key });
   trimThumbQueue();
@@ -238,14 +249,24 @@ function runThumbQueue() {
   while (state.thumbActive < THUMB_LOAD_CONCURRENCY && state.thumbQueue.length > 0) {
     const payload = state.thumbQueue.shift();
     state.thumbQueued.delete(payload.key);
-    if (!payload.img.isConnected || payload.img.classList.contains("loaded") || payload.mode !== state.thumbMode) {
+    if (
+      !payload.img.isConnected
+      || payload.img.classList.contains("loaded")
+      || payload.mode !== state.thumbMode
+      || state.thumbActiveKeys.has(payload.key)
+    ) {
       continue;
     }
     state.thumbActive += 1;
+    state.thumbActiveKeys.add(payload.key);
     loadThumbnail(payload.entry, payload.img, payload.spinner, payload.attempt, payload.mode)
       .catch(() => null)
       .finally(() => {
+        state.thumbActiveKeys.delete(payload.key);
         state.thumbActive = Math.max(0, state.thumbActive - 1);
+        if (isThumbnailStillNeeded(payload.img)) {
+          scheduleThumbnailRequeue(payload.entry, payload.img, payload.spinner, payload.mode);
+        }
         runThumbQueue();
       });
   }
@@ -265,6 +286,7 @@ function clearThumbTimers() {
   state.thumbTimers.clear();
   state.thumbQueue = [];
   state.thumbQueued.clear();
+  state.thumbActiveKeys.clear();
   for (const controller of state.thumbControllers.values()) {
     controller.abort();
   }

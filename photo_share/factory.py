@@ -46,6 +46,7 @@ def create_app(
         thumbnail_mode_settings,
         upload_password,
     )
+    app.config["photo_share_services"] = services
     for root_services in services.root_services.values():
         root_services.folder_counts.ensure_async()
     register_routes(app, services)

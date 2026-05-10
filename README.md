@@ -93,6 +93,12 @@ Linux / macOS：
 D:\codex_prj\photo\.venv\Scripts\python.exe app.py
 ```
 
+先预生成所有缩略图缓存，再启动 Web 服务：
+
+```powershell
+D:\codex_prj\photo\.venv\Scripts\python.exe app.py warmup
+```
+
 第一次启动如果没有 `config.json`，程序会自动创建默认配置并退出。编辑 `config.json` 后再次启动即可。
 
 默认配置格式：
