@@ -14,6 +14,7 @@ from typing import Any
 
 from flask import Flask, abort, jsonify, request, send_file
 from PIL import Image, ImageOps, ImageStat
+import piexif
 
 APP_DIR = Path(__file__).resolve().parent
 STATIC_DIR = APP_DIR / "static"
@@ -103,11 +104,11 @@ def create_app(
         filters = PhotoFilters.from_request(request.args)
         entries: list[dict[str, Any]] = []
         pending_entries: list[dict[str, Any]] = []
+        indexing = False
 
         if filters.needs_rating:
-            rating_index.ensure_folder(folder_path)
-        else:
-            rating_index.ensure_folder_async(folder_path)
+            rating_index.index_folder_budget(folder_path, FILTER_WAIT_SECONDS)
+            indexing = not rating_index.is_folder_ready(folder_path)
 
         for child in sorted(folder_path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
             if child.name in {RATINGS_FILE, THUMBNAIL_DIR}:
@@ -149,7 +150,16 @@ def create_app(
             parent_path = Path(folder).parent
             parent = "" if str(parent_path) == "." else as_posix(parent_path)
 
-        return jsonify({"folder": folder, "parent": parent, "entries": entries, "pendingEntries": pending_entries})
+        if filters.needs_rating and indexing:
+            rating_index.ensure_folder_async(folder_path)
+
+        return jsonify({
+            "folder": folder,
+            "parent": parent,
+            "entries": entries,
+            "pendingEntries": pending_entries,
+            "indexing": indexing,
+        })
 
     @app.get("/api/bracket-detection")
     def bracket_detection():
@@ -236,15 +246,19 @@ def create_app(
 
     @app.post("/api/rating/<path:photo_path>")
     def set_rating(photo_path: str):
-        resolve_photo(root, photo_path)
+        path = resolve_photo(root, photo_path)
         data = request.get_json(silent=True) or {}
         value = data.get("rating")
         if not isinstance(value, int) or value < 0 or value > 5:
             abort(400, "rating must be an integer from 0 to 5")
 
         rel = normalize_rel_path(photo_path)
+        try:
+            write_embedded_rating(path, value)
+        except Exception as error:
+            abort(500, f"failed to write JPEG rating: {error}")
         ratings.set(rel, value)
-        metadata.set_ready(resolve_photo(root, photo_path), value)
+        metadata.set_ready(path, value)
         rating_index.set(rel, value)
         return jsonify({"path": rel, "rating": ratings.get(rel)})
 
@@ -416,7 +430,7 @@ class RatingIndex:
 
         try:
             photos = [child for child in folder_path.iterdir() if child.suffix.lower() in JPG_EXTENSIONS and child.is_file()]
-            list(self.executor.map(self.ensure_photo, photos))
+            list(self.executor.map(self.ensure_photo_quick, photos))
             with self.lock:
                 self.indexed_folders[folder_key] = newest
         finally:
@@ -433,6 +447,25 @@ class RatingIndex:
         self.folder_executor.submit(self.ensure_folder, folder_path)
         return True
 
+    def index_folder_budget(self, folder_path: Path, budget: float) -> None:
+        folder_key = to_relative(self.root, folder_path) if folder_path != self.root else ""
+        newest = self._folder_signature(folder_path)
+        with self.lock:
+            if self.indexed_folders.get(folder_key) == newest:
+                return
+        deadline = time.perf_counter() + budget
+        complete = True
+        for child in sorted(folder_path.iterdir(), key=lambda p: p.name.lower()):
+            if child.suffix.lower() not in JPG_EXTENSIONS or not child.is_file():
+                continue
+            if time.perf_counter() >= deadline:
+                complete = False
+                break
+            self.ensure_photo_quick(child)
+        if complete:
+            with self.lock:
+                self.indexed_folders[folder_key] = newest
+
     def is_folder_ready(self, folder_path: Path) -> bool:
         folder_key = to_relative(self.root, folder_path) if folder_path != self.root else ""
         newest = self._folder_signature(folder_path)
@@ -440,12 +473,16 @@ class RatingIndex:
             return self.indexed_folders.get(folder_key) == newest
 
     def wait_for_folder(self, folder_path: Path, timeout: float) -> bool:
+        folder_key = to_relative(self.root, folder_path) if folder_path != self.root else ""
+        newest = self._folder_signature(folder_path)
         deadline = time.perf_counter() + timeout
         while time.perf_counter() < deadline:
-            if self.is_folder_ready(folder_path):
-                return True
+            with self.lock:
+                if self.indexed_folders.get(folder_key) == newest:
+                    return True
             time.sleep(0.03)
-        return self.is_folder_ready(folder_path)
+        with self.lock:
+            return self.indexed_folders.get(folder_key) == newest
 
     def ensure_photo(self, photo_path: Path) -> int:
         rel = to_relative(self.root, photo_path)
@@ -458,6 +495,20 @@ class RatingIndex:
         rating = override if override is not None else read_embedded_rating(photo_path)
         self.set(rel, rating, photo_path)
         self.metadata.set_ready(photo_path, rating)
+        return rating
+
+    def ensure_photo_quick(self, photo_path: Path) -> int:
+        rel = to_relative(self.root, photo_path)
+        stat = photo_path.stat()
+        cached = self.by_path.get(rel)
+        if cached and cached.get("mtime") == int(stat.st_mtime) and cached.get("size") == stat.st_size:
+            return cached.get("rating", 0)
+
+        override = self.ratings.get_override(rel)
+        rating = override if override is not None else read_xmp_head_rating(photo_path)
+        self.set(rel, rating, photo_path)
+        if rating:
+            self.metadata.set_ready(photo_path, rating)
         return rating
 
     def get(self, rel: str) -> int | None:
@@ -1060,7 +1111,9 @@ def parse_rating_filter(args: Any) -> set[int] | None:
             rating = parse_optional_int(item, 0, 5)
             if rating is not None:
                 ratings.add(rating)
-    return ratings or None
+    if not ratings or ratings == set(range(0, 6)):
+        return None
+    return ratings
 
 
 def parse_date_start(value: str | None) -> int | None:
@@ -1112,16 +1165,14 @@ def read_exif_rating(photo_path: Path) -> int:
 
 
 def read_xmp_rating(photo_path: Path) -> int:
-    try:
-        file_size = photo_path.stat().st_size
-        with photo_path.open("rb") as file:
-            head = file.read(128 * 1024)
-    except OSError:
-        head = b""
-
-    rating = parse_xmp_rating(head)
+    rating = read_xmp_head_rating(photo_path)
     if rating:
         return rating
+
+    try:
+        file_size = photo_path.stat().st_size
+    except OSError:
+        file_size = 0
 
     try:
         if file_size > 128 * 1024:
@@ -1141,6 +1192,15 @@ def read_xmp_rating(photo_path: Path) -> int:
         except OSError:
             return 0
     return 0
+
+
+def read_xmp_head_rating(photo_path: Path) -> int:
+    try:
+        with photo_path.open("rb") as file:
+            head = file.read(128 * 1024)
+    except OSError:
+        return 0
+    return parse_xmp_rating(head)
 
 
 def parse_xmp_rating(raw: bytes) -> int:
@@ -1181,6 +1241,38 @@ def normalize_rating_percent(value: int) -> int:
     if value <= 75:
         return 4
     return 5
+
+
+def write_embedded_rating(photo_path: Path, rating: int) -> None:
+    exif_dict = load_exif_dict(photo_path)
+    zeroth = exif_dict.setdefault("0th", {})
+    zeroth[18246] = int(rating)
+    zeroth[18249] = rating_to_percent(rating)
+    exif_bytes = piexif.dump(exif_dict)
+    piexif.insert(exif_bytes, str(photo_path))
+
+
+def load_exif_dict(photo_path: Path) -> dict[str, Any]:
+    try:
+        exif_dict = piexif.load(str(photo_path))
+    except Exception:
+        exif_dict = {}
+    return {
+        "0th": dict(exif_dict.get("0th", {})),
+        "Exif": dict(exif_dict.get("Exif", {})),
+        "GPS": dict(exif_dict.get("GPS", {})),
+        "Interop": dict(exif_dict.get("Interop", {})),
+        "1st": dict(exif_dict.get("1st", {})),
+        "thumbnail": exif_dict.get("thumbnail"),
+    }
+
+
+def rating_to_percent(rating: int) -> int:
+    if rating <= 0:
+        return 0
+    if rating >= 5:
+        return 99
+    return rating * 20
 
 
 def create_default_config(config_path: Path) -> None:
