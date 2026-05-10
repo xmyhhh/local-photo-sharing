@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import json
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from threading import Lock
 from time import perf_counter
 from uuid import uuid4
 
 from flask import Flask, abort, jsonify, request
 
+from ..bracket_project import build_project, default_project_path, load_bracket_project, save_bracket_project
 from ..bracket_merge import merge_bracket_groups, resolve_merge_output
 from ..brackets import detect_exposure_brackets
-from ..constants import BRACKET_CACHE_FILE
+from ..constants import APP_DIR, BRACKET_CACHE_FILE
 from ..context import AppServices
 from ..paths import join_rooted_path, quote_path, send_cached_file
 from .gallery import _resolve_rooted_folder, _root_services
@@ -21,6 +23,32 @@ BRACKET_TASK_LOCK = Lock()
 
 
 def register_bracket_routes(app: Flask, services: AppServices) -> None:
+    @app.get("/api/bracket-project")
+    def bracket_project_get():
+        path_arg = request.args.get("path")
+        try:
+            project_path = resolve_project_path(path_arg) if path_arg else default_project_path()
+            project = load_bracket_project(project_path)
+        except FileNotFoundError:
+            return jsonify({"exists": False, "path": str(default_project_path())}), 404
+        except ValueError as error:
+            abort(400, str(error))
+        return jsonify({"exists": True, "path": str(project_path), "project": project})
+
+    @app.post("/api/bracket-project")
+    def bracket_project_save():
+        data = request.get_json(silent=True) or {}
+        project = data.get("project")
+        if not isinstance(project, dict):
+            abort(400, "project must be an object.")
+        path_arg = data.get("path")
+        try:
+            project_path = resolve_project_path(path_arg) if path_arg else default_project_path()
+            saved = save_bracket_project(project, project_path)
+        except ValueError as error:
+            abort(400, str(error))
+        return jsonify({"path": str(saved), "project": load_bracket_project(saved)})
+
     @app.get("/api/bracket-detection")
     def bracket_detection():
         ensure_bracket_cache_loaded(services)
@@ -80,9 +108,11 @@ def register_bracket_routes(app: Flask, services: AppServices) -> None:
         cache_key = bracket_cache_key(root_id, folder)
         cached = services.bracket_cache.get(cache_key)
         if not cached and isinstance(data.get("groups"), list):
-            cached = root_bracket_result({"groups": data["groups"]}, root_id)
+            cached = root_bracket_result({"folder": folder, "groups": data["groups"]}, root_id)
             services.bracket_cache[cache_key] = cached
             save_bracket_cache(services)
+        if cached is not None and not cached.get("folder"):
+            cached["folder"] = folder
         if not cached:
             abort(409, "No cached bracket detection result for this folder.")
         task_id = uuid4().hex
@@ -103,6 +133,7 @@ def register_bracket_routes(app: Flask, services: AppServices) -> None:
             services,
             task_id,
             root_id,
+            folder,
             cached,
             group_ids_int,
             data.get("params") or {},
@@ -117,6 +148,14 @@ def register_bracket_routes(app: Flask, services: AppServices) -> None:
         except FileNotFoundError:
             abort(404)
         return send_cached_file(output_path, mimetype="image/jpeg", as_attachment=True, download_name=filename)
+
+    @app.get("/api/bracket-merge/image/<output_id>/<filename>")
+    def bracket_merge_image(output_id: str, filename: str):
+        try:
+            output_path = resolve_merge_output(output_id, filename)
+        except FileNotFoundError:
+            abort(404)
+        return send_cached_file(output_path, mimetype="image/jpeg", as_attachment=False)
 
 
 def initial_task_status(task_id: str, root_id: str, folder: str) -> dict:
@@ -139,6 +178,7 @@ def run_bracket_merge_task(
     services: AppServices,
     task_id: str,
     root_id: str,
+    folder: str,
     cached: dict,
     group_ids: list[int],
     params: dict,
@@ -166,6 +206,16 @@ def run_bracket_merge_task(
             params,
             progress_callback=progress,
         )
+        project_path = save_bracket_project(
+            build_project(
+                root_id,
+                folder,
+                cached,
+                params=params,
+                selected_group_ids=group_ids,
+                merge_result=result,
+            )
+        )
         with BRACKET_TASK_LOCK:
             task = services.bracket_merge_tasks.get(task_id)
             if task:
@@ -175,7 +225,7 @@ def run_bracket_merge_task(
                     "progress": 1.0,
                     "processed": len(group_ids),
                     "total": len(group_ids),
-                    "result": result,
+                    "result": {**result, "projectPath": str(project_path)},
                 })
     except Exception as error:
         with BRACKET_TASK_LOCK:
@@ -229,6 +279,8 @@ def run_bracket_detection_task(services: AppServices, root_id: str, folder: str,
             progress_callback=progress_callback,
         )
         result = root_bracket_result(raw_result, root_id)
+        result["folder"] = folder
+        project_path = save_bracket_project(build_project(root_id, folder, result))
         elapsed = perf_counter() - started_at
         status = {
             "taskId": task_id,
@@ -240,6 +292,7 @@ def run_bracket_detection_task(services: AppServices, root_id: str, folder: str,
             "total": result["total"],
             "elapsedSeconds": round(elapsed, 3),
             "etaSeconds": 0.0,
+            "projectPath": str(project_path),
             **result,
         }
         with BRACKET_TASK_LOCK:
@@ -264,6 +317,17 @@ def run_bracket_detection_task(services: AppServices, root_id: str, folder: str,
 def bracket_cache_key(root_id: str, folder: str) -> str:
     normalized = normalize_bracket_folder(root_id, folder)
     return f"{root_id}/{normalized}".rstrip("/")
+
+
+def resolve_project_path(path_arg: str) -> Path:
+    project_path = Path(path_arg).expanduser().resolve()
+    if project_path.suffix.lower() != ".prj":
+        raise ValueError("Project file must use .prj extension.")
+    try:
+        project_path.relative_to(APP_DIR.resolve())
+    except ValueError as exc:
+        raise ValueError("Project file must be inside the application folder.") from exc
+    return project_path
 
 
 def ensure_bracket_cache_loaded(services: AppServices) -> None:

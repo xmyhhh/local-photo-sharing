@@ -58,6 +58,8 @@ const state = {
   wheelZoomCenter: null,
   contextFolder: null,
   currentBracketResult: null,
+  currentBracketProjectPath: null,
+  currentBracketMergeResult: null,
   currentBracketFolder: null,
   currentBracketRoot: null,
   filters: {
@@ -78,6 +80,7 @@ const grid = document.querySelector("#grid");
 const emptyState = document.querySelector("#emptyState");
 const breadcrumb = document.querySelector("#breadcrumb");
 const rootPath = document.querySelector("#rootPath");
+const openBracketProjectBtn = document.querySelector("#openBracketProjectBtn");
 const backBtn = document.querySelector("#backBtn");
 const refreshBtn = document.querySelector("#refreshBtn");
 const ratingFilterBtn = document.querySelector("#ratingFilterBtn");
@@ -87,9 +90,11 @@ const dateFromFilter = document.querySelector("#dateFromFilter");
 const dateToFilter = document.querySelector("#dateToFilter");
 const thumbModeSelect = document.querySelector("#thumbModeSelect");
 const clearFiltersBtn = document.querySelector("#clearFiltersBtn");
+const scrollTopBtn = document.querySelector("#scrollTopBtn");
 const viewer = document.querySelector("#viewer");
 const viewerTitle = document.querySelector("#viewerTitle");
 const viewerImage = document.querySelector("#viewerImage");
+const viewerVideo = document.querySelector("#viewerVideo");
 const viewerRating = document.querySelector("#viewerRating");
 const imageStage = document.querySelector("#imageStage");
 const zoomOutBtn = document.querySelector("#zoomOutBtn");
@@ -117,7 +122,10 @@ const rescanBracketsBtn = document.querySelector("#rescanBracketsBtn");
 const bracketMergePanel = document.querySelector("#bracketMergePanel");
 const selectAllBracketGroups = document.querySelector("#selectAllBracketGroups");
 const mergeAlgorithm = document.querySelector("#mergeAlgorithm");
+const mergeAlignment = document.querySelector("#mergeAlignment");
 const mergeExposure = document.querySelector("#mergeExposure");
+const mergeShadows = document.querySelector("#mergeShadows");
+const mergeHighlights = document.querySelector("#mergeHighlights");
 const mergeContrast = document.querySelector("#mergeContrast");
 const mergeSaturation = document.querySelector("#mergeSaturation");
 const mergeSharpen = document.querySelector("#mergeSharpen");

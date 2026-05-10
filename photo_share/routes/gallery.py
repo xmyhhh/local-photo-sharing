@@ -8,10 +8,12 @@ from flask import Flask, abort, jsonify, request, send_file
 from ..constants import (
     FILTER_WAIT_SECONDS,
     JPG_EXTENSIONS,
+    MEDIA_EXTENSIONS,
     PHOTO_PAGE_SIZE,
     RATINGS_FILE,
     STATIC_DIR,
     THUMBNAIL_DIR,
+    VIDEO_EXTENSIONS,
 )
 from ..context import AppServices, RootServices
 from ..filters import PhotoFilters, parse_optional_int
@@ -104,7 +106,21 @@ def _build_entry(
             "path": rooted_path,
             "photoCount": _count_photos_recursive(child),
         }
-    if child.suffix.lower() not in JPG_EXTENSIONS:
+    suffix = child.suffix.lower()
+    if suffix in VIDEO_EXTENSIONS:
+        stat = child.stat()
+        if not filters.matches_photo(0, int(stat.st_mtime)):
+            return None
+        return {
+            "type": "video",
+            "name": child.name,
+            "path": rooted_path,
+            "size": stat.st_size,
+            "mtime": int(stat.st_mtime),
+            "rating": 0,
+            "ratingPending": False,
+        }
+    if suffix not in JPG_EXTENSIONS:
         return None
 
     stat = child.stat()
@@ -151,7 +167,7 @@ def _count_photos_recursive(folder_path: Path) -> int:
                 continue
             if child.is_dir():
                 stack.append(child)
-            elif child.is_file() and child.suffix.lower() in JPG_EXTENSIONS:
+            elif child.is_file() and child.suffix.lower() in MEDIA_EXTENSIONS:
                 count += 1
     return count
 

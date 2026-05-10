@@ -36,7 +36,7 @@ async function saveCurrentPhotoForAppleMobile() {
   try {
     const blob = await fetchPhotoBlob(entry);
     const file = new File([blob], entry.name, {
-      type: blob.type || "image/jpeg",
+      type: blob.type || (entry.type === "video" ? "video/mp4" : "image/jpeg"),
       lastModified: Date.now(),
     });
 
@@ -44,7 +44,7 @@ async function saveCurrentPhotoForAppleMobile() {
       await navigator.share({
         files: [file],
         title: entry.name,
-        text: "保存原图",
+        text: entry.type === "video" ? "保存视频" : "保存原图",
       });
       return;
     }
@@ -52,7 +52,7 @@ async function saveCurrentPhotoForAppleMobile() {
     // Fall through to the long-press guidance below.
   }
 
-  window.alert("请长按当前图片，然后点“存储到照片”或“存储图像”。");
+  window.alert(entry.type === "video" ? "请使用系统分享或浏览器下载功能保存当前视频。" : "请长按当前图片，然后点“存储到照片”或“存储图像”。");
 }
 
 async function fetchPhotoBlob(entry) {

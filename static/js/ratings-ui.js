@@ -1,5 +1,5 @@
-﻿function observeRating(entry, ratingWrap) {
-  if (!entry.ratingPending) {
+function observeRating(entry, ratingWrap) {
+  if (entry.type !== "photo" || !entry.ratingPending) {
     return;
   }
   if (!state.ratingObserver) {
@@ -26,10 +26,7 @@
 }
 
 function queueEmbeddedRating(entry, ratingWrap, attempt = 0) {
-  if (!entry.ratingPending) {
-    return;
-  }
-  if (!ratingWrap.isConnected) {
+  if (entry.type !== "photo" || !entry.ratingPending || !ratingWrap.isConnected) {
     return;
   }
   const key = entry.path;
@@ -55,7 +52,7 @@ function runRatingQueue() {
   while (state.ratingActive < RATING_STATUS_CONCURRENCY && state.ratingQueue.length > 0) {
     const payload = state.ratingQueue.shift();
     state.ratingQueued.delete(payload.key);
-    if (!payload.entry.ratingPending || !payload.ratingWrap.isConnected) {
+    if (payload.entry.type !== "photo" || !payload.entry.ratingPending || !payload.ratingWrap.isConnected) {
       continue;
     }
     state.ratingActive += 1;
@@ -69,7 +66,7 @@ function runRatingQueue() {
 }
 
 async function loadEmbeddedRating(entry, ratingWrap, attempt = 0) {
-  if (!entry.ratingPending || !ratingWrap.isConnected) {
+  if (entry.type !== "photo" || !entry.ratingPending || !ratingWrap.isConnected) {
     return;
   }
   try {
@@ -102,7 +99,7 @@ async function loadEmbeddedRating(entry, ratingWrap, attempt = 0) {
 }
 
 function scheduleRatingRetry(entry, ratingWrap, attempt) {
-  if (!entry.ratingPending || !ratingWrap.isConnected || attempt >= 12) {
+  if (entry.type !== "photo" || !entry.ratingPending || !ratingWrap.isConnected || attempt >= 12) {
     return;
   }
   const delay = Math.min(3000, 350 + attempt * 220);
@@ -208,5 +205,3 @@ function createRating(entry, large) {
   }
   return wrap;
 }
-
-

@@ -64,6 +64,7 @@ def merge_group_to_file(root: Path, group: dict[str, Any], output_dir: Path, par
         "path": str(output_path),
         "alignMethod": align_method,
         "algorithm": get_algorithm(params),
+        "imageUrl": f"/api/bracket-merge/image/{output_dir.name}/{output_path.name}",
         "downloadUrl": f"/api/bracket-merge/download/{output_dir.name}/{output_path.name}",
     }
 
@@ -84,7 +85,7 @@ def merge_one_group(source_paths: list[Path], output_path: Path, params: dict[st
         result_array = arrays[0]
         align_method = "single"
     else:
-        aligned, align_method = align_images_feature_homography(arrays)
+        aligned, align_method = align_images(arrays, get_alignment(params))
         result_array = merge_aligned_arrays(aligned, source_paths, params)
     result = Image.fromarray(np.clip(result_array, 0, 255).astype(np.uint8), "RGB")
     result = apply_adjustments(result, params)
@@ -105,8 +106,17 @@ def get_algorithm(params: dict[str, Any]) -> str:
     return "fusion"
 
 
+def get_alignment(params: dict[str, Any]) -> str:
+    value = str(params.get("alignment") or "simple").lower()
+    if value in {"off", "simple", "people", "advanced"}:
+        return value
+    return "simple"
+
+
 def merge_aligned_arrays(images: list[np.ndarray], source_paths: list[Path], params: dict[str, Any]) -> np.ndarray:
     algorithm = get_algorithm(params)
+    if get_alignment(params) == "people" and algorithm == "fusion":
+        return merge_deghosted_fusion(images)
     if algorithm == "debevec":
         return merge_hdr_debevec(images, source_paths)
     if algorithm == "robertson":
@@ -128,7 +138,83 @@ def load_rgb_arrays(source_paths: list[Path]) -> list[np.ndarray]:
     return arrays
 
 
-def align_images_feature_homography(images: list[np.ndarray]) -> tuple[list[np.ndarray], str]:
+def align_images(images: list[np.ndarray], alignment: str) -> tuple[list[np.ndarray], str]:
+    if alignment == "off":
+        return images, "none"
+    if alignment == "people":
+        aligned, method = align_images_simple(images)
+        return aligned, f"people-{method}"
+    if alignment == "advanced":
+        return align_images_advanced(images)
+    return align_images_simple(images)
+
+
+def align_images_simple(images: list[np.ndarray]) -> tuple[list[np.ndarray], str]:
+    reference_index = len(images) // 2
+    reference = images[reference_index]
+    aligned = []
+    methods = []
+    for index, image in enumerate(images):
+        if index == reference_index:
+            aligned.append(reference)
+            methods.append("reference")
+            continue
+        warped, method = warp_to_reference_simple(image, reference)
+        aligned.append(warped)
+        methods.append(method)
+    if any("homography" in method for method in methods):
+        return aligned, "simple-homography"
+    if any("affine" in method for method in methods):
+        return aligned, "simple-affine"
+    return aligned, "simple-translation"
+
+
+def warp_to_reference_simple(image: np.ndarray, reference: np.ndarray) -> tuple[np.ndarray, str]:
+    gray_image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    gray_reference = cv2.cvtColor(reference, cv2.COLOR_RGB2GRAY)
+    transform, method = estimate_simple_transform(gray_image, gray_reference)
+    if transform is None:
+        return warp_translation(image, gray_image, gray_reference), "translation"
+
+    height, width = reference.shape[:2]
+    warped = cv2.warpPerspective(
+        image,
+        transform,
+        (width, height),
+        flags=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_REFLECT,
+    )
+    return warped, method
+
+
+def estimate_simple_transform(gray_image: np.ndarray, gray_reference: np.ndarray) -> tuple[np.ndarray | None, str]:
+    detector = cv2.ORB_create(nfeatures=5000, scaleFactor=1.2, nlevels=8, fastThreshold=8)
+    keypoints_image, descriptors_image = detector.detectAndCompute(gray_image, None)
+    keypoints_reference, descriptors_reference = detector.detectAndCompute(gray_reference, None)
+    if descriptors_image is None or descriptors_reference is None:
+        return None, "none"
+    if len(keypoints_image) < 12 or len(keypoints_reference) < 12:
+        return None, "none"
+
+    good = match_descriptors(descriptors_image, descriptors_reference, cv2.NORM_HAMMING, 0.75)[:500]
+    if len(good) < 10:
+        return None, "none"
+
+    src = np.float32([keypoints_image[match.queryIdx].pt for match in good]).reshape(-1, 1, 2)
+    dst = np.float32([keypoints_reference[match.trainIdx].pt for match in good]).reshape(-1, 1, 2)
+    homography, mask = cv2.findHomography(src, dst, cv2.RANSAC, 4.0)
+    if homography is not None and mask is not None and int(mask.sum()) >= 10 and is_reasonable_homography(homography):
+        return homography.astype(np.float32), "orb-homography"
+
+    affine, mask = cv2.estimateAffinePartial2D(src, dst, method=cv2.RANSAC, ransacReprojThreshold=4.0)
+    if affine is not None and mask is not None and int(mask.sum()) >= 8:
+        homography = np.eye(3, dtype=np.float32)
+        homography[:2, :] = affine
+        return homography, "orb-affine"
+    return None, "none"
+
+
+def align_images_advanced(images: list[np.ndarray]) -> tuple[list[np.ndarray], str]:
     reference_index = len(images) // 2
     reference = images[reference_index]
     aligned = []
@@ -145,12 +231,12 @@ def align_images_feature_homography(images: list[np.ndarray]) -> tuple[list[np.n
         aligned.append(warped)
         methods.append(method)
     if any("homography" in method for method in methods):
-        return aligned, "feature-homography"
+        return aligned, "advanced-homography"
     if any("affine" in method for method in methods):
-        return aligned, "feature-affine"
+        return aligned, "advanced-affine"
     if any("flow" in method for method in methods):
-        return aligned, "dense-flow-refined"
-    return aligned, "translation-fallback"
+        return aligned, "advanced-flow"
+    return aligned, "advanced-translation"
 
 
 def warp_to_reference(image: np.ndarray, reference: np.ndarray) -> tuple[np.ndarray, str]:
@@ -351,9 +437,41 @@ def exposure_fusion_average(images: list[np.ndarray]) -> np.ndarray:
     return np.sum(stack * weights[..., None], axis=0)
 
 
+def merge_deghosted_fusion(images: list[np.ndarray]) -> np.ndarray:
+    reference_index = len(images) // 2
+    stack = np.stack([image.astype(np.float32) for image in images], axis=0)
+    gray = np.mean(stack, axis=3)
+    reference_gray = gray[reference_index]
+
+    blurred = np.array([cv2.GaussianBlur(item, (0, 0), 2.0) for item in gray])
+    contrast = np.abs(gray - blurred)
+    exposure = np.exp(-((gray - 128.0) ** 2) / (2 * 72.0 * 72.0))
+    weights = contrast * 0.7 + exposure * 0.3 + 0.04
+
+    diff = np.abs(gray - reference_gray[None, :, :])
+    local_diff = np.array([cv2.GaussianBlur(item, (0, 0), 3.0) for item in diff])
+    moving = local_diff > 20.0
+    penalty = np.where(moving, np.exp(-((local_diff / 28.0) ** 2)), 1.0)
+    penalty[reference_index] = 1.0
+    weights *= penalty
+
+    motion_area = np.any(moving, axis=0)
+    if np.any(motion_area):
+        motion_area = cv2.dilate(motion_area.astype(np.uint8), np.ones((7, 7), dtype=np.uint8), iterations=1).astype(bool)
+        flat_weights = weights.reshape(weights.shape[0], -1)
+        flat_motion = motion_area.reshape(-1)
+        flat_weights[:, flat_motion] *= 0.25
+        flat_weights[reference_index, flat_motion] = np.maximum(flat_weights[reference_index, flat_motion], 1.0)
+        weights = flat_weights.reshape(weights.shape)
+
+    weight_sum = np.sum(weights, axis=0, keepdims=True)
+    weights = weights / np.maximum(weight_sum, 1e-6)
+    return np.sum(stack * weights[..., None], axis=0)
+
+
 def merge_mertens_fusion(images: list[np.ndarray]) -> np.ndarray:
     try:
-        merge = cv2.createMergeMertens()
+        merge = cv2.createMergeMertens(contrast_weight=1.0, saturation_weight=0.15, exposure_weight=1.2)
         bgr_images = [cv2.cvtColor(image, cv2.COLOR_RGB2BGR).astype(np.uint8) for image in images]
         fused = merge.process(bgr_images)
         fused = np.nan_to_num(fused, nan=0.0, posinf=1.0, neginf=0.0)
@@ -424,6 +542,8 @@ def read_exposure_time(source_path: Path) -> float:
 
 def apply_adjustments(image: Image.Image, params: dict[str, Any]) -> Image.Image:
     exposure = parse_float(params.get("exposure"), -2.0, 2.0, 0.0)
+    shadows = parse_float(params.get("shadows"), 0.0, 1.0, 0.25)
+    highlights = parse_float(params.get("highlights"), 0.0, 1.0, 0.15)
     contrast = parse_float(params.get("contrast"), 0.5, 2.0, 1.0)
     saturation = parse_float(params.get("saturation"), 0.0, 2.0, 1.0)
     sharpen = parse_float(params.get("sharpen"), 0.0, 2.0, 0.2)
@@ -431,6 +551,8 @@ def apply_adjustments(image: Image.Image, params: dict[str, Any]) -> Image.Image
     result = image
     if exposure:
         result = ImageEnhance.Brightness(result).enhance(2 ** exposure)
+    if shadows or highlights:
+        result = adjust_local_tones(result, shadows, highlights)
     if contrast != 1.0:
         result = ImageEnhance.Contrast(result).enhance(contrast)
     if saturation != 1.0:
@@ -438,6 +560,25 @@ def apply_adjustments(image: Image.Image, params: dict[str, Any]) -> Image.Image
     if sharpen:
         result = ImageEnhance.Sharpness(result).enhance(1 + sharpen)
     return result
+
+
+def adjust_local_tones(image: Image.Image, shadows: float, highlights: float) -> Image.Image:
+    array = np.array(image).astype(np.float32)
+    luminance = 0.2126 * array[:, :, 0] + 0.7152 * array[:, :, 1] + 0.0722 * array[:, :, 2]
+    normalized = luminance / 255.0
+
+    if shadows:
+        shadow_mask = np.clip((0.62 - normalized) / 0.62, 0.0, 1.0) ** 1.6
+        lift = 1.0 + shadows * 1.15 * shadow_mask
+        array *= lift[:, :, None]
+
+    if highlights:
+        highlight_mask = np.clip((normalized - 0.58) / 0.42, 0.0, 1.0) ** 1.4
+        compression = 1.0 - highlights * 0.55 * highlight_mask
+        array *= compression[:, :, None]
+        array += 255.0 * highlights * 0.06 * highlight_mask[:, :, None]
+
+    return Image.fromarray(np.clip(array, 0, 255).astype(np.uint8), "RGB")
 
 
 def report(callback: ProgressCallback | None, stage: str, processed: int, total: int) -> None:

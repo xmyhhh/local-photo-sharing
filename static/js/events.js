@@ -4,8 +4,13 @@
   }
 });
 refreshBtn.addEventListener("click", () => loadFolder(state.folder));
+openBracketProjectBtn.addEventListener("click", () => openBracketProject());
 window.addEventListener("scroll", scheduleVisibleWorkScan, { passive: true });
 window.addEventListener("scroll", scheduleLoadMoreIfNeeded, { passive: true });
+window.addEventListener("scroll", updateScrollTopButton, { passive: true });
+scrollTopBtn.addEventListener("click", () => {
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
 ratingFilterBtn.addEventListener("click", (event) => {
   event.stopPropagation();
   setRatingMenuOpen(ratingFilterMenu.hidden);
@@ -23,6 +28,7 @@ closeBracketDialogBtn.addEventListener("click", () => bracketDialog.close());
 useBracketCacheBtn.addEventListener("click", () => {
   bracketCacheActions.hidden = true;
   renderBracketDetection(state.currentBracketResult);
+  saveCurrentBracketProject();
 });
 rescanBracketsBtn.addEventListener("click", () => {
   resetBracketDialog();
@@ -31,6 +37,9 @@ rescanBracketsBtn.addEventListener("click", () => {
 });
 selectAllBracketGroups.addEventListener("change", () => setAllBracketGroups(selectAllBracketGroups.checked));
 mergeBracketsBtn.addEventListener("click", mergeSelectedBracketGroups);
+[mergeAlgorithm, mergeAlignment, mergeExposure, mergeShadows, mergeHighlights, mergeContrast, mergeSaturation, mergeSharpen, mergeQuality].forEach((input) => {
+  input.addEventListener("change", saveCurrentBracketProject);
+});
 document.addEventListener("click", (event) => {
   if (!ratingFilterMenu.hidden && !ratingFilterMenu.contains(event.target) && event.target !== ratingFilterBtn) {
     setRatingMenuOpen(false);
@@ -229,10 +238,25 @@ function clearEndedTouches(event) {
   }
 }
 
+function updateScrollTopButton() {
+  scrollTopBtn.hidden = window.scrollY < 700 || viewer.open || bracketDialog.open;
+}
+
 loadConfig()
   .then(() => loadFolder(""))
+  .then(openInitialBracketProject)
+  .then(updateScrollTopButton)
   .catch((error) => {
     emptyState.hidden = false;
     emptyState.textContent = error.message;
   });
+
+function openInitialBracketProject() {
+  const params = new URLSearchParams(window.location.search);
+  const path = params.get("bracketProject");
+  if (path !== null) {
+    return openBracketProject(path || undefined);
+  }
+  return null;
+}
 

@@ -42,6 +42,9 @@ function runOriginalPrefetchQueue() {
 }
 
 async function loadOriginalImage(entry, forceDisplay = false) {
+  if (entry.type !== "photo") {
+    return null;
+  }
   const cached = getOriginalCache(entry.path);
   if (cached) {
     if (forceDisplay || state.currentPhoto?.path === entry.path) {
@@ -82,7 +85,7 @@ async function loadOriginalImage(entry, forceDisplay = false) {
 }
 
 function showOriginalUrl(entry, url) {
-  if (state.currentPhoto?.path !== entry.path) {
+  if (entry.type !== "photo" || state.currentPhoto?.path !== entry.path) {
     return;
   }
   entry.originalReady = true;

@@ -4,7 +4,7 @@
 }
 
 function showPhoto(entry) {
-  if (!entry || entry.type !== "photo") {
+  if (!entry || (entry.type !== "photo" && entry.type !== "video")) {
     return;
   }
   state.currentPhoto = entry;
@@ -18,6 +18,38 @@ function showPhoto(entry) {
   state.swipeStart = null;
   viewerTitle.textContent = entry.path;
   viewerImage.alt = entry.name;
+  viewerVideo.pause();
+  viewerVideo.hidden = true;
+  viewerVideo.removeAttribute("src");
+  viewerVideo.load();
+  viewerImage.hidden = entry.type === "video";
+
+  if (entry.type === "video") {
+    viewerImage.classList.remove("ready", "loading");
+    viewerImage.removeAttribute("src");
+    viewerVideo.hidden = false;
+    viewerVideo.currentTime = 0;
+    viewerVideo.src = `/api/image/${encodePath(entry.path)}`;
+    viewerVideo.load();
+    renderViewerRating();
+    updatePageButtons();
+    updateZoom();
+    updateDownloadButton();
+    return;
+  }
+
+  viewerImage.hidden = false;
+
+  if (entry.originalUrl) {
+    viewerImage.classList.remove("loading");
+    viewerImage.onload = () => viewerImage.classList.add("ready");
+    viewerImage.src = entry.originalUrl;
+    renderViewerRating();
+    updatePageButtons();
+    updateZoom();
+    updateDownloadButton();
+    return;
+  }
 
   const cachedOriginal = getOriginalCache(entry.path);
   entry.originalReady = Boolean(cachedOriginal);
@@ -50,11 +82,11 @@ function showPhoto(entry) {
 function updateDownloadButton() {
   if (isAppleMobileBrowser) {
     downloadBtn.textContent = "保存到相册";
-    downloadBtn.title = "优先调起系统分享，失败时请长按图片存储到相册";
+    downloadBtn.title = state.currentPhoto?.type === "video" ? "优先调起系统分享保存视频" : "优先调起系统分享，失败时请长按图片存储到相册";
     return;
   }
   downloadBtn.textContent = "下载";
-  downloadBtn.title = "下载原图";
+  downloadBtn.title = state.currentPhoto?.type === "video" ? "下载视频" : "下载原图";
 }
 
 async function loadPreviewImage(entry, attempt = 0) {
@@ -104,12 +136,16 @@ function showOriginalImageFallback(entry) {
 
 function renderViewerRating() {
   viewerRating.innerHTML = "";
-  if (state.currentPhoto) {
+  viewerRating.hidden = !state.currentPhoto || state.currentPhoto.type !== "photo";
+  if (state.currentPhoto && state.currentPhoto.type === "photo") {
     viewerRating.append(createRating(state.currentPhoto, true));
   }
 }
 
 async function setRating(entry, rating) {
+  if (entry.type !== "photo") {
+    return;
+  }
   const updated = await fetchJson(`/api/rating/${encodePath(entry.path)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -125,6 +161,12 @@ async function setRating(entry, rating) {
 }
 
 function updateZoom() {
+  if (state.currentPhoto?.type === "video") {
+    zoomResetBtn.textContent = "100%";
+    imageStage.classList.remove("is-zoomed");
+    viewerVideo.style.transform = "";
+    return;
+  }
   viewerImage.style.transform = `translate3d(${state.panX}px, ${state.panY}px, 0) scale(${state.zoom})`;
   zoomResetBtn.textContent = `${Math.round(state.zoom * 100)}%`;
   imageStage.classList.toggle("is-zoomed", state.zoom > 1);
@@ -138,7 +180,7 @@ function currentPhotoIndex() {
 }
 
 function photosOnly() {
-  return state.entries.filter((entry) => entry.type === "photo");
+  return state.entries.filter((entry) => entry.type === "photo" || entry.type === "video");
 }
 
 function showAdjacentPhoto(direction) {

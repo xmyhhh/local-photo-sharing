@@ -6,11 +6,14 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = APP_DIR / "static"
 JPG_EXTENSIONS = {".jpg", ".jpeg"}
+VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".webm"}
+MEDIA_EXTENSIONS = JPG_EXTENSIONS | VIDEO_EXTENSIONS
 RATINGS_FILE = ".photo_share_ratings.json"
 THUMBNAIL_DIR = ".photo_share_thumbs"
 CACHE_DIR = APP_DIR / ".photo_share_cache"
 BRACKET_OUTPUT_DIR = APP_DIR / ".photo_share_bracket_results"
 BRACKET_CACHE_FILE = CACHE_DIR / "bracket_detection_cache.json"
+DEFAULT_BRACKET_PROJECT_FILE = APP_DIR / "bracket_project.prj"
 CPU_COUNT = os.cpu_count() or 1
 THUMBNAIL_WORKERS = min(8, max(2, CPU_COUNT))
 METADATA_WORKERS = min(4, max(2, CPU_COUNT // 2))

@@ -31,6 +31,8 @@ async function detectBracketsInContextFolder() {
 
 function resetBracketDialog() {
   state.currentBracketResult = null;
+  state.currentBracketMergeResult = null;
+  state.currentBracketProjectPath = null;
   bracketCacheActions.hidden = true;
   bracketMergePanel.hidden = true;
   bracketMergeOutput.hidden = true;
@@ -52,6 +54,7 @@ async function startBracketDetection(force) {
       state.currentBracketResult = start;
       bracketStatus.textContent = `已有缓存结果：${start.groups.length} 组。`;
       bracketCacheActions.hidden = false;
+      saveCurrentBracketProject();
       return;
     }
     bracketCacheActions.hidden = true;
@@ -79,6 +82,7 @@ async function pollBracketDetection(root, folderPath, taskId) {
       }
       if (result.state === "done") {
         renderBracketDetection(result);
+        saveCurrentBracketProject();
         return;
       }
       lastProgress = result.progress || lastProgress;
@@ -105,6 +109,7 @@ function renderBracketProgress(result, startedAt, lastProgress) {
 
 function renderBracketDetection(result) {
   state.currentBracketResult = result;
+  state.currentBracketMergeResult = null;
   bracketResults.innerHTML = "";
   bracketMergeOutput.hidden = true;
   bracketMergeOutput.innerHTML = "";
@@ -128,6 +133,7 @@ function renderBracketDetection(result) {
     checkbox.type = "checkbox";
     checkbox.className = "bracket-group-check";
     checkbox.value = String(group.id);
+    checkbox.addEventListener("change", saveCurrentBracketProject);
     const exposureText = group.exposureRangeEv === null ? "无 EXIF 曝光跨度" : `曝光跨度 ${group.exposureRangeEv} EV`;
     const timeText = group.timeSpanSeconds === null ? "时间未知" : `时间跨度 ${group.timeSpanSeconds}s`;
     const titleText = document.createElement("span");
@@ -135,14 +141,132 @@ function renderBracketDetection(result) {
     title.append(checkbox, titleText);
     section.append(title);
 
+    const compare = document.createElement("div");
+    compare.className = "bracket-compare";
+
+    const sourcePane = document.createElement("div");
+    sourcePane.className = "bracket-source-pane";
+    const sourceTitle = document.createElement("div");
+    sourceTitle.className = "bracket-pane-title";
+    sourceTitle.textContent = "原始序列";
     const strip = document.createElement("div");
     strip.className = "bracket-strip";
     group.photos.forEach((photo) => {
       strip.append(createBracketPhotoButton(photo));
     });
-    section.append(strip);
+    sourcePane.append(sourceTitle, strip);
+
+    const resultPane = document.createElement("div");
+    resultPane.className = "bracket-result-pane";
+    resultPane.dataset.groupId = String(group.id);
+    const resultTitle = document.createElement("div");
+    resultTitle.className = "bracket-pane-title";
+    resultTitle.textContent = "合成结果";
+    const resultBody = document.createElement("div");
+    resultBody.className = "bracket-result-body";
+    resultBody.textContent = "选择本组并点击合成后显示。";
+    resultPane.append(resultTitle, resultBody);
+
+    compare.append(sourcePane, resultPane);
+    section.append(compare);
     bracketResults.append(section);
   });
+}
+
+async function openBracketProject(path) {
+  try {
+    const params = new URLSearchParams();
+    if (path) {
+      params.set("path", path);
+    }
+    const data = await fetchJson(`/api/bracket-project?${params.toString()}`);
+    restoreBracketProject(data.project, data.path);
+  } catch (error) {
+    window.alert(path ? `无法打开项目：${error.message}` : "还没有默认包围曝光项目。请先扫描一个文件夹生成项目。");
+  }
+}
+
+function restoreBracketProject(project, path) {
+  if (!project || !project.detection) {
+    throw new Error("项目文件无效。");
+  }
+  state.currentBracketProjectPath = path || null;
+  state.currentBracketRoot = project.root || state.rootId || "root1";
+  state.currentBracketFolder = project.folder || "";
+  state.rootId = state.currentBracketRoot;
+  renderRootSelector();
+  resetBracketDialog();
+  state.currentBracketProjectPath = path || null;
+  state.currentBracketRoot = project.root || state.rootId || "root1";
+  state.currentBracketFolder = project.folder || "";
+  bracketDialogPath.textContent = `${state.currentBracketRoot}/${state.currentBracketFolder}`.replace(/\/$/, "");
+  applyMergeParams(project.params || {});
+  bracketDialog.showModal();
+  renderBracketDetection({ root: state.currentBracketRoot, folder: state.currentBracketFolder, state: "done", ...project.detection });
+  restoreSelectedBracketGroups(project.selectedGroupIds || []);
+  if (project.mergeResult) {
+    renderMergeOutput(project.mergeResult);
+  }
+  bracketStatus.textContent = `已打开项目：${path || "bracket_project.prj"} · ${project.detection.groups?.length || 0} 组`;
+}
+
+function restoreSelectedBracketGroups(groupIds) {
+  const selected = new Set(groupIds.map((groupId) => String(groupId)));
+  document.querySelectorAll(".bracket-group-check").forEach((input) => {
+    input.checked = selected.has(input.value);
+  });
+  selectAllBracketGroups.checked = Boolean(groupIds.length) && Array.from(document.querySelectorAll(".bracket-group-check")).every((input) => input.checked);
+}
+
+function applyMergeParams(params) {
+  if (params.algorithm) mergeAlgorithm.value = params.algorithm;
+  if (params.alignment) mergeAlignment.value = params.alignment;
+  if (params.exposure !== undefined) mergeExposure.value = params.exposure;
+  if (params.shadows !== undefined) mergeShadows.value = params.shadows;
+  if (params.highlights !== undefined) mergeHighlights.value = params.highlights;
+  if (params.contrast !== undefined) mergeContrast.value = params.contrast;
+  if (params.saturation !== undefined) mergeSaturation.value = params.saturation;
+  if (params.sharpen !== undefined) mergeSharpen.value = params.sharpen;
+  if (params.quality !== undefined) mergeQuality.value = params.quality;
+}
+
+async function saveCurrentBracketProject() {
+  if (!state.currentBracketResult) {
+    return;
+  }
+  const project = {
+    type: "photo-share-bracket-project",
+    root: state.currentBracketRoot || state.rootId || "root1",
+    folder: state.currentBracketFolder || "",
+    detection: state.currentBracketResult,
+    selectedGroupIds: currentSelectedBracketGroupIds(),
+    params: getMergeParams(),
+    mergeResult: state.currentBracketMergeResult,
+  };
+  try {
+    const data = await fetchJson("/api/bracket-project", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: state.currentBracketProjectPath, project }),
+    });
+    state.currentBracketProjectPath = data.path;
+    updateBracketProjectUrl(data.path);
+  } catch (error) {
+    bracketStatus.textContent = `项目保存失败：${error.message}`;
+  }
+}
+
+function updateBracketProjectUrl(path) {
+  if (!path || !bracketDialog.open) {
+    return;
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.set("bracketProject", path);
+  window.history.replaceState(null, "", url.toString());
+}
+
+function currentSelectedBracketGroupIds() {
+  return Array.from(document.querySelectorAll(".bracket-group-check:checked")).map((input) => Number(input.value));
 }
 
 function createBracketPhotoButton(photo) {
@@ -165,7 +289,6 @@ function createBracketPhotoButton(photo) {
   info.textContent = formatBracketPhotoInfo(displayPhoto);
   item.append(img, name, info);
   item.addEventListener("click", () => {
-    bracketDialog.close();
     openViewer(photoToEntry(displayPhoto));
   });
   return item;
@@ -183,13 +306,14 @@ function normalizeBracketPhoto(photo) {
 }
 
 async function mergeSelectedBracketGroups() {
-  const groupIds = Array.from(document.querySelectorAll(".bracket-group-check:checked")).map((input) => Number(input.value));
+  const groupIds = currentSelectedBracketGroupIds();
   if (!groupIds.length) {
     bracketMergeOutput.hidden = false;
     bracketMergeOutput.textContent = "先选择要合成的包围曝光组。";
     return;
   }
   bracketMergeOutput.hidden = false;
+  markBracketGroupsMerging(groupIds);
   renderMergeProgress({ stage: "正在提交合成任务", progress: 0, processed: 0, total: groupIds.length });
   try {
     const start = await fetchJson("/api/bracket-merge", {
@@ -203,6 +327,7 @@ async function mergeSelectedBracketGroups() {
         params: getMergeParams(),
       }),
     });
+    saveCurrentBracketProject();
     pollBracketMerge(start.taskId);
   } catch (error) {
     bracketMergeOutput.textContent = error.message;
@@ -219,6 +344,7 @@ async function pollBracketMerge(taskId) {
       });
       if (status.state === "done") {
         renderMergeOutput(status.result);
+        saveCurrentBracketProject();
         return;
       }
       if (status.state === "error") {
@@ -246,22 +372,70 @@ function renderMergeProgress(status) {
 }
 
 function renderMergeOutput(result) {
+  state.currentBracketMergeResult = result;
   bracketMergeOutput.innerHTML = "";
   const dir = document.createElement("div");
   dir.textContent = `临时目录：${result.outputDir}`;
   bracketMergeOutput.append(dir);
   result.files.forEach((file) => {
-    const link = document.createElement("a");
-    link.href = file.downloadUrl;
-    link.textContent = `下载第 ${file.groupId} 组合成结果`;
-    link.download = file.name;
-    bracketMergeOutput.append(link);
-    if (file.alignMethod) {
-      const method = document.createElement("div");
-      method.textContent = `第 ${file.groupId} 组：${formatMergeAlgorithm(file.algorithm)} · ${formatAlignMethod(file.alignMethod)}`;
-      bracketMergeOutput.append(method);
-    }
+    renderGroupMergeResult(file);
   });
+}
+
+function markBracketGroupsMerging(groupIds) {
+  groupIds.forEach((groupId) => {
+    const pane = document.querySelector(`.bracket-result-pane[data-group-id="${groupId}"]`);
+    if (!pane) {
+      return;
+    }
+    const body = pane.querySelector(".bracket-result-body");
+    body.innerHTML = "";
+    const spinner = document.createElement("div");
+    spinner.className = "spinner";
+    const text = document.createElement("div");
+    text.className = "bracket-result-note";
+    text.textContent = "正在合成...";
+    body.append(spinner, text);
+  });
+}
+
+function renderGroupMergeResult(file) {
+  const pane = document.querySelector(`.bracket-result-pane[data-group-id="${file.groupId}"]`);
+  if (!pane) {
+    return;
+  }
+  const body = pane.querySelector(".bracket-result-body");
+  body.innerHTML = "";
+  body.classList.add("has-result");
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "bracket-merged-photo";
+  const img = document.createElement("img");
+  img.alt = `第 ${file.groupId} 组合成结果`;
+  img.src = file.imageUrl || file.downloadUrl;
+  const caption = document.createElement("span");
+  caption.textContent = `${formatMergeAlgorithm(file.algorithm)} · ${formatAlignMethod(file.alignMethod)}`;
+  button.append(img, caption);
+  button.addEventListener("click", () => {
+    openViewer({
+      type: "photo",
+      name: file.name,
+      path: file.path,
+      thumbUrl: file.imageUrl || file.downloadUrl,
+      originalUrl: file.imageUrl || file.downloadUrl,
+      originalReady: true,
+    });
+  });
+
+  const actions = document.createElement("div");
+  actions.className = "bracket-result-actions";
+  const download = document.createElement("a");
+  download.href = file.downloadUrl;
+  download.download = file.name;
+  download.textContent = "下载合成图";
+  actions.append(download);
+  body.append(button, actions);
 }
 
 function formatMergeAlgorithm(algorithm) {
@@ -275,6 +449,39 @@ function formatMergeAlgorithm(algorithm) {
 }
 
 function formatAlignMethod(method) {
+  if (method === "none") {
+    return "未对齐";
+  }
+  if (method === "simple-homography") {
+    return "简单特征单应性对齐";
+  }
+  if (method === "simple-affine") {
+    return "简单特征仿射对齐";
+  }
+  if (method === "simple-translation") {
+    return "简单平移对齐";
+  }
+  if (method === "people-simple-homography") {
+    return "人物轻微移动：简单对齐 + 去重影";
+  }
+  if (method === "people-simple-affine") {
+    return "人物轻微移动：简单仿射 + 去重影";
+  }
+  if (method === "people-simple-translation") {
+    return "人物轻微移动：平移 + 去重影";
+  }
+  if (method === "advanced-homography") {
+    return "复杂特征单应性对齐";
+  }
+  if (method === "advanced-affine") {
+    return "复杂特征仿射对齐";
+  }
+  if (method === "advanced-flow") {
+    return "复杂光流细化对齐";
+  }
+  if (method === "advanced-translation") {
+    return "复杂平移降级对齐";
+  }
   if (method === "feature-homography") {
     return "特征点单应性对齐";
   }
@@ -290,7 +497,10 @@ function formatAlignMethod(method) {
 function getMergeParams() {
   return {
     algorithm: mergeAlgorithm.value,
+    alignment: mergeAlignment.value,
     exposure: mergeExposure.value,
+    shadows: mergeShadows.value,
+    highlights: mergeHighlights.value,
     contrast: mergeContrast.value,
     saturation: mergeSaturation.value,
     sharpen: mergeSharpen.value,
@@ -302,6 +512,7 @@ function setAllBracketGroups(checked) {
   document.querySelectorAll(".bracket-group-check").forEach((input) => {
     input.checked = checked;
   });
+  saveCurrentBracketProject();
 }
 
 function splitRootedFolder(path) {

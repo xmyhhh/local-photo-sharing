@@ -9,6 +9,7 @@ from ..paths import (
     get_thumbnail_mode,
     image_url,
     preview_url,
+    resolve_media,
     resolve_photo,
     send_cached_file,
     thumb_url,
@@ -21,8 +22,8 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
     def image(photo_path: str):
         root_id, rel_path = _split_rooted(photo_path)
         root_services = _root_services(services, root_id)
-        path = resolve_photo(root_services.root, rel_path)
-        return send_cached_file(path, mimetype=mimetypes.guess_type(path.name)[0] or "image/jpeg")
+        path = resolve_media(root_services.root, rel_path)
+        return send_cached_file(path, mimetype=mimetypes.guess_type(path.name)[0] or "application/octet-stream")
 
     @app.get("/api/preview/<path:photo_path>")
     def preview(photo_path: str):
@@ -53,10 +54,10 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
     def download(photo_path: str):
         root_id, rel_path = _split_rooted(photo_path)
         root_services = _root_services(services, root_id)
-        path = resolve_photo(root_services.root, rel_path)
+        path = resolve_media(root_services.root, rel_path)
         return send_cached_file(
             path,
-            mimetype=mimetypes.guess_type(path.name)[0] or "image/jpeg",
+            mimetype=mimetypes.guess_type(path.name)[0] or "application/octet-stream",
             as_attachment=True,
             download_name=path.name,
         )
@@ -94,15 +95,16 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
     def delete_photo(photo_path: str):
         root_id, rel_path = _split_rooted(photo_path)
         root_services = _root_services(services, root_id)
-        path = resolve_photo(root_services.root, rel_path)
+        path = resolve_media(root_services.root, rel_path)
         rel = rel_path
         path.unlink()
         root_services.ratings.delete(rel)
-        for thumb_store in root_services.thumbnails.values():
-            thumb_store.delete(path)
-        root_services.previews.delete(path)
-        root_services.metadata.delete(path)
-        root_services.rating_index.delete(rel)
+        if path.suffix.lower() in JPG_EXTENSIONS:
+            for thumb_store in root_services.thumbnails.values():
+                thumb_store.delete(path)
+            root_services.previews.delete(path)
+            root_services.metadata.delete(path)
+            root_services.rating_index.delete(rel)
         return jsonify({"deleted": f"{root_id}/{rel}"})
 
 

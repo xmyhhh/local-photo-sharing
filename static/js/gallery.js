@@ -41,6 +41,7 @@ function navigateFolder(folder) {
   const target = normalizeFolderPath(folder || "");
   if (target !== state.folder) {
     resetFiltersForFolderNavigation();
+    window.scrollTo({ top: 0, behavior: "auto" });
   }
   loadFolder(target);
 }
@@ -83,6 +84,7 @@ function renderRootSelector() {
     button.addEventListener("click", () => {
       state.rootId = root.id;
       renderRootSelector();
+      window.scrollTo({ top: 0, behavior: "auto" });
       loadFolder("");
     });
     host.append(button);
@@ -197,9 +199,9 @@ function updateEmptyState() {
   if (state.filters.ratings.length && state.indexing) {
     emptyState.textContent = "正在执行筛选...";
   } else if (state.filters.ratings.length) {
-    emptyState.textContent = "没有找到满足筛选条件的 JPG 图片。";
+    emptyState.textContent = "没有找到满足筛选条件的媒体文件。";
   } else {
-    emptyState.textContent = "当前文件夹没有 JPG 图片或子文件夹。";
+    emptyState.textContent = "当前文件夹没有图片、视频或子文件夹。";
   }
 }
 
@@ -218,7 +220,12 @@ function createGridTile(entry) {
   if (entry.type === "folder") {
     const icon = document.createElement("div");
     icon.className = "folder-icon";
-    icon.textContent = "DIR";
+    icon.innerHTML = `
+      <svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">
+        <path d="M8 18a6 6 0 0 1 6-6h12l6 6h18a6 6 0 0 1 6 6v4H8z"></path>
+        <path d="M8 24h48v20a8 8 0 0 1-8 8H16a8 8 0 0 1-8-8z"></path>
+      </svg>
+    `;
     button.append(icon);
     button.addEventListener("click", () => navigateFolder(entry.path));
     button.addEventListener("contextmenu", (event) => openFolderContextMenu(event, entry));
@@ -228,14 +235,28 @@ function createGridTile(entry) {
     const spinner = document.createElement("div");
     spinner.className = "spinner";
     spinner.setAttribute("aria-label", "正在生成预览");
-    const img = document.createElement("img");
-    img.className = "thumb";
-    img.loading = "lazy";
-    img.decoding = "async";
-    img.alt = entry.name;
-    holder.append(spinner, img);
+    let img = null;
+    if (entry.type === "video") {
+      const videoBadge = document.createElement("div");
+      videoBadge.className = "media-badge";
+      videoBadge.textContent = "VIDEO";
+      const icon = document.createElement("div");
+      icon.className = "video-thumb";
+      icon.textContent = "▶";
+      spinner.hidden = true;
+      holder.append(videoBadge, icon);
+    } else {
+      img = document.createElement("img");
+      img.className = "thumb";
+      img.loading = "lazy";
+      img.decoding = "async";
+      img.alt = entry.name;
+      holder.append(spinner, img);
+    }
     button.append(holder);
-    thumbPayload = { entry, img, spinner };
+    if (img) {
+      thumbPayload = { entry, img, spinner };
+    }
     button.addEventListener("click", () => openViewer(entry));
   }
 
@@ -250,6 +271,11 @@ function createGridTile(entry) {
     const ratingWrap = createRating(entry, false);
     meta.append(ratingWrap);
     ratingPayload = { entry, ratingWrap };
+  } else if (entry.type === "video") {
+    const kind = document.createElement("div");
+    kind.className = "folder-count";
+    kind.textContent = "视频";
+    meta.append(kind);
   } else if (entry.type === "folder") {
     const count = document.createElement("div");
     count.className = "folder-count";
