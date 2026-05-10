@@ -1,0 +1,259 @@
+:root {
+  color-scheme: light;
+  --bg: #f4f6f8;
+  --panel: #ffffff;
+  --text: #1c232b;
+  --muted: #647180;
+  --line: #d9e0e7;
+  --accent: #176b87;
+  --accent-strong: #0f5065;
+  --danger: #b42318;
+  --star: #d99214;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Arial, "Microsoft YaHei", sans-serif;
+}
+
+button {
+  min-height: 36px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 0 14px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--accent-strong);
+}
+
+button.ghost {
+  background: #fff;
+  color: var(--accent);
+}
+
+button.danger {
+  border-color: var(--danger);
+  background: var(--danger);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+}
+
+h1 {
+  margin: 0 0 4px;
+  font-size: 24px;
+}
+
+.subtle {
+  color: var(--muted);
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.actions,
+.viewer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+main {
+  width: min(1440px, 100%);
+  margin: 0 auto;
+  padding: 20px 24px 40px;
+}
+
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  color: var(--muted);
+}
+
+.breadcrumb button {
+  border-color: var(--line);
+  background: #fff;
+  color: var(--text);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 14px;
+}
+
+.tile {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.tile-button {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  background: #e7edf3;
+}
+
+.folder-icon {
+  display: grid;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  place-items: center;
+  background: #e8f2f5;
+  color: var(--accent);
+  font-size: 56px;
+  font-weight: bold;
+}
+
+.meta {
+  padding: 10px;
+}
+
+.name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 14px;
+}
+
+.rating {
+  display: flex;
+  gap: 2px;
+  margin-top: 8px;
+}
+
+.star {
+  min-width: 0;
+  min-height: 28px;
+  border: 0;
+  padding: 0 2px;
+  background: transparent;
+  color: #b8c0c9;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.star:hover {
+  background: transparent;
+  color: var(--star);
+}
+
+.star.active {
+  color: var(--star);
+}
+
+.empty {
+  margin-top: 40px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.viewer {
+  width: min(96vw, 1280px);
+  height: min(94vh, 920px);
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  background: #111820;
+  color: #fff;
+}
+
+.viewer::backdrop {
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.viewer-shell {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  height: 100%;
+}
+
+.viewer-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.viewer-title {
+  min-width: 0;
+  align-self: center;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.viewer-rating {
+  padding: 8px 12px;
+}
+
+.image-stage {
+  overflow: auto;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+#viewerImage {
+  display: block;
+  max-width: none;
+  transform-origin: center center;
+}
+
+@media (max-width: 700px) {
+  .topbar,
+  .viewer-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  main {
+    padding: 16px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+}
