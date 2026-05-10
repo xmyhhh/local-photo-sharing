@@ -14,7 +14,6 @@ from .constants import (
     PREVIEW_CACHE_QUEUE_LIMIT,
     RATINGS_FILE,
     STATIC_DIR,
-    THUMB_CACHE_QUEUE_LIMIT,
 )
 from .context import AppServices
 from .paths import build_thumbnail_modes, root_cache_key
@@ -58,7 +57,7 @@ def _create_services(
             spec["size"],
             spec["quality"],
             f"thumb-{mode}",
-            queue_limit=THUMB_CACHE_QUEUE_LIMIT,
+            queue_limit=spec["queue_limit"],
         )
         for mode, spec in thumbnail_modes.items()
     }
@@ -78,4 +77,5 @@ def _create_services(
         thumbnails=thumbnails,
         default_thumbnails=thumbnails[DEFAULT_THUMBNAIL_MODE],
         previews=previews,
+        bracket_tasks={},
     )

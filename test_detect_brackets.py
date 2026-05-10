@@ -28,12 +28,12 @@ def main() -> int:
         raise SystemExit(f"Source folder not found: {source}")
 
     output.mkdir(parents=True, exist_ok=True)
-    def progress_callback(processed: int, total: int) -> None:
+    def progress_callback(processed: int, total: int, groups_count: int) -> None:
         if total <= 0:
-            print("\rprogress: 100.00% (0/0)", end="", flush=True)
+            print("\rprogress: 100.00% (0/0) groups=0", end="", flush=True)
             return
         percent = processed * 100 / total
-        print(f"\rprogress: {percent:6.2f}% ({processed}/{total})", end="", flush=True)
+        print(f"\rprogress: {percent:6.2f}% ({processed}/{total}) groups={groups_count}", end="", flush=True)
 
     result = detect_exposure_brackets(source, source, scan_limit=None, progress_callback=progress_callback)
     print()

@@ -18,6 +18,7 @@
 body {
   margin: 0;
   min-height: 100vh;
+  overscroll-behavior: none;
   background: var(--bg);
   color: var(--text);
   font-family: Arial, "Microsoft YaHei", sans-serif;
@@ -56,7 +57,7 @@ button.danger {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 18px 24px;
+  padding: 18px clamp(12px, 1.4vw, 24px);
   border-bottom: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(12px);
@@ -82,9 +83,9 @@ h1 {
 }
 
 main {
-  width: min(1440px, 100%);
-  margin: 0 auto;
-  padding: 20px 24px 40px;
+  width: 100%;
+  margin: 0;
+  padding: 18px clamp(10px, 1.2vw, 20px) 40px;
 }
 
 .filters {
@@ -191,6 +192,10 @@ main {
 
 .grid.thumb-large {
   grid-template-columns: repeat(auto-fill, minmax(286px, 1fr));
+}
+
+.grid.thumb-xlarge {
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
 }
 
 .tile {
@@ -505,6 +510,8 @@ main {
   padding: 0;
   background: #05070a;
   color: #fff;
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
 .viewer::backdrop {
@@ -805,6 +812,10 @@ main {
   .grid.thumb-large {
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   }
+
+  .grid.thumb-xlarge {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
 }
 
 @media (pointer: coarse) {
@@ -857,6 +868,10 @@ main {
 
   .grid.thumb-large {
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+
+  .grid.thumb-xlarge {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   }
 
   .meta {

@@ -1,7 +1,15 @@
 ﻿function getStoredThumbMode() {
   const value = window.localStorage.getItem("thumbMode");
-  return ["small", "medium", "large"].includes(value) ? value : "medium";
+  return THUMB_MODES.includes(value) ? value : "medium";
 }
+
+const THUMB_MODES = ["small", "medium", "large", "xlarge"];
+const THUMB_QUEUE_LIMITS = {
+  small: 100,
+  medium: 50,
+  large: 30,
+  xlarge: 15,
+};
 
 const state = {
   folder: "",
@@ -58,7 +66,6 @@ const ORIGINAL_CACHE_LIMIT = 1024 * 1024 * 1024;
 const ORIGINAL_PREFETCH_CONCURRENCY = 2;
 const ORIGINAL_PREFETCH_QUEUE_LIMIT = 25;
 const THUMB_LOAD_CONCURRENCY = 6;
-const THUMB_QUEUE_LIMIT = 50;
 const RATING_STATUS_CONCURRENCY = 3;
 const RATING_QUEUE_LIMIT = 50;
 

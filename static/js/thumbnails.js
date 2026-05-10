@@ -86,11 +86,11 @@ function showThumbnailFallback(entry, img, spinner) {
 
 function getStoredThumbMode() {
   const value = window.localStorage.getItem("thumbMode");
-  return ["small", "medium", "large"].includes(value) ? value : "medium";
+  return THUMB_MODES.includes(value) ? value : "medium";
 }
 
 function setThumbMode(mode) {
-  if (!["small", "medium", "large"].includes(mode) || mode === state.thumbMode) {
+  if (!THUMB_MODES.includes(mode) || mode === state.thumbMode) {
     return;
   }
   state.thumbMode = mode;
@@ -183,7 +183,8 @@ function queueThumbnail(entry, img, spinner, attempt = 0) {
 }
 
 function trimThumbQueue() {
-  while (state.thumbQueue.length > THUMB_QUEUE_LIMIT) {
+  const limit = THUMB_QUEUE_LIMITS[state.thumbMode] || THUMB_QUEUE_LIMITS.medium;
+  while (state.thumbQueue.length > limit) {
     const dropped = state.thumbQueue.pop();
     if (dropped) {
       state.thumbQueued.delete(dropped.key);

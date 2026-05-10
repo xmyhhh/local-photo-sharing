@@ -86,12 +86,13 @@ def detect_exposure_brackets(
             processed += 1
             feature = read_bracket_feature(root, photo)
             if feature is None:
-                report_progress(progress_callback, processed, total)
+                report_progress(progress_callback, processed, total, len(groups))
                 continue
             analyzed += 1
             features.append(feature)
-            report_progress(progress_callback, processed, total)
+            report_progress(progress_callback, processed, total, len(groups))
         groups.extend(find_bracket_groups_in_features(features))
+        report_progress(progress_callback, processed, total, len(groups))
         if truncated:
             break
 
@@ -109,11 +110,11 @@ def detect_exposure_brackets(
     }
 
 
-def report_progress(progress_callback: Any | None, processed: int, total: int) -> None:
+def report_progress(progress_callback: Any | None, processed: int, total: int, groups_count: int) -> None:
     if progress_callback is None:
         return
     try:
-        progress_callback(processed, total)
+        progress_callback(processed, total, groups_count)
     except Exception:
         return
 

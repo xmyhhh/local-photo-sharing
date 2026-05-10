@@ -5,7 +5,7 @@ from threading import Lock, Thread
 
 from PIL import Image, ImageOps
 
-from .constants import THUMBNAIL_WORKERS, THUMB_CACHE_QUEUE_LIMIT
+from .constants import THUMBNAIL_WORKERS
 from .paths import hash_text, to_relative
 class ImageCacheStore:
     def __init__(
@@ -15,7 +15,7 @@ class ImageCacheStore:
         size: int,
         quality: int,
         thread_name: str,
-        queue_limit: int = THUMB_CACHE_QUEUE_LIMIT,
+        queue_limit: int = 50,
     ) -> None:
         self.root = root
         self.cache_root = cache_root

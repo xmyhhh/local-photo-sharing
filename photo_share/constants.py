@@ -12,7 +12,6 @@ CACHE_DIR = APP_DIR / ".photo_share_cache"
 CPU_COUNT = os.cpu_count() or 1
 THUMBNAIL_WORKERS = min(8, max(2, CPU_COUNT))
 METADATA_WORKERS = min(4, max(2, CPU_COUNT // 2))
-THUMB_CACHE_QUEUE_LIMIT = 50
 PREVIEW_CACHE_QUEUE_LIMIT = 25
 FILTER_WAIT_SECONDS = 0.8
 PHOTO_PAGE_SIZE = 80
@@ -21,9 +20,10 @@ DEFAULT_THUMBNAIL_QUALITY = 74
 DEFAULT_PREVIEW_SIZE = 2560
 DEFAULT_PREVIEW_QUALITY = 88
 THUMBNAIL_MODES = {
-    "small": {"size": 260, "quality": 68},
-    "medium": {"size": DEFAULT_THUMBNAIL_SIZE, "quality": DEFAULT_THUMBNAIL_QUALITY},
-    "large": {"size": 640, "quality": 84},
+    "small": {"size": 260, "quality": 68, "queue_limit": 100},
+    "medium": {"size": DEFAULT_THUMBNAIL_SIZE, "quality": DEFAULT_THUMBNAIL_QUALITY, "queue_limit": 50},
+    "large": {"size": 640, "quality": 84, "queue_limit": 30},
+    "xlarge": {"size": 920, "quality": 88, "queue_limit": 15},
 }
 DEFAULT_THUMBNAIL_MODE = "medium"
 BRACKET_SCAN_LIMIT = 500

@@ -60,10 +60,15 @@ zoomOutBtn.addEventListener("click", () => {
 zoomResetBtn.addEventListener("click", () => {
   setZoom(1);
 });
-viewer.addEventListener("wheel", (event) => {
+function handleViewerWheel(event) {
+  if (!viewer.open) {
+    return;
+  }
   event.preventDefault();
+  event.stopImmediatePropagation();
   event.stopPropagation();
-  state.wheelZoomDelta += event.deltaY;
+  const deltaY = "deltaY" in event ? event.deltaY : -event.wheelDelta || event.detail * 16 || 0;
+  state.wheelZoomDelta += deltaY;
   state.wheelZoomCenter = { x: event.clientX, y: event.clientY };
   if (state.wheelZoomFrame) {
     return;
@@ -76,7 +81,10 @@ viewer.addEventListener("wheel", (event) => {
     state.wheelZoomFrame = 0;
     setZoom(state.zoom * Math.exp(-delta * 0.0016), center.x, center.y);
   });
-}, { passive: false });
+}
+document.addEventListener("wheel", handleViewerWheel, { capture: true, passive: false });
+document.addEventListener("mousewheel", handleViewerWheel, { capture: true, passive: false });
+document.addEventListener("DOMMouseScroll", handleViewerWheel, { capture: true, passive: false });
 imageStage.addEventListener("pointerdown", (event) => {
   if (event.pointerType !== "mouse" || state.zoom <= 1) {
     return;

@@ -28,6 +28,7 @@ async function detectBracketsInContextFolder() {
     const params = new URLSearchParams();
     params.set("folder", folder.path);
     const start = await fetchJson(`/api/bracket-detection?${params.toString()}`, { method: "GET" });
+    renderBracketProgress(start, Date.now(), 0);
     pollBracketDetection(folder.path, start.taskId);
   } catch (error) {
     bracketStatus.textContent = error.message;
@@ -69,13 +70,13 @@ function renderBracketProgress(result, startedAt, lastProgress) {
   const etaSeconds = Number.isFinite(result.etaSeconds) ? result.etaSeconds : estimateEta(result, elapsedSeconds);
   const groupText = `已找到 ${result.count || 0} 组包围曝光`;
   const timeText = `已耗时 ${formatDuration(elapsedSeconds)}`;
-  const etaText = `预计还需 ${formatDuration(etaSeconds)}`;
+  const etaText = etaSeconds === null ? "预计还需计算中" : `预计还需 ${formatDuration(etaSeconds)}`;
   bracketStatus.textContent = `扫描进度 ${percent.toFixed(0)}% · ${groupText} · ${timeText} · ${etaText}`;
 }
 
 function estimateEta(result, elapsedSeconds) {
   if (!result.processed || !result.total || result.processed <= 0 || result.total <= result.processed) {
-    return 0;
+    return null;
   }
   const perPhoto = elapsedSeconds / result.processed;
   return perPhoto * (result.total - result.processed);

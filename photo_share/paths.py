@@ -104,7 +104,11 @@ def hash_text(value: str) -> str:
 
 def build_thumbnail_modes(base_size: int, base_quality: int) -> dict[str, dict[str, int]]:
     modes = {mode: spec.copy() for mode, spec in THUMBNAIL_MODES.items()}
-    modes[DEFAULT_THUMBNAIL_MODE] = {"size": base_size, "quality": base_quality}
+    modes[DEFAULT_THUMBNAIL_MODE] = {
+        **modes[DEFAULT_THUMBNAIL_MODE],
+        "size": base_size,
+        "quality": base_quality,
+    }
     return modes
 
 
@@ -112,5 +116,5 @@ def get_thumbnail_mode(value: str | None) -> str:
     if not value:
         return DEFAULT_THUMBNAIL_MODE
     if value not in THUMBNAIL_MODES:
-        abort(400, "thumbnail mode must be small, medium, or large.")
+        abort(400, "thumbnail mode must be small, medium, large, or xlarge.")
     return value
