@@ -1,4 +1,8 @@
 ﻿function queueAdjacentOriginals() {
+  state.originalPrefetchQueue = [];
+  if (state.rapidNavDirection) {
+    return;
+  }
   const photos = photosOnly();
   const index = currentPhotoIndex();
   const candidates = [
@@ -26,6 +30,9 @@ function queueOriginalPrefetch(entry) {
 }
 
 function runOriginalPrefetchQueue() {
+  if (state.rapidNavDirection) {
+    return;
+  }
   while (
     state.originalPrefetchActive < ORIGINAL_PREFETCH_CONCURRENCY
     && state.originalPrefetchQueue.length > 0
@@ -41,7 +48,31 @@ function runOriginalPrefetchQueue() {
   }
 }
 
-async function loadOriginalImage(entry, forceDisplay = false) {
+function scheduleCurrentOriginalLoad(entry) {
+  if (state.originalLoadTimer) {
+    window.clearTimeout(state.originalLoadTimer);
+    state.originalLoadTimer = null;
+  }
+  const generation = state.viewerGeneration;
+  const delay = state.rapidNavDirection ? 180 : 0;
+  state.originalLoadTimer = window.setTimeout(() => {
+    state.originalLoadTimer = null;
+    if (state.currentPhoto?.path === entry.path && state.viewerGeneration === generation) {
+      loadOriginalImage(entry, true, generation);
+    }
+  }, delay);
+}
+
+function cancelStaleOriginalLoads(keepPath = null) {
+  state.originalPrefetchQueue = [];
+  for (const [path, controller] of state.originalControllers.entries()) {
+    if (path !== keepPath) {
+      controller.abort();
+    }
+  }
+}
+
+async function loadOriginalImage(entry, forceDisplay = false, generation = state.viewerGeneration) {
   if (entry.type !== "photo") {
     return null;
   }
@@ -54,13 +85,18 @@ async function loadOriginalImage(entry, forceDisplay = false) {
   }
   if (state.originalFetches.has(entry.path)) {
     const url = await state.originalFetches.get(entry.path);
-    if ((forceDisplay || state.currentPhoto?.path === entry.path) && url) {
+    if ((forceDisplay || state.currentPhoto?.path === entry.path) && url && state.viewerGeneration === generation) {
       showOriginalUrl(entry, url);
     }
     return url;
   }
 
-  const promise = fetch(`/api/image/${encodePath(entry.path)}`)
+  if (forceDisplay) {
+    cancelStaleOriginalLoads(entry.path);
+  }
+  const controller = new AbortController();
+  state.originalControllers.set(entry.path, controller);
+  const promise = fetch(`/api/image/${encodePath(entry.path)}`, { signal: controller.signal })
     .then((response) => {
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -76,10 +112,11 @@ async function loadOriginalImage(entry, forceDisplay = false) {
     .catch(() => null)
     .finally(() => {
       state.originalFetches.delete(entry.path);
+      state.originalControllers.delete(entry.path);
     });
   state.originalFetches.set(entry.path, promise);
   const url = await promise;
-  if ((forceDisplay || state.currentPhoto?.path === entry.path) && url) {
+  if ((forceDisplay || state.currentPhoto?.path === entry.path) && url && state.viewerGeneration === generation) {
     showOriginalUrl(entry, url);
   }
   return url;
@@ -156,6 +193,7 @@ function trimOriginalCache() {
 }
 
 window.addEventListener("beforeunload", () => {
+  cancelStaleOriginalLoads();
   for (const item of state.originalCache.values()) {
     URL.revokeObjectURL(item.url);
   }

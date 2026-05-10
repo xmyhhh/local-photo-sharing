@@ -46,8 +46,18 @@ const state = {
   originalCache: new Map(),
   originalCacheBytes: 0,
   originalFetches: new Map(),
+  originalControllers: new Map(),
   originalPrefetchQueue: [],
   originalPrefetchActive: 0,
+  originalLoadTimer: null,
+  viewerGeneration: 0,
+  rapidNavTimer: null,
+  rapidNavStopTimer: null,
+  rapidNavDirection: 0,
+  rapidNavStarted: false,
+  rapidNavSuppressClick: false,
+  rapidNavDelay: 0,
+  rapidNavPointerId: null,
   thumbObserver: null,
   thumbMode: getStoredThumbMode(),
   compactMode: getStoredCompactMode(),
@@ -57,6 +67,10 @@ const state = {
   swipeStart: null,
   swipeMoved: false,
   lastTapTime: 0,
+  viewerHistoryArmed: false,
+  closingViewerFromHistory: false,
+  galleryHistoryArmed: false,
+  handlingGalleryBack: false,
   visibleScanTimer: null,
   wheelZoomFrame: 0,
   wheelZoomDelta: 0,
@@ -102,11 +116,13 @@ const viewer = document.querySelector("#viewer");
 const viewerTitle = document.querySelector("#viewerTitle");
 const viewerImage = document.querySelector("#viewerImage");
 const viewerVideo = document.querySelector("#viewerVideo");
-const viewerRating = document.querySelector("#viewerRating");
+const viewerRatingBtn = document.querySelector("#viewerRatingBtn");
+const viewerRatingMenu = document.querySelector("#viewerRatingMenu");
 const imageStage = document.querySelector("#imageStage");
 const zoomOutBtn = document.querySelector("#zoomOutBtn");
 const zoomResetBtn = document.querySelector("#zoomResetBtn");
 const zoomInBtn = document.querySelector("#zoomInBtn");
+const rotateBtn = document.querySelector("#rotateBtn");
 const downloadBtn = document.querySelector("#downloadBtn");
 const deleteBtn = document.querySelector("#deleteBtn");
 const closeBtn = document.querySelector("#closeBtn");

@@ -2,6 +2,22 @@ async function loadConfig() {
   const config = await fetchJson("/api/config");
   state.roots = config.roots || [];
   state.rootId = config.defaultRootId || state.roots[0]?.id || "root1";
+  applyThumbnailQueueLimits(config.thumbnailQueueLimits);
+}
+
+function applyThumbnailQueueLimits(limits) {
+  if (!limits || typeof limits !== "object") {
+    return;
+  }
+  THUMB_MODES.forEach((mode) => {
+    if (limits[mode] === undefined) {
+      return;
+    }
+    const value = Number.parseInt(limits[mode], 10);
+    if (Number.isFinite(value)) {
+      THUMB_QUEUE_LIMITS[mode] = Math.max(10, value);
+    }
+  });
 }
 
 async function loadFolder(folder = state.folder) {
@@ -33,6 +49,7 @@ async function loadFolder(folder = state.folder) {
   if (data.indexing && state.filters.ratings.length) {
     scheduleFilterRefresh(generation);
   }
+  updateGalleryHistoryState();
 }
 
 function navigateFolder(folder) {
@@ -42,6 +59,35 @@ function navigateFolder(folder) {
     window.scrollTo({ top: 0, behavior: "auto" });
   }
   loadFolder(target);
+}
+
+function armGalleryHistory() {
+  if (state.galleryHistoryArmed) {
+    return;
+  }
+  window.history.replaceState({ galleryBase: true }, "", window.location.href);
+  window.history.pushState({ gallery: true, folder: state.folder || "" }, "", window.location.href);
+  state.galleryHistoryArmed = true;
+}
+
+function updateGalleryHistoryState() {
+  if (!state.galleryHistoryArmed || state.viewerHistoryArmed || state.handlingGalleryBack) {
+    return;
+  }
+  window.history.replaceState({ gallery: true, folder: state.folder || "" }, "", window.location.href);
+}
+
+function handleGalleryBackNavigation() {
+  if (!state.folder || viewer.open || bracketDialog.open) {
+    return false;
+  }
+  state.handlingGalleryBack = true;
+  navigateFolder(state.parent);
+  window.history.pushState({ gallery: true, folder: state.parent || "" }, "", window.location.href);
+  window.setTimeout(() => {
+    state.handlingGalleryBack = false;
+  }, 0);
+  return true;
 }
 
 function normalizeFolderPath(folder) {

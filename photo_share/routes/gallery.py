@@ -40,6 +40,7 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
             ],
             "defaultRootId": services.default_root_id,
             "allowDelete": True,
+            "thumbnailQueueLimits": services.thumbnail_queue_limits,
         })
 
     @app.get("/api/photos")

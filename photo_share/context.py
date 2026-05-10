@@ -29,3 +29,4 @@ class AppServices:
     bracket_cache: dict[str, dict[str, Any]]
     bracket_cache_loaded: bool
     bracket_merge_tasks: dict[str, dict[str, Any]]
+    thumbnail_queue_limits: dict[str, int]

@@ -27,6 +27,7 @@ def create_app(
     thumbnail_quality: int = DEFAULT_THUMBNAIL_QUALITY,
     preview_size: int = DEFAULT_PREVIEW_SIZE,
     preview_quality: int = DEFAULT_PREVIEW_QUALITY,
+    thumbnail_queue_limits: dict[str, int] | None = None,
 ) -> Flask:
     roots_input = [photo_roots] if isinstance(photo_roots, Path) else photo_roots
     roots = [root.resolve() for root in roots_input]
@@ -37,7 +38,7 @@ def create_app(
             raise ValueError(f"Photo root does not exist or is not a folder: {root}")
 
     app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="/static")
-    services = _create_services(roots, thumbnail_size, thumbnail_quality, preview_size, preview_quality)
+    services = _create_services(roots, thumbnail_size, thumbnail_quality, preview_size, preview_quality, thumbnail_queue_limits)
     register_routes(app, services)
     return app
 
@@ -48,10 +49,11 @@ def _create_services(
     thumbnail_quality: int,
     preview_size: int,
     preview_quality: int,
+    thumbnail_queue_limits: dict[str, int] | None,
 ) -> AppServices:
     root_map = {f"root{index + 1}": root for index, root in enumerate(roots)}
     root_services = {
-        root_id: _create_root_services(root, thumbnail_size, thumbnail_quality, preview_size, preview_quality)
+        root_id: _create_root_services(root, thumbnail_size, thumbnail_quality, preview_size, preview_quality, thumbnail_queue_limits)
         for root_id, root in root_map.items()
     }
     return AppServices(
@@ -62,6 +64,7 @@ def _create_services(
         bracket_cache={},
         bracket_cache_loaded=False,
         bracket_merge_tasks={},
+        thumbnail_queue_limits=thumbnail_queue_limits or {},
     )
 
 
@@ -71,12 +74,13 @@ def _create_root_services(
     thumbnail_quality: int,
     preview_size: int,
     preview_quality: int,
+    thumbnail_queue_limits: dict[str, int] | None,
 ) -> RootServices:
     ratings = RatingStore(root / RATINGS_FILE)
     cache_root = CACHE_DIR / root_cache_key(root)
     metadata = MetadataStore(root)
     rating_index = RatingIndex(root, ratings, metadata)
-    thumbnail_modes = build_thumbnail_modes(thumbnail_size, thumbnail_quality)
+    thumbnail_modes = build_thumbnail_modes(thumbnail_size, thumbnail_quality, thumbnail_queue_limits)
     thumbnails = {
         mode: ImageCacheStore(
             root,

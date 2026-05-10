@@ -12,6 +12,7 @@ from .constants import (
     DEFAULT_PREVIEW_SIZE,
     DEFAULT_THUMBNAIL_QUALITY,
     DEFAULT_THUMBNAIL_SIZE,
+    THUMBNAIL_MODES,
 )
 
 
@@ -117,6 +118,28 @@ def get_preview_quality(config: dict[str, Any]) -> int:
     if quality < 50 or quality > 95:
         raise ValueError("Config field preview_quality must be between 50 and 95.")
     return quality
+
+
+def get_thumbnail_queue_limits(config: dict[str, Any]) -> dict[str, int]:
+    defaults = {
+        mode: int(spec["queue_limit"])
+        for mode, spec in THUMBNAIL_MODES.items()
+    }
+    value = config.get("thumbnail_queue_limits", {})
+    if value is None:
+        return defaults
+    if not isinstance(value, dict):
+        raise ValueError("Config field thumbnail_queue_limits must be an object.")
+    limits = defaults.copy()
+    for mode in defaults:
+        if mode not in value:
+            continue
+        try:
+            parsed = int(value[mode])
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Config field thumbnail_queue_limits.{mode} must be an integer.") from exc
+        limits[mode] = max(10, parsed)
+    return limits
 
 
 def parse_args() -> argparse.Namespace:

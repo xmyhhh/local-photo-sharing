@@ -132,7 +132,6 @@ h1 {
 }
 
 .actions button:hover,
-.root-selector button:hover,
 #clearFiltersBtn:hover {
   transform: translateY(-1px);
 }
@@ -150,7 +149,35 @@ h1 {
 main {
   width: 100%;
   margin: 0;
-  padding: 18px clamp(12px, 2vw, 28px) 40px;
+  padding: 14px clamp(12px, 2vw, 28px) 40px;
+}
+
+.browse-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.browse-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.browse-actions button {
+  min-height: 38px;
+  padding: 0 14px;
+  border-color: rgba(23, 107, 135, 0.14);
+  background: rgba(255, 255, 255, 0.66);
+  color: var(--accent);
+  box-shadow: 0 10px 26px rgba(31, 63, 77, 0.06);
+}
+
+.browse-actions button.active {
+  background: var(--accent);
+  color: #fff;
 }
 
 .filters {
@@ -158,13 +185,17 @@ main {
   flex-wrap: wrap;
   align-items: end;
   gap: 10px;
-  margin-bottom: 18px;
-  padding: 12px;
+  margin-bottom: 12px;
+  padding: 14px;
   border: 1px solid rgba(154, 174, 187, 0.24);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.84);
   box-shadow: var(--shadow-soft);
   backdrop-filter: blur(14px);
+}
+
+.filters[hidden] {
+  display: none;
 }
 
 .filters label {
@@ -239,15 +270,23 @@ main {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 18px;
+  min-width: 0;
+  gap: 6px;
   color: var(--muted);
 }
 
 .breadcrumb button {
-  border-color: var(--line);
-  background: #fff;
+  min-height: 34px;
+  border-color: rgba(154, 174, 187, 0.2);
+  background: rgba(255, 255, 255, 0.62);
   color: var(--text);
+  padding: 0 13px;
+  font-size: 14px;
+}
+
+.breadcrumb span {
+  color: rgba(100, 113, 128, 0.42);
+  font-weight: 700;
 }
 
 .grid {
@@ -963,8 +1002,6 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-wrap: nowrap;
-  gap: 8px;
   max-width: calc(100vw - 24px);
   padding: 7px;
   border: 1px solid rgba(236, 245, 247, 0.12);
@@ -1059,14 +1096,20 @@ main {
 }
 
 .viewer-rating {
+  position: absolute;
+  left: 50%;
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 58px);
+  z-index: 5;
   display: flex;
   justify-content: center;
-  max-width: 100%;
-  padding: 0;
+  max-width: calc(100vw - 24px);
+  padding: 7px;
+  border: 1px solid rgba(236, 245, 247, 0.12);
   border-radius: 999px;
-  background: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
+  background: rgba(16, 23, 27, 0.38);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(20px) saturate(0.86);
+  transform: translateX(-50%);
 }
 
 .viewer-rating .rating {
@@ -1283,6 +1326,23 @@ main {
     padding: 12px;
   }
 
+  .browse-bar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .browse-actions {
+    align-self: flex-start;
+  }
+
+  .browse-actions button {
+    min-height: 36px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
   .filters {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1290,6 +1350,10 @@ main {
     margin-bottom: 12px;
     padding: 10px;
     border-radius: 16px;
+  }
+
+  .filters[hidden] {
+    display: none;
   }
 
   .filters label,
@@ -1315,7 +1379,6 @@ main {
 
   .breadcrumb {
     gap: 6px;
-    margin-bottom: 12px;
     overflow-x: auto;
     flex-wrap: nowrap;
     scrollbar-width: none;
@@ -1448,8 +1511,7 @@ main {
   }
 
   .viewer-control-bar {
-    justify-content: flex-start;
-    gap: 6px;
+    justify-content: center;
     overflow-x: auto;
     bottom: max(10px, env(safe-area-inset-bottom));
     max-width: calc(100vw - 16px);
@@ -1472,6 +1534,12 @@ main {
     min-height: 38px;
     padding: 0 12px;
     font-size: 13px;
+  }
+
+  .viewer-rating {
+    bottom: calc(max(10px, env(safe-area-inset-bottom)) + 56px);
+    max-width: calc(100vw - 16px);
+    padding: 5px;
   }
 
   #closeBtn {
@@ -1510,6 +1578,34 @@ main {
     min-height: clamp(30px, 9vw, 42px);
     font-size: clamp(21px, 7.6vw, 30px);
     padding: 0 clamp(1px, 1vw, 4px);
+  }
+}
+
+@media (max-width: 520px) {
+  .viewer-control-bar,
+  .viewer-rating {
+    left: 50%;
+    width: max-content;
+  }
+
+  .viewer-control-bar {
+    bottom: max(10px, env(safe-area-inset-bottom));
+  }
+
+  .viewer-rating {
+    bottom: calc(max(10px, env(safe-area-inset-bottom)) + 54px);
+  }
+}
+
+@media (max-width: 360px) {
+  .viewer-actions button {
+    min-width: 40px;
+    padding: 0 10px;
+  }
+
+  #downloadBtn,
+  #deleteBtn {
+    min-width: 48px;
   }
 }
 

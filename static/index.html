@@ -122,13 +122,15 @@
         </div>
         <div class="viewer-control-bar">
           <div class="viewer-actions">
-            <button id="zoomOutBtn" type="button">-</button>
             <button id="zoomResetBtn" type="button">100%</button>
-            <button id="zoomInBtn" type="button">+</button>
+            <div class="viewer-rating-picker">
+              <button id="viewerRatingBtn" type="button" aria-expanded="false" aria-controls="viewerRatingMenu">☆</button>
+              <div id="viewerRatingMenu" class="viewer-rating-menu" hidden></div>
+            </div>
+            <button id="rotateBtn" type="button">旋转</button>
             <button id="downloadBtn" type="button">下载</button>
             <button id="deleteBtn" class="danger" type="button">删除</button>
           </div>
-          <div class="viewer-rating" id="viewerRating"></div>
         </div>
         <div id="imageStage" class="image-stage">
           <img id="viewerImage" alt="" />

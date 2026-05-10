@@ -2,10 +2,23 @@
   if (!state.currentPhoto) {
     return;
   }
-  await fetchJson(`/api/photo/${encodePath(state.currentPhoto.path)}`, { method: "DELETE" });
-  viewer.close();
+  const entry = state.currentPhoto;
+  const mediaEntries = photosOnly();
+  const index = mediaEntries.findIndex((item) => item.path === entry.path);
+  const nextEntry = index >= 0 ? mediaEntries[index + 1] || mediaEntries[index - 1] || null : null;
+
+  await fetchJson(`/api/photo/${encodePath(entry.path)}`, { method: "DELETE" });
+
+  state.entries = state.entries.filter((item) => item.path !== entry.path);
+  renderGrid();
+
+  if (nextEntry) {
+    showPhoto(nextEntry);
+    return;
+  }
+
   state.currentPhoto = null;
-  await loadFolder(state.folder);
+  closeViewerFromUi();
 }
 
 function requestDeleteCurrentPhoto() {

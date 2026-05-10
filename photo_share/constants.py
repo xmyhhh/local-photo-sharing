@@ -41,6 +41,12 @@ DEFAULT_CONFIG = {
     "port": 8000,
     "thumbnail_size": DEFAULT_THUMBNAIL_SIZE,
     "thumbnail_quality": DEFAULT_THUMBNAIL_QUALITY,
+    "thumbnail_queue_limits": {
+        "small": 100,
+        "medium": 70,
+        "large": 40,
+        "xlarge": 30,
+    },
     "preview_size": DEFAULT_PREVIEW_SIZE,
     "preview_quality": DEFAULT_PREVIEW_QUALITY,
 }

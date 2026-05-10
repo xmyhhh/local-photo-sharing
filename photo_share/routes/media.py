@@ -4,6 +4,7 @@ import mimetypes
 
 from flask import Flask, jsonify, request
 
+from ..constants import JPG_EXTENSIONS
 from ..context import AppServices
 from ..paths import (
     get_thumbnail_mode,

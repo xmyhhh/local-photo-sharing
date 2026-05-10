@@ -27,6 +27,7 @@ dateToFilter.addEventListener("change", applyFilters);
 thumbModeSelect.value = state.thumbMode;
 thumbModeSelect.addEventListener("change", () => setThumbMode(thumbModeSelect.value));
 compactToggleBtn.textContent = state.compactMode ? "展开" : "精简";
+updateFilterPanelLabel();
 compactToggleBtn.addEventListener("click", () => {
   state.compactMode = !state.compactMode;
   window.localStorage.setItem("compactMode", state.compactMode ? "1" : "0");
@@ -68,11 +69,12 @@ clearFiltersBtn.addEventListener("click", () => {
   });
   dateFromFilter.value = "";
   dateToFilter.value = "";
+  setFilterPanelOpen(false);
   applyFilters();
 });
-closeBtn.addEventListener("click", () => closeViewerAnimated());
-prevBtn.addEventListener("click", () => showAdjacentPhoto(-1));
-nextBtn.addEventListener("click", () => showAdjacentPhoto(1));
+closeBtn.addEventListener("click", () => closeViewerFromUi());
+bindPageButton(prevBtn, -1);
+bindPageButton(nextBtn, 1);
 downloadBtn.addEventListener("click", downloadCurrentPhoto);
 deleteBtn.addEventListener("click", requestDeleteCurrentPhoto);
 cancelDeleteBtn.addEventListener("click", () => deleteDialog.close());
@@ -228,15 +230,71 @@ document.addEventListener("keydown", (event) => {
   }
   if (event.key === "ArrowLeft") {
     event.preventDefault();
-    showAdjacentPhoto(-1);
+    if (event.repeat) {
+      startRapidNavigation(-1);
+    } else {
+      showAdjacentPhoto(-1);
+    }
   } else if (event.key === "ArrowRight") {
     event.preventDefault();
-    showAdjacentPhoto(1);
+    if (event.repeat) {
+      startRapidNavigation(1);
+    } else {
+      showAdjacentPhoto(1);
+    }
   } else if (event.key === "Escape") {
     event.preventDefault();
-    closeViewerAnimated();
+    closeViewerFromUi();
   }
 });
+document.addEventListener("keyup", (event) => {
+  if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+    stopRapidNavigation();
+  }
+});
+window.addEventListener("popstate", () => {
+  if (viewer.open && state.viewerHistoryArmed) {
+    state.closingViewerFromHistory = true;
+    closeViewerAnimated();
+    return;
+  }
+  if (handleGalleryBackNavigation()) {
+    return;
+  }
+});
+
+function bindPageButton(button, direction) {
+  button.addEventListener("click", (event) => {
+    if (state.rapidNavSuppressClick) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    showAdjacentPhoto(direction);
+  });
+  button.addEventListener("pointerdown", (event) => {
+    if (!viewer.open || button.disabled) {
+      return;
+    }
+    button.setPointerCapture(event.pointerId);
+    startRapidNavigation(direction, event.pointerId);
+  });
+  button.addEventListener("pointerup", (event) => {
+    if (state.rapidNavPointerId === event.pointerId) {
+      stopRapidNavigation();
+    }
+  });
+  button.addEventListener("pointercancel", (event) => {
+    if (state.rapidNavPointerId === event.pointerId) {
+      stopRapidNavigation();
+    }
+  });
+  button.addEventListener("pointerleave", (event) => {
+    if (event.pointerType !== "touch" && state.rapidNavPointerId === event.pointerId) {
+      stopRapidNavigation();
+    }
+  });
+}
 
 function clearEndedTouches(event) {
   for (const touch of event.changedTouches) {
@@ -253,6 +311,7 @@ function updateScrollTopButton() {
 
 loadConfig()
   .then(() => loadFolder(""))
+  .then(armGalleryHistory)
   .then(openInitialBracketProject)
   .then(updateScrollTopButton)
   .catch((error) => {

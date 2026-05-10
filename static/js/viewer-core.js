@@ -2,6 +2,7 @@ const VIEWER_TRANSITION_MS = 260;
 
 function openViewer(entry, originElement = null) {
   showPhoto(entry);
+  armViewerHistory();
   if (!originElement || prefersReducedMotion()) {
     viewer.showModal();
     viewer.classList.remove("is-transitioning", "is-fading-out");
@@ -10,10 +11,33 @@ function openViewer(entry, originElement = null) {
   startViewerEnterTransition(entry, originElement);
 }
 
+function armViewerHistory() {
+  if (state.viewerHistoryArmed) {
+    return;
+  }
+  window.history.pushState({ viewerOpen: true }, "", window.location.href);
+  state.viewerHistoryArmed = true;
+  state.closingViewerFromHistory = false;
+}
+
+function closeViewerFromUi() {
+  if (!viewer.open) {
+    return;
+  }
+  if (state.viewerHistoryArmed && !state.closingViewerFromHistory) {
+    state.closingViewerFromHistory = true;
+    window.history.back();
+    return;
+  }
+  closeViewerAnimated();
+}
+
 function showPhoto(entry) {
   if (!entry || (entry.type !== "photo" && entry.type !== "video")) {
     return;
   }
+  state.viewerGeneration += 1;
+  cancelStaleOriginalLoads(entry.type === "photo" ? entry.path : null);
   state.currentPhoto = entry;
   state.zoom = 1;
   state.panX = 0;
@@ -64,19 +88,19 @@ function showPhoto(entry) {
     showOriginalUrl(entry, cachedOriginal.url);
   } else if (state.originalFetches.has(entry.path)) {
     viewerImage.classList.add("loading");
-    loadOriginalImage(entry, true);
+    scheduleCurrentOriginalLoad(entry);
   } else if (entry.thumbUrl) {
     viewerImage.classList.remove("ready");
     viewerImage.classList.add("loading");
     viewerImage.src = entry.thumbUrl;
     viewerImage.classList.add("ready");
-    loadOriginalImage(entry);
+    scheduleCurrentOriginalLoad(entry);
     loadPreviewImage(entry);
   } else {
     viewerImage.classList.remove("ready");
     viewerImage.classList.add("loading");
     viewerImage.removeAttribute("src");
-    loadOriginalImage(entry);
+    scheduleCurrentOriginalLoad(entry);
     loadPreviewImage(entry);
   }
   renderViewerRating();
@@ -138,7 +162,9 @@ async function loadPreviewImage(entry, attempt = 0) {
 }
 
 function showOriginalImageFallback(entry) {
-  loadOriginalImage(entry, true);
+  if (state.currentPhoto?.path === entry.path) {
+    scheduleCurrentOriginalLoad(entry);
+  }
 }
 
 function renderViewerRating() {
@@ -200,6 +226,58 @@ function showAdjacentPhoto(direction) {
   showPhoto(photos[next]);
 }
 
+function startRapidNavigation(direction, pointerId = null) {
+  if (!viewer.open || state.rapidNavDirection === direction) {
+    return;
+  }
+  stopRapidNavigation(false);
+  state.rapidNavDirection = direction;
+  state.rapidNavPointerId = pointerId;
+  state.rapidNavStarted = false;
+  state.rapidNavSuppressClick = false;
+  state.rapidNavDelay = 320;
+  state.rapidNavTimer = window.setTimeout(() => runRapidNavigationStep(), 280);
+}
+
+function runRapidNavigationStep() {
+  if (!state.rapidNavDirection || !viewer.open) {
+    stopRapidNavigation(false);
+    return;
+  }
+  state.rapidNavStarted = true;
+  state.rapidNavSuppressClick = true;
+  showAdjacentPhoto(state.rapidNavDirection);
+  state.rapidNavDelay = Math.max(125, state.rapidNavDelay * 0.86);
+  state.rapidNavTimer = window.setTimeout(() => runRapidNavigationStep(), state.rapidNavDelay);
+}
+
+function stopRapidNavigation(runCurrentLoad = true) {
+  if (state.rapidNavTimer) {
+    window.clearTimeout(state.rapidNavTimer);
+    state.rapidNavTimer = null;
+  }
+  if (state.rapidNavStopTimer) {
+    window.clearTimeout(state.rapidNavStopTimer);
+    state.rapidNavStopTimer = null;
+  }
+  const wasRapid = state.rapidNavStarted;
+  state.rapidNavDirection = 0;
+  state.rapidNavPointerId = null;
+  state.rapidNavStarted = false;
+  state.rapidNavDelay = 0;
+  if (runCurrentLoad && state.currentPhoto?.type === "photo") {
+    scheduleCurrentOriginalLoad(state.currentPhoto);
+    queueAdjacentOriginals();
+  }
+  if (wasRapid || state.rapidNavSuppressClick) {
+    state.rapidNavSuppressClick = true;
+    state.rapidNavStopTimer = window.setTimeout(() => {
+      state.rapidNavSuppressClick = false;
+      state.rapidNavStopTimer = null;
+    }, 0);
+  }
+}
+
 function updatePageButtons() {
   const index = currentPhotoIndex();
   const last = photosOnly().length - 1;
@@ -220,10 +298,16 @@ function preloadAdjacentPreviews() {
 
 function closeViewerAnimated() {
   if (!viewer.open) {
+    state.viewerHistoryArmed = false;
+    state.closingViewerFromHistory = false;
     return;
   }
+  stopRapidNavigation(false);
+  cancelStaleOriginalLoads();
   const entry = state.currentPhoto;
   if (!entry || prefersReducedMotion()) {
+    state.viewerHistoryArmed = false;
+    state.closingViewerFromHistory = false;
     viewer.close();
     return;
   }
@@ -231,12 +315,16 @@ function closeViewerAnimated() {
   const targetElement = getGridMediaElement(entry.path);
   const targetRect = targetElement ? targetElement.getBoundingClientRect() : null;
   if (!sourceRect || !targetRect || !isRectVisible(targetRect)) {
+    state.viewerHistoryArmed = false;
+    state.closingViewerFromHistory = false;
     viewer.close();
     return;
   }
 
   const ghost = buildViewerTransitionGhost(entry, targetElement, true);
   if (!ghost) {
+    state.viewerHistoryArmed = false;
+    state.closingViewerFromHistory = false;
     viewer.close();
     return;
   }
@@ -254,6 +342,8 @@ function closeViewerAnimated() {
   window.setTimeout(() => {
     ghost.remove();
     viewer.classList.remove("is-transitioning", "is-fading-out");
+    state.viewerHistoryArmed = false;
+    state.closingViewerFromHistory = false;
     viewer.close();
   }, VIEWER_TRANSITION_MS);
 }
