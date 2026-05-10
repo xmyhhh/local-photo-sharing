@@ -48,10 +48,14 @@ async function rotateCurrentPhoto() {
     state.originalCache.delete(entry.path);
     state.originalFetches.delete(entry.path);
     state.viewerGeneration += 1;
-    cancelStaleOriginalLoads(entry.path);
+    cancelStaleOriginalLoads();
     viewerImage.classList.remove("ready");
     viewerImage.classList.add("loading");
-    viewerImage.onload = () => viewerImage.classList.add("ready");
+    viewerImage.onload = () => {
+      viewerImage.classList.remove("loading");
+      viewerImage.classList.add("ready");
+      entry.originalReady = true;
+    };
     viewerImage.src = `${updated.imageUrl}?v=${updated.mtime}`;
     renderGrid();
   } finally {

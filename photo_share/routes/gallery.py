@@ -37,7 +37,7 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
     def config():
         return jsonify({
             "roots": [
-                {"id": root_id, "path": str(root.resolve())}
+                {"id": root_id, "name": root.name or root_id, "path": str(root.resolve())}
                 for root_id, root in services.roots.items()
             ],
             "defaultRootId": services.default_root_id,
@@ -47,9 +47,14 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
 
     @app.get("/api/photos")
     def photos():
-        root_id = request.args.get("root", services.default_root_id)
-        root_services = _root_services(services, root_id)
+        root_id = request.args.get("root", "")
         folder = request.args.get("folder", "")
+        if not root_id and not folder:
+            return jsonify(_virtual_root_payload(services))
+
+        if not root_id:
+            root_id, folder = parse_rooted_path(folder)
+        root_services = _root_services(services, root_id)
         folder_path = _resolve_rooted_folder(services, root_id, folder)
         filters = PhotoFilters.from_request(request.args)
         cursor = parse_optional_int(request.args.get("cursor"), 0, 1_000_000) or 0
@@ -91,6 +96,27 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
             "indexing": indexing,
             "nextCursor": next_cursor,
         })
+
+
+def _virtual_root_payload(services: AppServices) -> dict[str, Any]:
+    entries = [
+        {
+            "type": "folder",
+            "name": root.name or root_id,
+            "path": root_id,
+            "photoCount": _count_photos_recursive(root),
+        }
+        for root_id, root in services.roots.items()
+    ]
+    return {
+        "root": "",
+        "folder": "",
+        "parent": "",
+        "entries": entries,
+        "pendingEntries": [],
+        "indexing": False,
+        "nextCursor": None,
+    }
 
 
 def _build_entry(

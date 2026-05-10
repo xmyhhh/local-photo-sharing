@@ -23,12 +23,71 @@
 
 ## 安装
 
+推荐使用部署脚本自动创建虚拟环境并安装依赖。
+
+Windows PowerShell：
+
+```powershell
+.\deploy.ps1 install
+```
+
+Linux / macOS：
+
+```bash
+chmod +x ./deploy.sh
+./deploy.sh install
+```
+
+也可以手动安装：
+
 ```powershell
 D:\codex_prj\photo\.venv\Scripts\python.exe -m ensurepip --upgrade --default-pip
 D:\codex_prj\photo\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 ## 启动
+
+Windows PowerShell：
+
+```powershell
+.\deploy.ps1 init
+.\deploy.ps1 start
+```
+
+Linux / macOS：
+
+```bash
+./deploy.sh init
+./deploy.sh start
+```
+
+后台运行：
+
+```powershell
+.\deploy.ps1 start-bg
+.\deploy.ps1 status
+.\deploy.ps1 logs
+.\deploy.ps1 stop
+```
+
+```bash
+./deploy.sh start-bg
+./deploy.sh status
+./deploy.sh logs
+./deploy.sh stop
+```
+
+指定配置文件：
+
+```powershell
+.\deploy.ps1 start -Config D:\photo-share-config.json
+```
+
+```bash
+./deploy.sh start --config /opt/photo-share/config.json
+```
+
+也可以直接用 Python 启动：
 
 ```powershell
 D:\codex_prj\photo\.venv\Scripts\python.exe app.py
@@ -89,3 +148,7 @@ http://192.168.1.20:8000
 ```
 
 删除操作会直接删除原始 JPG 文件，请只在可信局域网内运行。
+
+
+
+![img.png](img.png)

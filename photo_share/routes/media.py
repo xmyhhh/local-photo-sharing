@@ -47,13 +47,13 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
         root_id, rel_path = _split_rooted(photo_path)
         root_services = _root_services(services, root_id)
         path = resolve_photo(root_services.root, rel_path)
-        error = root_services.previews.get_error(path)
-        if error:
-            return jsonify({"status": "error", "url": image_url(photo_path), "error": error}), 500
         preview_path = root_services.previews.get_ready(path)
         if preview_path is not None:
             return jsonify({"status": "ready", "url": preview_url(photo_path)})
         queued = root_services.previews.ensure(path)
+        error = root_services.previews.get_error(path)
+        if error and not queued:
+            return jsonify({"status": "error", "url": preview_url(photo_path), "error": error}), 500
         return jsonify({"status": "queued" if queued else "processing", "url": preview_url(photo_path)}), 202
 
     @app.get("/api/download/<path:photo_path>")
@@ -98,13 +98,13 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
         path = resolve_photo(root_services.root, rel_path)
         mode = get_thumbnail_mode(request.args.get("mode"))
         thumb_store = root_services.thumbnails[mode]
-        error = thumb_store.get_error(path)
-        if error:
-            return jsonify({"status": "error", "url": image_url(photo_path), "error": error}), 500
         thumb = thumb_store.get_ready(path)
         if thumb is not None:
             return jsonify({"status": "ready", "url": thumb_url(photo_path, mode)})
         queued = thumb_store.ensure(path)
+        error = thumb_store.get_error(path)
+        if error and not queued:
+            return jsonify({"status": "error", "url": thumb_url(photo_path, mode), "error": error}), 500
         return jsonify({"status": "queued" if queued else "processing", "url": thumb_url(photo_path, mode)}), 202
 
     @app.delete("/api/photo/<path:photo_path>")
@@ -167,16 +167,10 @@ def _split_rooted(value: str) -> tuple[str, str]:
 
 
 def _rotate_jpeg_file(path: Path, angle: int) -> None:
-    try:
-        exif_dict = piexif.load(str(path))
-    except Exception:
-        exif_dict = {}
-    zeroth = exif_dict.setdefault("0th", {})
-    zeroth.pop(piexif.ImageIFD.Orientation, None)
-    exif_bytes = piexif.dump(exif_dict) if exif_dict else b""
     tmp_path = path.with_name(f".{path.name}.rotate.tmp")
     try:
         with Image.open(path) as image:
+            exif_bytes = _rotated_exif_bytes(path)
             rotated = ImageOps.exif_transpose(image).rotate(angle, expand=True)
             if rotated.mode not in {"RGB", "L"}:
                 rotated = rotated.convert("RGB")
@@ -189,3 +183,29 @@ def _rotate_jpeg_file(path: Path, angle: int) -> None:
         if tmp_path.exists():
             tmp_path.unlink()
         abort(500, f"failed to rotate JPEG: {error}")
+
+
+def _rotated_exif_bytes(path: Path) -> bytes:
+    try:
+        exif_dict = piexif.load(str(path))
+    except Exception as error:
+        abort(500, f"failed to read JPEG EXIF: {error}")
+    exif_dict.setdefault("0th", {}).pop(piexif.ImageIFD.Orientation, None)
+    _normalize_exif_value_types(exif_dict)
+    return piexif.dump(exif_dict)
+
+
+def _normalize_exif_value_types(exif_dict: dict) -> None:
+    for ifd_name in ("0th", "Exif", "GPS", "Interop", "1st"):
+        ifd = exif_dict.get(ifd_name)
+        if not isinstance(ifd, dict):
+            continue
+        tags = piexif.TAGS.get(ifd_name, {})
+        for tag, value in list(ifd.items()):
+            tag_type = tags.get(tag, {}).get("type")
+            if tag_type == 7 and isinstance(value, int):
+                if 0 <= value <= 255:
+                    ifd[tag] = bytes([value])
+                else:
+                    length = max(1, (value.bit_length() + 7) // 8)
+                    ifd[tag] = value.to_bytes(length, "big", signed=False)

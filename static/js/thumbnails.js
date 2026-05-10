@@ -70,6 +70,14 @@ function scheduleThumbnailRetry(entry, img, spinner, attempt, mode) {
 }
 
 function showThumbnailFallback(entry, img, spinner) {
+  if (entry.browserRenderable === false) {
+    if (isThumbnailStillNeeded(img)) {
+      scheduleThumbnailRequeue(entry, img, spinner, state.thumbMode);
+      return;
+    }
+    spinner.classList.add("failed");
+    return;
+  }
   img.loading = "eager";
   img.fetchPriority = "high";
   img.onload = () => {

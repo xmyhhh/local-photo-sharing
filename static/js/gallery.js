@@ -1,7 +1,7 @@
 async function loadConfig() {
   const config = await fetchJson("/api/config");
   state.roots = config.roots || [];
-  state.rootId = config.defaultRootId || state.roots[0]?.id || "root1";
+  state.rootId = "";
   applyThumbnailQueueLimits(config.thumbnailQueueLimits);
 }
 
@@ -22,10 +22,13 @@ function applyThumbnailQueueLimits(limits) {
 
 async function loadFolder(folder = state.folder) {
   const generation = state.filterGeneration;
+  const targetFolder = normalizeFolderPath(folder || "");
   state.nextCursor = null;
   const params = new URLSearchParams();
-  params.set("root", state.rootId);
-  params.set("folder", folder);
+  if (state.rootId) {
+    params.set("root", state.rootId);
+  }
+  params.set("folder", targetFolder);
   params.set("limit", "80");
   state.filters.ratings.forEach((rating) => params.append("rating", rating));
   if (state.filters.dateFrom) {
@@ -78,7 +81,15 @@ function updateGalleryHistoryState() {
 }
 
 function handleGalleryBackNavigation() {
-  if (!state.folder || viewer.open || bracketDialog.open) {
+  if (viewer.open || bracketDialog.open) {
+    return false;
+  }
+  if (!state.folder) {
+    if (state.rootId) {
+      navigateVirtualRoot();
+      window.history.pushState({ gallery: true, folder: "" }, "", window.location.href);
+      return true;
+    }
     return false;
   }
   state.handlingGalleryBack = true;
@@ -91,6 +102,9 @@ function handleGalleryBackNavigation() {
 }
 
 function normalizeFolderPath(folder) {
+  if (!state.rootId) {
+    return normalizeVirtualRootPath(folder);
+  }
   const prefix = `${state.rootId}/`;
   if (folder === state.rootId) {
     return "";
@@ -101,8 +115,21 @@ function normalizeFolderPath(folder) {
   return folder;
 }
 
+function normalizeVirtualRootPath(folder) {
+  const normalized = folder.replace(/^\/+/, "");
+  const root = state.roots.find((item) => item.id === normalized || normalized.startsWith(`${item.id}/`));
+  if (!root) {
+    return normalized;
+  }
+  state.rootId = root.id;
+  return normalized === root.id ? "" : normalized.slice(root.id.length + 1);
+}
+
 function qualifyPath(path) {
   if (!path) {
+    return path;
+  }
+  if (!state.rootId) {
     return path;
   }
   if (path.startsWith(`${state.rootId}/`)) {
@@ -121,7 +148,9 @@ async function loadMoreEntries() {
   state.loadingMore = true;
   const generation = state.filterGeneration;
   const params = new URLSearchParams();
-  params.set("root", state.rootId);
+  if (state.rootId) {
+    params.set("root", state.rootId);
+  }
   params.set("folder", state.folder);
   params.set("cursor", String(state.nextCursor));
   params.set("limit", "80");
@@ -160,8 +189,23 @@ function renderBreadcrumb() {
   const root = document.createElement("button");
   root.type = "button";
   root.textContent = "根目录";
-  root.addEventListener("click", () => navigateFolder(""));
+  root.addEventListener("click", () => navigateVirtualRoot());
   breadcrumb.append(root);
+
+  if (!state.rootId) {
+    backBtn.disabled = true;
+    return;
+  }
+
+  const rootInfo = state.roots.find((item) => item.id === state.rootId);
+  const sep = document.createElement("span");
+  sep.textContent = "/";
+  breadcrumb.append(sep);
+  const rootBtn = document.createElement("button");
+  rootBtn.type = "button";
+  rootBtn.textContent = rootInfo?.name || rootDisplayName(rootInfo) || state.rootId;
+  rootBtn.addEventListener("click", () => loadFolder(""));
+  breadcrumb.append(rootBtn);
 
   const parts = state.folder ? state.folder.split("/") : [];
   let current = "";
@@ -179,7 +223,19 @@ function renderBreadcrumb() {
     breadcrumb.append(btn);
   });
 
-  backBtn.disabled = !state.folder;
+  backBtn.disabled = false;
+}
+
+function navigateVirtualRoot() {
+  state.rootId = "";
+  navigateFolder("");
+}
+
+function rootDisplayName(root) {
+  if (!root?.path) {
+    return "";
+  }
+  return root.path.replace(/[\\/]+$/, "").split(/[\\/]/).pop();
 }
 
 function renderGrid() {

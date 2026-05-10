@@ -17,7 +17,7 @@ const THUMB_QUEUE_LIMITS = {
 
 const state = {
   folder: "",
-  rootId: "root1",
+  rootId: "",
   roots: [],
   parent: "",
   entries: [],
@@ -26,6 +26,9 @@ const state = {
   indexing: false,
   currentPhoto: null,
   viewerLiveMode: false,
+  viewerControlsVisible: true,
+  viewerControlsTimer: null,
+  lastViewerTapTime: 0,
   deleteInProgress: false,
   zoom: 1,
   panX: 0,
@@ -101,6 +104,7 @@ const grid = document.querySelector("#grid");
 const emptyState = document.querySelector("#emptyState");
 const breadcrumb = document.querySelector("#breadcrumb");
 const openBracketProjectBtn = document.querySelector("#openBracketProjectBtn");
+const openUploadBtn = document.querySelector("#openUploadBtn");
 const backBtn = document.querySelector("#backBtn");
 const refreshBtn = document.querySelector("#refreshBtn");
 const filterPanel = document.querySelector("#filterPanel");
@@ -133,6 +137,15 @@ const deleteDialog = document.querySelector("#deleteDialog");
 const deleteDialogPath = document.querySelector("#deleteDialogPath");
 const cancelDeleteBtn = document.querySelector("#cancelDeleteBtn");
 const confirmDeleteBtn = document.querySelector("#confirmDeleteBtn");
+const uploadDialog = document.querySelector("#uploadDialog");
+const uploadForm = document.querySelector("#uploadForm");
+const closeUploadBtn = document.querySelector("#closeUploadBtn");
+const uploadRootLabel = document.querySelector("#uploadRootLabel");
+const uploadFolderInput = document.querySelector("#uploadFolderInput");
+const uploadFilesInput = document.querySelector("#uploadFilesInput");
+const uploadStatus = document.querySelector("#uploadStatus");
+const createUploadFolderBtn = document.querySelector("#createUploadFolderBtn");
+const submitUploadBtn = document.querySelector("#submitUploadBtn");
 const folderContextMenu = document.querySelector("#folderContextMenu");
 const detectBracketsBtn = document.querySelector("#detectBracketsBtn");
 const bracketDialog = document.querySelector("#bracketDialog");

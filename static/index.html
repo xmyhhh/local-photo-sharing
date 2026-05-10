@@ -4,6 +4,10 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>局域网照片共享</title>
+    <meta name="theme-color" content="#176b87" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="照片共享" />
+    <link rel="manifest" href="/static/manifest.webmanifest" />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
@@ -12,6 +16,7 @@
         <h1>照片共享</h1>
       </div>
       <div class="actions">
+        <button id="openUploadBtn" type="button">上传</button>
         <button id="openBracketProjectBtn" class="ghost" type="button">打开包围曝光项目</button>
         <button id="backBtn" class="ghost" type="button">返回上级</button>
         <button id="refreshBtn" type="button">刷新</button>
@@ -153,6 +158,37 @@
       </form>
     </dialog>
 
+    <dialog id="uploadDialog" class="upload-dialog">
+      <form id="uploadForm" class="upload-panel">
+        <div class="upload-header">
+          <div>
+            <div class="upload-title">上传照片</div>
+            <div id="uploadRootLabel" class="upload-target"></div>
+          </div>
+          <button id="closeUploadBtn" class="ghost" type="button">关闭</button>
+        </div>
+        <label>
+          文件夹
+          <input id="uploadFolderInput" name="folder" type="text" autocomplete="off" placeholder="例如 2026-05-10" />
+        </label>
+        <label>
+          文件
+          <input
+            id="uploadFilesInput"
+            name="files"
+            type="file"
+            multiple
+            accept="image/*,video/*,.jpg,.jpeg,.heic,.heif,.mov,.m4v,.mp4"
+          />
+        </label>
+        <div id="uploadStatus" class="upload-status"></div>
+        <div class="upload-actions">
+          <button id="createUploadFolderBtn" class="ghost" type="button">新建文件夹</button>
+          <button id="submitUploadBtn" type="submit">开始上传</button>
+        </div>
+      </form>
+    </dialog>
+
     <script src="/static/js/state.js"></script>
     <script src="/static/js/api.js"></script>
     <script src="/static/js/ratings-ui.js"></script>
@@ -163,6 +199,8 @@
     <script src="/static/js/viewer-cache.js"></script>
     <script src="/static/js/viewer-zoom.js"></script>
     <script src="/static/js/viewer-actions.js"></script>
+    <script src="/static/js/uploads.js"></script>
+    <script src="/static/js/pwa.js"></script>
     <script src="/static/js/events.js"></script>
     <script src="/static/app.js"></script>
   </body>

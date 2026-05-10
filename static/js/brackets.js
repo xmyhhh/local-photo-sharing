@@ -194,7 +194,6 @@ function restoreBracketProject(project, path) {
   state.currentBracketRoot = project.root || state.rootId || "root1";
   state.currentBracketFolder = project.folder || "";
   state.rootId = state.currentBracketRoot;
-  renderRootSelector();
   resetBracketDialog();
   state.currentBracketProjectPath = path || null;
   state.currentBracketRoot = project.root || state.rootId || "root1";

@@ -1,0 +1,1534 @@
+{
+  "version": 1,
+  "updatedAt": "2026-05-10T22:23:44",
+  "type": "photo-share-bracket-project",
+  "root": "root1",
+  "folder": "卡2/DCIM",
+  "detection": {
+    "analyzed": 1473,
+    "count": 20,
+    "folder": "卡2/DCIM",
+    "groups": [
+      {
+        "averageSimilarity": 0.994,
+        "exposureRangeEv": 4,
+        "id": 1,
+        "photos": [
+          {
+            "aperture": 6.3,
+            "captureTime": "2026-05-03 21:02:13",
+            "exposureBias": -2,
+            "exposureTime": 0.016666666666666666,
+            "focalLength": 60,
+            "mtime": 1777813332,
+            "name": "P1023040.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023040.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023040.JPG"
+          },
+          {
+            "aperture": 6.3,
+            "captureTime": "2026-05-03 21:02:13",
+            "exposureBias": -1,
+            "exposureTime": 0.016666666666666666,
+            "focalLength": 60,
+            "mtime": 1777813332,
+            "name": "P1023041.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023041.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023041.JPG"
+          },
+          {
+            "aperture": 6.3,
+            "captureTime": "2026-05-03 21:02:13",
+            "exposureBias": 0,
+            "exposureTime": 0.016666666666666666,
+            "focalLength": 60,
+            "mtime": 1777813332,
+            "name": "P1023042.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023042.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023042.JPG"
+          },
+          {
+            "aperture": 6.3,
+            "captureTime": "2026-05-03 21:02:14",
+            "exposureBias": 1,
+            "exposureTime": 0.016666666666666666,
+            "focalLength": 60,
+            "mtime": 1777813334,
+            "name": "P1023043.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023043.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023043.JPG"
+          },
+          {
+            "aperture": 6.3,
+            "captureTime": "2026-05-03 21:02:14",
+            "exposureBias": 2,
+            "exposureTime": 0.016666666666666666,
+            "focalLength": 60,
+            "mtime": 1777813334,
+            "name": "P1023044.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023044.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023044.JPG"
+          }
+        ],
+        "size": 5,
+        "timeSpanSeconds": 1
+      },
+      {
+        "averageSimilarity": 0.997,
+        "exposureRangeEv": 4,
+        "id": 2,
+        "photos": [
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-03 21:03:25",
+            "exposureBias": -2,
+            "exposureTime": 0.002,
+            "focalLength": 20,
+            "mtime": 1777813404,
+            "name": "P1023045.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023045.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023045.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-03 21:03:25",
+            "exposureBias": -1,
+            "exposureTime": 0.004,
+            "focalLength": 20,
+            "mtime": 1777813404,
+            "name": "P1023046.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023046.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023046.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-03 21:03:25",
+            "exposureBias": 0,
+            "exposureTime": 0.008,
+            "focalLength": 20,
+            "mtime": 1777813404,
+            "name": "P1023047.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023047.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023047.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-03 21:03:25",
+            "exposureBias": 1,
+            "exposureTime": 0.016666666666666666,
+            "focalLength": 20,
+            "mtime": 1777813404,
+            "name": "P1023048.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023048.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023048.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-03 21:03:25",
+            "exposureBias": 2,
+            "exposureTime": 0.016666666666666666,
+            "focalLength": 20,
+            "mtime": 1777813404,
+            "name": "P1023049.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023049.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023049.JPG"
+          }
+        ],
+        "size": 5,
+        "timeSpanSeconds": 0
+      },
+      {
+        "averageSimilarity": 0.996,
+        "exposureRangeEv": 4,
+        "id": 3,
+        "photos": [
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-03 21:03:41",
+            "exposureBias": -2,
+            "exposureTime": 0.0025,
+            "focalLength": 20,
+            "mtime": 1777813420,
+            "name": "P1023050.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023050.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023050.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-03 21:03:41",
+            "exposureBias": -1,
+            "exposureTime": 0.005,
+            "focalLength": 20,
+            "mtime": 1777813420,
+            "name": "P1023051.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023051.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023051.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-03 21:03:41",
+            "exposureBias": 0,
+            "exposureTime": 0.01,
+            "focalLength": 20,
+            "mtime": 1777813420,
+            "name": "P1023052.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023052.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023052.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-03 21:03:42",
+            "exposureBias": 1,
+            "exposureTime": 0.016666666666666666,
+            "focalLength": 20,
+            "mtime": 1777813422,
+            "name": "P1023053.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023053.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023053.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-03 21:03:42",
+            "exposureBias": 2,
+            "exposureTime": 0.016666666666666666,
+            "focalLength": 20,
+            "mtime": 1777813422,
+            "name": "P1023054.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023054.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023054.JPG"
+          }
+        ],
+        "size": 5,
+        "timeSpanSeconds": 1
+      },
+      {
+        "averageSimilarity": 0.995,
+        "exposureRangeEv": 4,
+        "id": 4,
+        "photos": [
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-03 21:03:52",
+            "exposureBias": -2,
+            "exposureTime": 0.0025,
+            "focalLength": 20,
+            "mtime": 1777813432,
+            "name": "P1023055.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023055.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023055.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-03 21:03:52",
+            "exposureBias": -1,
+            "exposureTime": 0.005,
+            "focalLength": 20,
+            "mtime": 1777813432,
+            "name": "P1023056.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023056.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023056.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-03 21:03:52",
+            "exposureBias": 0,
+            "exposureTime": 0.01,
+            "focalLength": 20,
+            "mtime": 1777813432,
+            "name": "P1023057.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023057.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023057.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-03 21:03:52",
+            "exposureBias": 1,
+            "exposureTime": 0.016666666666666666,
+            "focalLength": 20,
+            "mtime": 1777813432,
+            "name": "P1023058.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023058.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023058.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-03 21:03:52",
+            "exposureBias": 2,
+            "exposureTime": 0.016666666666666666,
+            "focalLength": 20,
+            "mtime": 1777813432,
+            "name": "P1023059.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023059.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023059.JPG"
+          }
+        ],
+        "size": 5,
+        "timeSpanSeconds": 0
+      },
+      {
+        "averageSimilarity": 0.998,
+        "exposureRangeEv": 4,
+        "id": 5,
+        "photos": [
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-03 21:03:57",
+            "exposureBias": -2,
+            "exposureTime": 0.0025,
+            "focalLength": 42,
+            "mtime": 1777813436,
+            "name": "P1023060.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023060.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023060.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-03 21:03:57",
+            "exposureBias": -1,
+            "exposureTime": 0.005,
+            "focalLength": 42,
+            "mtime": 1777813436,
+            "name": "P1023061.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023061.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023061.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-03 21:03:57",
+            "exposureBias": 0,
+            "exposureTime": 0.01,
+            "focalLength": 42,
+            "mtime": 1777813436,
+            "name": "P1023062.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023062.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023062.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-03 21:03:57",
+            "exposureBias": 1,
+            "exposureTime": 0.016666666666666666,
+            "focalLength": 42,
+            "mtime": 1777813436,
+            "name": "P1023063.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023063.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023063.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-03 21:03:58",
+            "exposureBias": 2,
+            "exposureTime": 0.016666666666666666,
+            "focalLength": 42,
+            "mtime": 1777988484,
+            "name": "P1023064.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023064.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023064.JPG"
+          }
+        ],
+        "size": 5,
+        "timeSpanSeconds": 1
+      },
+      {
+        "averageSimilarity": 0.996,
+        "exposureRangeEv": 4,
+        "id": 6,
+        "photos": [
+          {
+            "aperture": 3.5,
+            "captureTime": "2026-05-03 21:53:19",
+            "exposureBias": -2,
+            "exposureTime": 0.016666666666666666,
+            "focalLength": 20,
+            "mtime": 1777816398,
+            "name": "P1023287.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023287.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023287.JPG"
+          },
+          {
+            "aperture": 3.5,
+            "captureTime": "2026-05-03 21:53:19",
+            "exposureBias": -1,
+            "exposureTime": 0.016666666666666666,
+            "focalLength": 20,
+            "mtime": 1777816398,
+            "name": "P1023288.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023288.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023288.JPG"
+          },
+          {
+            "aperture": 3.5,
+            "captureTime": "2026-05-03 21:53:19",
+            "exposureBias": 0,
+            "exposureTime": 0.016666666666666666,
+            "focalLength": 20,
+            "mtime": 1777816398,
+            "name": "P1023289.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023289.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023289.JPG"
+          },
+          {
+            "aperture": 3.5,
+            "captureTime": "2026-05-03 21:53:19",
+            "exposureBias": 1,
+            "exposureTime": 0.03333333333333333,
+            "focalLength": 20,
+            "mtime": 1777816398,
+            "name": "P1023290.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023290.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023290.JPG"
+          },
+          {
+            "aperture": 3.5,
+            "captureTime": "2026-05-03 21:53:20",
+            "exposureBias": 2,
+            "exposureTime": 0.06666666666666667,
+            "focalLength": 20,
+            "mtime": 1777816400,
+            "name": "P1023291.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023291.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023291.JPG"
+          }
+        ],
+        "size": 5,
+        "timeSpanSeconds": 1
+      },
+      {
+        "averageSimilarity": 0.98,
+        "exposureRangeEv": 3.99,
+        "id": 7,
+        "photos": [
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 12:48:36",
+            "exposureBias": -1.33,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777956516,
+            "name": "P1023646.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023646.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023646.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 12:48:37",
+            "exposureBias": -0.33,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777956516,
+            "name": "P1023647.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023647.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023647.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 12:48:37",
+            "exposureBias": 0.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777956516,
+            "name": "P1023648.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023648.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023648.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 12:48:37",
+            "exposureBias": 1.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777956516,
+            "name": "P1023649.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023649.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023649.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 12:48:37",
+            "exposureBias": 2.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777956516,
+            "name": "P1023650.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023650.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023650.JPG"
+          }
+        ],
+        "size": 5,
+        "timeSpanSeconds": 1
+      },
+      {
+        "averageSimilarity": 0.978,
+        "exposureRangeEv": 3.99,
+        "id": 8,
+        "photos": [
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 12:48:46",
+            "exposureBias": -1.33,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777956526,
+            "name": "P1023651.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023651.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023651.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 12:48:46",
+            "exposureBias": -0.33,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1778053894,
+            "name": "P1023652.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023652.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023652.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 12:48:46",
+            "exposureBias": 0.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777956526,
+            "name": "P1023653.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023653.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023653.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 12:48:46",
+            "exposureBias": 1.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777956526,
+            "name": "P1023654.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023654.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023654.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 12:48:46",
+            "exposureBias": 2.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777956526,
+            "name": "P1023655.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023655.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023655.JPG"
+          }
+        ],
+        "size": 5,
+        "timeSpanSeconds": 0
+      },
+      {
+        "averageSimilarity": 0.993,
+        "exposureRangeEv": 3.99,
+        "id": 9,
+        "photos": [
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 12:48:55",
+            "exposureBias": -1.33,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777956534,
+            "name": "P1023656.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023656.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023656.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 12:48:55",
+            "exposureBias": -0.33,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777956534,
+            "name": "P1023657.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023657.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023657.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 12:48:55",
+            "exposureBias": 0.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777956534,
+            "name": "P1023658.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023658.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023658.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 12:48:55",
+            "exposureBias": 1.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1778053884,
+            "name": "P1023659.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023659.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023659.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 12:48:55",
+            "exposureBias": 2.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777956534,
+            "name": "P1023660.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023660.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023660.JPG"
+          }
+        ],
+        "size": 5,
+        "timeSpanSeconds": 0
+      },
+      {
+        "averageSimilarity": 0.974,
+        "exposureRangeEv": 3.99,
+        "id": 10,
+        "photos": [
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 13:11:58",
+            "exposureBias": -1.33,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777957918,
+            "name": "P1023696.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023696.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023696.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 13:11:58",
+            "exposureBias": -0.33,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777957918,
+            "name": "P1023697.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023697.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023697.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 13:11:58",
+            "exposureBias": 0.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777957918,
+            "name": "P1023698.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023698.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023698.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 13:11:59",
+            "exposureBias": 1.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777957918,
+            "name": "P1023699.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023699.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023699.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 13:11:59",
+            "exposureBias": 2.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777957918,
+            "name": "P1023700.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023700.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023700.JPG"
+          }
+        ],
+        "size": 5,
+        "timeSpanSeconds": 1
+      },
+      {
+        "averageSimilarity": 0.986,
+        "exposureRangeEv": 3.99,
+        "id": 11,
+        "photos": [
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 13:12:22",
+            "exposureBias": -1.33,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777957942,
+            "name": "P1023701.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023701.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023701.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 13:12:23",
+            "exposureBias": -0.33,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777957942,
+            "name": "P1023702.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023702.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023702.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 13:12:23",
+            "exposureBias": 0.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777957942,
+            "name": "P1023703.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023703.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023703.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 13:12:23",
+            "exposureBias": 1.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777957942,
+            "name": "P1023704.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023704.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023704.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 13:12:23",
+            "exposureBias": 2.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777957942,
+            "name": "P1023705.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023705.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023705.JPG"
+          }
+        ],
+        "size": 5,
+        "timeSpanSeconds": 1
+      },
+      {
+        "averageSimilarity": 0.988,
+        "exposureRangeEv": 3.99,
+        "id": 12,
+        "photos": [
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 13:12:36",
+            "exposureBias": -1.33,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777957956,
+            "name": "P1023706.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023706.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023706.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 13:12:36",
+            "exposureBias": -0.33,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777957956,
+            "name": "P1023707.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023707.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023707.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 13:12:37",
+            "exposureBias": 0.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777957956,
+            "name": "P1023708.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023708.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023708.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 13:12:37",
+            "exposureBias": 1.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777957956,
+            "name": "P1023709.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023709.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023709.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 13:12:37",
+            "exposureBias": 2.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777957956,
+            "name": "P1023710.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023710.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023710.JPG"
+          }
+        ],
+        "size": 5,
+        "timeSpanSeconds": 1
+      },
+      {
+        "averageSimilarity": 0.959,
+        "exposureRangeEv": 3.99,
+        "id": 13,
+        "photos": [
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 13:13:07",
+            "exposureBias": -1.33,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1778053786,
+            "name": "P1023711.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023711.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023711.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 13:13:07",
+            "exposureBias": -0.33,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777957986,
+            "name": "P1023712.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023712.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023712.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 13:13:07",
+            "exposureBias": 0.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777957986,
+            "name": "P1023713.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023713.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023713.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 13:13:07",
+            "exposureBias": 1.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777957986,
+            "name": "P1023714.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023714.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023714.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 13:13:07",
+            "exposureBias": 2.66,
+            "exposureTime": 0.0004,
+            "focalLength": 60,
+            "mtime": 1777957986,
+            "name": "P1023715.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023715.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023715.JPG"
+          }
+        ],
+        "size": 5,
+        "timeSpanSeconds": 0
+      },
+      {
+        "averageSimilarity": 0.995,
+        "exposureRangeEv": 3.99,
+        "id": 14,
+        "photos": [
+          {
+            "aperture": 5.5,
+            "captureTime": "2026-05-05 13:13:21",
+            "exposureBias": -1.33,
+            "exposureTime": 0.0004,
+            "focalLength": 57,
+            "mtime": 1777958000,
+            "name": "P1023716.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023716.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023716.JPG"
+          },
+          {
+            "aperture": 5.5,
+            "captureTime": "2026-05-05 13:13:21",
+            "exposureBias": -0.33,
+            "exposureTime": 0.0004,
+            "focalLength": 57,
+            "mtime": 1777958000,
+            "name": "P1023717.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023717.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023717.JPG"
+          },
+          {
+            "aperture": 5.5,
+            "captureTime": "2026-05-05 13:13:21",
+            "exposureBias": 0.66,
+            "exposureTime": 0.0004,
+            "focalLength": 57,
+            "mtime": 1777958000,
+            "name": "P1023718.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023718.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023718.JPG"
+          },
+          {
+            "aperture": 5.5,
+            "captureTime": "2026-05-05 13:13:21",
+            "exposureBias": 1.66,
+            "exposureTime": 0.0004,
+            "focalLength": 57,
+            "mtime": 1777958000,
+            "name": "P1023719.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023719.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023719.JPG"
+          },
+          {
+            "aperture": 5.5,
+            "captureTime": "2026-05-05 13:13:21",
+            "exposureBias": 2.66,
+            "exposureTime": 0.0004,
+            "focalLength": 57,
+            "mtime": 1777958000,
+            "name": "P1023720.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023720.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023720.JPG"
+          }
+        ],
+        "size": 5,
+        "timeSpanSeconds": 0
+      },
+      {
+        "averageSimilarity": 0.994,
+        "exposureRangeEv": 4,
+        "id": 15,
+        "photos": [
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 14:17:45",
+            "exposureBias": -1,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777961864,
+            "name": "P1023824.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023824.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023824.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 14:17:46",
+            "exposureBias": 0,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777961866,
+            "name": "P1023825.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023825.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023825.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 14:17:46",
+            "exposureBias": 1,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777961866,
+            "name": "P1023826.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023826.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023826.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 14:17:46",
+            "exposureBias": 2,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777961866,
+            "name": "P1023827.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023827.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023827.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 14:17:46",
+            "exposureBias": 3,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777961866,
+            "name": "P1023828.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023828.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023828.JPG"
+          }
+        ],
+        "size": 5,
+        "timeSpanSeconds": 1
+      },
+      {
+        "averageSimilarity": 0.994,
+        "exposureRangeEv": 4,
+        "id": 16,
+        "photos": [
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 14:17:48",
+            "exposureBias": -1,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777961868,
+            "name": "P1023829.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023829.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023829.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 14:17:48",
+            "exposureBias": 0,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777961868,
+            "name": "P1023830.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023830.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023830.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 14:17:49",
+            "exposureBias": 1,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777961868,
+            "name": "P1023831.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023831.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023831.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 14:17:49",
+            "exposureBias": 2,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777961868,
+            "name": "P1023832.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023832.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023832.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 14:17:49",
+            "exposureBias": 3,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777961868,
+            "name": "P1023833.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023833.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023833.JPG"
+          }
+        ],
+        "size": 5,
+        "timeSpanSeconds": 1
+      },
+      {
+        "averageSimilarity": 0.993,
+        "exposureRangeEv": 4,
+        "id": 17,
+        "photos": [
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 14:18:41",
+            "exposureBias": -1,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777961920,
+            "name": "P1023834.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023834.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023834.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 14:18:41",
+            "exposureBias": 0,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777961920,
+            "name": "P1023835.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023835.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023835.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 14:18:42",
+            "exposureBias": 1,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777961922,
+            "name": "P1023836.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023836.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023836.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 14:18:42",
+            "exposureBias": 2,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777961922,
+            "name": "P1023837.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023837.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023837.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 14:18:42",
+            "exposureBias": 3,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777961922,
+            "name": "P1023838.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023838.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023838.JPG"
+          }
+        ],
+        "size": 5,
+        "timeSpanSeconds": 1
+      },
+      {
+        "averageSimilarity": 0.993,
+        "exposureRangeEv": 4,
+        "id": 18,
+        "photos": [
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 14:18:50",
+            "exposureBias": -1,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777961930,
+            "name": "P1023839.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023839.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023839.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 14:18:50",
+            "exposureBias": 0,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777961930,
+            "name": "P1023840.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023840.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023840.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 14:18:50",
+            "exposureBias": 1,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777961930,
+            "name": "P1023841.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023841.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023841.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 14:18:50",
+            "exposureBias": 2,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777961930,
+            "name": "P1023842.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023842.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023842.JPG"
+          },
+          {
+            "aperture": 5.6,
+            "captureTime": "2026-05-05 14:18:50",
+            "exposureBias": 3,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777961930,
+            "name": "P1023843.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023843.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023843.JPG"
+          }
+        ],
+        "size": 5,
+        "timeSpanSeconds": 0
+      },
+      {
+        "averageSimilarity": 0.997,
+        "exposureRangeEv": 4,
+        "id": 19,
+        "photos": [
+          {
+            "aperture": 7.1,
+            "captureTime": "2026-05-05 15:18:21",
+            "exposureBias": -2,
+            "exposureTime": 0.000125,
+            "focalLength": 41,
+            "mtime": 1777965500,
+            "name": "P1023921.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023921.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023921.JPG"
+          },
+          {
+            "aperture": 7.1,
+            "captureTime": "2026-05-05 15:18:22",
+            "exposureBias": -1,
+            "exposureTime": 0.000125,
+            "focalLength": 41,
+            "mtime": 1777965502,
+            "name": "P1023922.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023922.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023922.JPG"
+          },
+          {
+            "aperture": 7.1,
+            "captureTime": "2026-05-05 15:18:22",
+            "exposureBias": 0,
+            "exposureTime": 0.000125,
+            "focalLength": 41,
+            "mtime": 1777965502,
+            "name": "P1023923.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023923.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023923.JPG"
+          },
+          {
+            "aperture": 7.1,
+            "captureTime": "2026-05-05 15:18:22",
+            "exposureBias": 1,
+            "exposureTime": 0.000125,
+            "focalLength": 41,
+            "mtime": 1777965502,
+            "name": "P1023924.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023924.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023924.JPG"
+          },
+          {
+            "aperture": 7.1,
+            "captureTime": "2026-05-05 15:18:22",
+            "exposureBias": 2,
+            "exposureTime": 0.000125,
+            "focalLength": 41,
+            "mtime": 1777965502,
+            "name": "P1023925.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023925.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023925.JPG"
+          }
+        ],
+        "size": 5,
+        "timeSpanSeconds": 1
+      },
+      {
+        "averageSimilarity": 0.997,
+        "exposureRangeEv": 4,
+        "id": 20,
+        "photos": [
+          {
+            "aperture": 7.1,
+            "captureTime": "2026-05-05 15:18:30",
+            "exposureBias": -2,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1778052960,
+            "name": "P1023926.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023926.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023926.JPG"
+          },
+          {
+            "aperture": 7.1,
+            "captureTime": "2026-05-05 15:18:30",
+            "exposureBias": -1,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777965510,
+            "name": "P1023927.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023927.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023927.JPG"
+          },
+          {
+            "aperture": 7.1,
+            "captureTime": "2026-05-05 15:18:30",
+            "exposureBias": 0,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777965510,
+            "name": "P1023928.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023928.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023928.JPG"
+          },
+          {
+            "aperture": 7.1,
+            "captureTime": "2026-05-05 15:18:30",
+            "exposureBias": 1,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777965510,
+            "name": "P1023929.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023929.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023929.JPG"
+          },
+          {
+            "aperture": 7.1,
+            "captureTime": "2026-05-05 15:18:30",
+            "exposureBias": 2,
+            "exposureTime": 0.000125,
+            "focalLength": 60,
+            "mtime": 1777965510,
+            "name": "P1023930.JPG",
+            "path": "root1/卡2/DCIM/102_PANA/P1023930.JPG",
+            "thumbUrl": "/api/thumb/root1/%E5%8D%A12/DCIM/102_PANA/P1023930.JPG"
+          }
+        ],
+        "size": 5,
+        "timeSpanSeconds": 0
+      }
+    ],
+    "hasCached": true,
+    "processed": 1473,
+    "progress": 1,
+    "queued": 0,
+    "root": "root1",
+    "scanned": 1473,
+    "stage": "done",
+    "stage1": {
+      "processed": 1473,
+      "progress": 1,
+      "total": 1473
+    },
+    "stage2": {
+      "processed": 1473,
+      "progress": 1,
+      "total": 1473
+    },
+    "state": "cached",
+    "total": 1473,
+    "truncated": false
+  },
+  "selectedGroupIds": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20
+  ],
+  "params": {
+    "algorithm": "fusion",
+    "alignment": "people",
+    "exposure": "0",
+    "shadows": "0.25",
+    "highlights": "0.15",
+    "contrast": "1",
+    "saturation": "1",
+    "sharpen": "0.2",
+    "quality": "92"
+  },
+  "mergeResult": {
+    "files": [
+      {
+        "algorithm": "fusion",
+        "alignMethod": "people-simple-homography",
+        "downloadUrl": "/api/bracket-merge/download/20260510_222116_8706d703/bracket_group_001.jpg",
+        "groupId": 1,
+        "imageUrl": "/api/bracket-merge/image/20260510_222116_8706d703/bracket_group_001.jpg",
+        "name": "bracket_group_001.jpg",
+        "path": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703\\bracket_group_001.jpg"
+      },
+      {
+        "algorithm": "fusion",
+        "alignMethod": "people-simple-homography",
+        "downloadUrl": "/api/bracket-merge/download/20260510_222116_8706d703/bracket_group_002.jpg",
+        "groupId": 2,
+        "imageUrl": "/api/bracket-merge/image/20260510_222116_8706d703/bracket_group_002.jpg",
+        "name": "bracket_group_002.jpg",
+        "path": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703\\bracket_group_002.jpg"
+      },
+      {
+        "algorithm": "fusion",
+        "alignMethod": "people-simple-homography",
+        "downloadUrl": "/api/bracket-merge/download/20260510_222116_8706d703/bracket_group_003.jpg",
+        "groupId": 3,
+        "imageUrl": "/api/bracket-merge/image/20260510_222116_8706d703/bracket_group_003.jpg",
+        "name": "bracket_group_003.jpg",
+        "path": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703\\bracket_group_003.jpg"
+      },
+      {
+        "algorithm": "fusion",
+        "alignMethod": "people-simple-homography",
+        "downloadUrl": "/api/bracket-merge/download/20260510_222116_8706d703/bracket_group_004.jpg",
+        "groupId": 4,
+        "imageUrl": "/api/bracket-merge/image/20260510_222116_8706d703/bracket_group_004.jpg",
+        "name": "bracket_group_004.jpg",
+        "path": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703\\bracket_group_004.jpg"
+      },
+      {
+        "algorithm": "fusion",
+        "alignMethod": "people-simple-homography",
+        "downloadUrl": "/api/bracket-merge/download/20260510_222116_8706d703/bracket_group_005.jpg",
+        "groupId": 5,
+        "imageUrl": "/api/bracket-merge/image/20260510_222116_8706d703/bracket_group_005.jpg",
+        "name": "bracket_group_005.jpg",
+        "path": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703\\bracket_group_005.jpg"
+      },
+      {
+        "algorithm": "fusion",
+        "alignMethod": "people-simple-homography",
+        "downloadUrl": "/api/bracket-merge/download/20260510_222116_8706d703/bracket_group_006.jpg",
+        "groupId": 6,
+        "imageUrl": "/api/bracket-merge/image/20260510_222116_8706d703/bracket_group_006.jpg",
+        "name": "bracket_group_006.jpg",
+        "path": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703\\bracket_group_006.jpg"
+      },
+      {
+        "algorithm": "fusion",
+        "alignMethod": "people-simple-homography",
+        "downloadUrl": "/api/bracket-merge/download/20260510_222116_8706d703/bracket_group_007.jpg",
+        "groupId": 7,
+        "imageUrl": "/api/bracket-merge/image/20260510_222116_8706d703/bracket_group_007.jpg",
+        "name": "bracket_group_007.jpg",
+        "path": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703\\bracket_group_007.jpg"
+      },
+      {
+        "algorithm": "fusion",
+        "alignMethod": "people-simple-homography",
+        "downloadUrl": "/api/bracket-merge/download/20260510_222116_8706d703/bracket_group_008.jpg",
+        "groupId": 8,
+        "imageUrl": "/api/bracket-merge/image/20260510_222116_8706d703/bracket_group_008.jpg",
+        "name": "bracket_group_008.jpg",
+        "path": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703\\bracket_group_008.jpg"
+      },
+      {
+        "algorithm": "fusion",
+        "alignMethod": "people-simple-homography",
+        "downloadUrl": "/api/bracket-merge/download/20260510_222116_8706d703/bracket_group_009.jpg",
+        "groupId": 9,
+        "imageUrl": "/api/bracket-merge/image/20260510_222116_8706d703/bracket_group_009.jpg",
+        "name": "bracket_group_009.jpg",
+        "path": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703\\bracket_group_009.jpg"
+      },
+      {
+        "algorithm": "fusion",
+        "alignMethod": "people-simple-homography",
+        "downloadUrl": "/api/bracket-merge/download/20260510_222116_8706d703/bracket_group_010.jpg",
+        "groupId": 10,
+        "imageUrl": "/api/bracket-merge/image/20260510_222116_8706d703/bracket_group_010.jpg",
+        "name": "bracket_group_010.jpg",
+        "path": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703\\bracket_group_010.jpg"
+      },
+      {
+        "algorithm": "fusion",
+        "alignMethod": "people-simple-homography",
+        "downloadUrl": "/api/bracket-merge/download/20260510_222116_8706d703/bracket_group_011.jpg",
+        "groupId": 11,
+        "imageUrl": "/api/bracket-merge/image/20260510_222116_8706d703/bracket_group_011.jpg",
+        "name": "bracket_group_011.jpg",
+        "path": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703\\bracket_group_011.jpg"
+      },
+      {
+        "algorithm": "fusion",
+        "alignMethod": "people-simple-homography",
+        "downloadUrl": "/api/bracket-merge/download/20260510_222116_8706d703/bracket_group_012.jpg",
+        "groupId": 12,
+        "imageUrl": "/api/bracket-merge/image/20260510_222116_8706d703/bracket_group_012.jpg",
+        "name": "bracket_group_012.jpg",
+        "path": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703\\bracket_group_012.jpg"
+      },
+      {
+        "algorithm": "fusion",
+        "alignMethod": "people-simple-homography",
+        "downloadUrl": "/api/bracket-merge/download/20260510_222116_8706d703/bracket_group_013.jpg",
+        "groupId": 13,
+        "imageUrl": "/api/bracket-merge/image/20260510_222116_8706d703/bracket_group_013.jpg",
+        "name": "bracket_group_013.jpg",
+        "path": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703\\bracket_group_013.jpg"
+      },
+      {
+        "algorithm": "fusion",
+        "alignMethod": "people-simple-homography",
+        "downloadUrl": "/api/bracket-merge/download/20260510_222116_8706d703/bracket_group_014.jpg",
+        "groupId": 14,
+        "imageUrl": "/api/bracket-merge/image/20260510_222116_8706d703/bracket_group_014.jpg",
+        "name": "bracket_group_014.jpg",
+        "path": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703\\bracket_group_014.jpg"
+      },
+      {
+        "algorithm": "fusion",
+        "alignMethod": "people-simple-homography",
+        "downloadUrl": "/api/bracket-merge/download/20260510_222116_8706d703/bracket_group_015.jpg",
+        "groupId": 15,
+        "imageUrl": "/api/bracket-merge/image/20260510_222116_8706d703/bracket_group_015.jpg",
+        "name": "bracket_group_015.jpg",
+        "path": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703\\bracket_group_015.jpg"
+      },
+      {
+        "algorithm": "fusion",
+        "alignMethod": "people-simple-homography",
+        "downloadUrl": "/api/bracket-merge/download/20260510_222116_8706d703/bracket_group_016.jpg",
+        "groupId": 16,
+        "imageUrl": "/api/bracket-merge/image/20260510_222116_8706d703/bracket_group_016.jpg",
+        "name": "bracket_group_016.jpg",
+        "path": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703\\bracket_group_016.jpg"
+      },
+      {
+        "algorithm": "fusion",
+        "alignMethod": "people-simple-homography",
+        "downloadUrl": "/api/bracket-merge/download/20260510_222116_8706d703/bracket_group_017.jpg",
+        "groupId": 17,
+        "imageUrl": "/api/bracket-merge/image/20260510_222116_8706d703/bracket_group_017.jpg",
+        "name": "bracket_group_017.jpg",
+        "path": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703\\bracket_group_017.jpg"
+      },
+      {
+        "algorithm": "fusion",
+        "alignMethod": "people-simple-homography",
+        "downloadUrl": "/api/bracket-merge/download/20260510_222116_8706d703/bracket_group_018.jpg",
+        "groupId": 18,
+        "imageUrl": "/api/bracket-merge/image/20260510_222116_8706d703/bracket_group_018.jpg",
+        "name": "bracket_group_018.jpg",
+        "path": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703\\bracket_group_018.jpg"
+      },
+      {
+        "algorithm": "fusion",
+        "alignMethod": "people-simple-homography",
+        "downloadUrl": "/api/bracket-merge/download/20260510_222116_8706d703/bracket_group_019.jpg",
+        "groupId": 19,
+        "imageUrl": "/api/bracket-merge/image/20260510_222116_8706d703/bracket_group_019.jpg",
+        "name": "bracket_group_019.jpg",
+        "path": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703\\bracket_group_019.jpg"
+      },
+      {
+        "algorithm": "fusion",
+        "alignMethod": "people-simple-homography",
+        "downloadUrl": "/api/bracket-merge/download/20260510_222116_8706d703/bracket_group_020.jpg",
+        "groupId": 20,
+        "imageUrl": "/api/bracket-merge/image/20260510_222116_8706d703/bracket_group_020.jpg",
+        "name": "bracket_group_020.jpg",
+        "path": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703\\bracket_group_020.jpg"
+      }
+    ],
+    "outputDir": "D:\\codex_prj\\photo\\.photo_share_bracket_results\\20260510_222116_8706d703",
+    "outputId": "20260510_222116_8706d703",
+    "projectPath": "D:\\codex_prj\\photo\\bracket_project.prj"
+  }
+}

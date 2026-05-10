@@ -3,6 +3,7 @@ const VIEWER_TRANSITION_MS = 260;
 function openViewer(entry, originElement = null) {
   showPhoto(entry);
   armViewerHistory();
+  showViewerControls({ autoHide: true });
   if (!originElement || prefersReducedMotion()) {
     viewer.showModal();
     viewer.classList.remove("is-transitioning", "is-fading-out");
@@ -30,6 +31,58 @@ function closeViewerFromUi() {
     return;
   }
   closeViewerAnimated();
+}
+
+function setViewerControlsVisible(visible) {
+  state.viewerControlsVisible = visible;
+  viewer.classList.toggle("controls-hidden", !visible);
+  if (!visible) {
+    setViewerRatingMenuOpen(false);
+  }
+}
+
+function showViewerControls({ autoHide = false } = {}) {
+  if (!viewer.open && !state.currentPhoto) {
+    return;
+  }
+  setViewerControlsVisible(true);
+  scheduleViewerControlsAutoHide(autoHide);
+}
+
+function hideViewerControls() {
+  if (isViewerLocked()) {
+    return;
+  }
+  setViewerControlsVisible(false);
+}
+
+function toggleViewerControls() {
+  if (isViewerLocked()) {
+    return;
+  }
+  if (state.viewerControlsVisible) {
+    hideViewerControls();
+  } else {
+    showViewerControls({ autoHide: false });
+  }
+}
+
+function scheduleViewerControlsAutoHide(enabled = true) {
+  if (state.viewerControlsTimer) {
+    window.clearTimeout(state.viewerControlsTimer);
+    state.viewerControlsTimer = null;
+  }
+  if (!enabled || isViewerLocked()) {
+    return;
+  }
+  state.viewerControlsTimer = window.setTimeout(() => {
+    state.viewerControlsTimer = null;
+    hideViewerControls();
+  }, 2600);
+}
+
+function isCoarsePointer() {
+  return window.matchMedia("(pointer: coarse)").matches;
 }
 
 function showPhoto(entry) {
@@ -73,6 +126,24 @@ function showPhoto(entry) {
   }
 
   viewerImage.hidden = false;
+
+  if (entry.browserRenderable === false) {
+    viewerImage.classList.remove("ready");
+    viewerImage.classList.add("loading");
+    if (entry.thumbUrl) {
+      viewerImage.src = entry.thumbUrl;
+      viewerImage.classList.add("ready");
+    } else {
+      viewerImage.removeAttribute("src");
+    }
+    loadPreviewImage(entry);
+    renderViewerRating();
+    updatePageButtons();
+    updateZoom();
+    updateDownloadButton();
+    preloadAdjacentPreviews();
+    return;
+  }
 
   if (entry.originalUrl) {
     viewerImage.classList.remove("loading");
@@ -402,6 +473,7 @@ function updateViewerControlsLock() {
     }
   });
   if (locked) {
+    showViewerControls({ autoHide: false });
     setViewerRatingMenuOpen(false);
   }
   if (!locked) {

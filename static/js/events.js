@@ -1,9 +1,12 @@
 ﻿backBtn.addEventListener("click", () => {
   if (state.folder) {
     navigateFolder(state.parent);
+  } else if (state.rootId) {
+    navigateVirtualRoot();
   }
 });
 refreshBtn.addEventListener("click", () => loadFolder(state.folder));
+openUploadBtn.addEventListener("click", openUploadDialog);
 openBracketProjectBtn.addEventListener("click", () => openBracketProject());
 filterPanelToggleBtn.addEventListener("click", () => {
   setFilterPanelOpen(filterPanel.hidden);
@@ -95,6 +98,9 @@ confirmDeleteBtn.addEventListener("click", async () => {
   deleteDialog.close();
   await deleteCurrentPhoto();
 });
+closeUploadBtn.addEventListener("click", closeUploadDialog);
+createUploadFolderBtn.addEventListener("click", createUploadFolder);
+uploadForm.addEventListener("submit", submitUpload);
 zoomResetBtn.addEventListener("click", () => {
   setZoom(1);
 });
@@ -133,6 +139,9 @@ imageStage.addEventListener("pointerdown", (event) => {
   state.dragStart = { x: event.clientX, y: event.clientY, panX: state.panX, panY: state.panY };
 });
 imageStage.addEventListener("pointermove", (event) => {
+  if (viewer.open && !isCoarsePointer() && !isViewerLocked()) {
+    showViewerControls({ autoHide: true });
+  }
   if (isViewerLocked() || !state.isDragging || !state.dragStart) {
     return;
   }
@@ -239,6 +248,12 @@ imageStage.addEventListener("touchend", (event) => {
       state.lastTapTime = 0;
     } else {
       state.lastTapTime = now;
+      window.setTimeout(() => {
+        if (state.lastTapTime === now && viewer.open && !isViewerLocked()) {
+          state.lastTapTime = 0;
+          toggleViewerControls();
+        }
+      }, 320);
     }
   }
   clearEndedTouches(event);
@@ -246,6 +261,12 @@ imageStage.addEventListener("touchend", (event) => {
   state.dragStart = null;
 });
 imageStage.addEventListener("touchcancel", clearEndedTouches);
+viewer.addEventListener("mousemove", () => {
+  if (!viewer.open || isCoarsePointer() || isViewerLocked()) {
+    return;
+  }
+  showViewerControls({ autoHide: true });
+});
 document.addEventListener("keydown", (event) => {
   if (!viewer.open) {
     return;
@@ -360,6 +381,7 @@ function openInitialBracketProject() {
   if (path !== null) {
     return openBracketProject(path || undefined);
   }
+  handleSharedLaunch();
   return null;
 }
 
