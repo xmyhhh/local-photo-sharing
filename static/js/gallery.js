@@ -174,3 +174,89 @@ function renderGrid() {
   scheduleVisibleWorkScan();
   scheduleLoadMoreIfNeeded();
 }
+
+function appendGridEntry(entry) {
+  const tile = createGridTile(entry);
+  grid.append(tile.element);
+  if (tile.thumbPayload) {
+    observeThumbnail(tile.thumbPayload.entry, tile.thumbPayload.img, tile.thumbPayload.spinner);
+  }
+  if (tile.ratingPayload) {
+    observeRating(tile.ratingPayload.entry, tile.ratingPayload.ratingWrap);
+  }
+  updateEmptyState();
+  scheduleVisibleWorkScan();
+}
+
+function updateEmptyState() {
+  if (state.entries.length > 0) {
+    emptyState.hidden = true;
+    return;
+  }
+  emptyState.hidden = false;
+  if (state.filters.ratings.length && state.indexing) {
+    emptyState.textContent = "正在执行筛选...";
+  } else if (state.filters.ratings.length) {
+    emptyState.textContent = "没有找到满足筛选条件的 JPG 图片。";
+  } else {
+    emptyState.textContent = "当前文件夹没有 JPG 图片或子文件夹。";
+  }
+}
+
+function createGridTile(entry) {
+  const tile = document.createElement("article");
+  tile.className = "tile";
+  tile.dataset.path = entry.path;
+  let thumbPayload = null;
+  let ratingPayload = null;
+
+  const button = document.createElement("button");
+  button.className = "tile-button";
+  button.type = "button";
+  button.title = entry.name;
+
+  if (entry.type === "folder") {
+    const icon = document.createElement("div");
+    icon.className = "folder-icon";
+    icon.textContent = "DIR";
+    button.append(icon);
+    button.addEventListener("click", () => navigateFolder(entry.path));
+    button.addEventListener("contextmenu", (event) => openFolderContextMenu(event, entry));
+  } else {
+    const holder = document.createElement("div");
+    holder.className = "thumb-holder";
+    const spinner = document.createElement("div");
+    spinner.className = "spinner";
+    spinner.setAttribute("aria-label", "正在生成预览");
+    const img = document.createElement("img");
+    img.className = "thumb";
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.alt = entry.name;
+    holder.append(spinner, img);
+    button.append(holder);
+    thumbPayload = { entry, img, spinner };
+    button.addEventListener("click", () => openViewer(entry));
+  }
+
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  const name = document.createElement("div");
+  name.className = "name";
+  name.textContent = entry.name;
+  meta.append(name);
+
+  if (entry.type === "photo") {
+    const ratingWrap = createRating(entry, false);
+    meta.append(ratingWrap);
+    ratingPayload = { entry, ratingWrap };
+  } else if (entry.type === "folder") {
+    const count = document.createElement("div");
+    count.className = "folder-count";
+    count.textContent = `${entry.photoCount || 0} 张照片`;
+    meta.append(count);
+  }
+
+  tile.append(button, meta);
+  return { element: tile, thumbPayload, ratingPayload };
+}

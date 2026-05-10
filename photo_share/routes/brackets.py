@@ -10,7 +10,7 @@ from flask import Flask, abort, jsonify, request
 from ..bracket_merge import merge_bracket_groups, resolve_merge_output
 from ..brackets import detect_exposure_brackets
 from ..context import AppServices
-from ..paths import send_cached_file
+from ..paths import join_rooted_path, quote_path, send_cached_file
 from .gallery import _resolve_rooted_folder, _root_services
 
 BRACKET_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="bracket-detection")
@@ -72,7 +72,7 @@ def register_bracket_routes(app: Flask, services: AppServices) -> None:
         root_services = _root_services(services, root_id)
         result = merge_bracket_groups(
             root_services.root,
-            cached.get("groups", []),
+            unroot_bracket_result(cached, root_id).get("groups", []),
             [int(group_id) for group_id in group_ids],
             data.get("params") or {},
         )
@@ -136,13 +136,14 @@ def run_bracket_detection_task(services: AppServices, root_id: str, folder: str,
                 )
 
     try:
-        result = detect_exposure_brackets(
+        raw_result = detect_exposure_brackets(
             _root_services(services, root_id).root,
             folder_path,
             thumbnails,
             scan_limit=None,
             progress_callback=progress_callback,
         )
+        result = root_bracket_result(raw_result, root_id)
         elapsed = perf_counter() - started_at
         status = {
             "taskId": task_id,
@@ -176,6 +177,34 @@ def run_bracket_detection_task(services: AppServices, root_id: str, folder: str,
 
 def bracket_cache_key(root_id: str, folder: str) -> str:
     return f"{root_id}/{folder}".rstrip("/")
+
+
+def root_bracket_result(result: dict, root_id: str) -> dict:
+    rooted = {**result, "groups": []}
+    for group in result.get("groups", []):
+        rooted_group = {**group, "photos": []}
+        for photo in group.get("photos", []):
+            rooted_path = join_rooted_path(root_id, photo["path"])
+            rooted_group["photos"].append({
+                **photo,
+                "path": rooted_path,
+                "thumbUrl": f"/api/thumb/{quote_path(rooted_path)}",
+            })
+        rooted["groups"].append(rooted_group)
+    return rooted
+
+
+def unroot_bracket_result(result: dict, root_id: str) -> dict:
+    prefix = f"{root_id}/"
+    unrooted = {**result, "groups": []}
+    for group in result.get("groups", []):
+        unrooted_group = {**group, "photos": []}
+        for photo in group.get("photos", []):
+            path = photo.get("path", "")
+            rel_path = path[len(prefix):] if path.startswith(prefix) else path
+            unrooted_group["photos"].append({**photo, "path": rel_path})
+        unrooted["groups"].append(unrooted_group)
+    return unrooted
 
 
 def find_active_task_for_folder(services: AppServices, root_id: str, folder: str) -> dict | None:

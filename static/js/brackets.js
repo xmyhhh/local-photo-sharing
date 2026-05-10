@@ -146,28 +146,40 @@ function renderBracketDetection(result) {
 }
 
 function createBracketPhotoButton(photo) {
+  const displayPhoto = normalizeBracketPhoto(photo);
   const item = document.createElement("button");
   item.type = "button";
   item.className = "bracket-photo";
-  item.title = photo.path;
+  item.title = displayPhoto.path;
   const img = document.createElement("img");
-  img.alt = photo.name;
-  img.src = withVersion(photo.thumbUrl, photo.mtime);
+  img.alt = displayPhoto.name;
+  img.src = withVersion(displayPhoto.thumbUrl, displayPhoto.mtime);
   img.onerror = () => {
-    img.src = `/api/image/${encodePath(photo.path)}`;
+    img.src = `/api/image/${encodePath(displayPhoto.path)}`;
   };
   const name = document.createElement("span");
   name.className = "bracket-photo-name";
-  name.textContent = photo.name;
+  name.textContent = displayPhoto.name;
   const info = document.createElement("span");
   info.className = "bracket-photo-info";
-  info.textContent = formatBracketPhotoInfo(photo);
+  info.textContent = formatBracketPhotoInfo(displayPhoto);
   item.append(img, name, info);
   item.addEventListener("click", () => {
     bracketDialog.close();
-    openViewer(photoToEntry(photo));
+    openViewer(photoToEntry(displayPhoto));
   });
   return item;
+}
+
+function normalizeBracketPhoto(photo) {
+  const path = qualifyPath(photo.path);
+  return {
+    ...photo,
+    path,
+    thumbUrl: photo.thumbUrl && photo.thumbUrl.includes(`/${state.rootId}/`)
+      ? photo.thumbUrl
+      : `/api/thumb/${encodePath(path)}`,
+  };
 }
 
 async function mergeSelectedBracketGroups() {
