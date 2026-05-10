@@ -42,10 +42,11 @@ const state = {
 
 const ORIGINAL_CACHE_LIMIT = 1024 * 1024 * 1024;
 const ORIGINAL_PREFETCH_CONCURRENCY = 2;
+const ORIGINAL_PREFETCH_QUEUE_LIMIT = 25;
 const THUMB_LOAD_CONCURRENCY = 6;
-const THUMB_QUEUE_LIMIT = 120;
+const THUMB_QUEUE_LIMIT = 50;
 const RATING_STATUS_CONCURRENCY = 3;
-const RATING_QUEUE_LIMIT = 100;
+const RATING_QUEUE_LIMIT = 50;
 
 const grid = document.querySelector("#grid");
 const emptyState = document.querySelector("#emptyState");
@@ -148,6 +149,8 @@ function renderGrid() {
   state.entries.forEach((entry) => {
     const tile = document.createElement("article");
     tile.className = "tile";
+    let thumbPayload = null;
+    let ratingPayload = null;
 
     const button = document.createElement("button");
     button.className = "tile-button";
@@ -169,12 +172,12 @@ function renderGrid() {
       spinner.setAttribute("aria-label", "正在生成预览");
       const img = document.createElement("img");
       img.className = "thumb";
-      img.loading = "eager";
+      img.loading = "lazy";
       img.decoding = "async";
       img.alt = entry.name;
       holder.append(spinner, img);
       button.append(holder);
-      observeThumbnail(entry, img, spinner);
+      thumbPayload = { entry, img, spinner };
       button.addEventListener("click", () => openViewer(entry));
     }
 
@@ -186,17 +189,19 @@ function renderGrid() {
     meta.append(name);
 
     if (entry.type === "photo") {
-      const detail = document.createElement("div");
-      detail.className = "detail";
-      detail.textContent = formatDate(entry.mtime);
       const ratingWrap = createRating(entry, false);
-      meta.append(detail);
       meta.append(ratingWrap);
-      observeRating(entry, ratingWrap);
+      ratingPayload = { entry, ratingWrap };
     }
 
     tile.append(button, meta);
     grid.append(tile);
+    if (thumbPayload) {
+      observeThumbnail(thumbPayload.entry, thumbPayload.img, thumbPayload.spinner);
+    }
+    if (ratingPayload) {
+      observeRating(ratingPayload.entry, ratingPayload.ratingWrap);
+    }
   });
 }
 
@@ -223,6 +228,9 @@ function observeRating(entry, ratingWrap) {
   }
   ratingWrap.__ratingPayload = { entry, ratingWrap };
   state.ratingObserver.observe(ratingWrap);
+  if (isNearViewport(ratingWrap, 220)) {
+    queueEmbeddedRating(entry, ratingWrap);
+  }
 }
 
 function queueEmbeddedRating(entry, ratingWrap, attempt = 0) {
@@ -445,6 +453,7 @@ async function loadThumbnail(entry, img, spinner, attempt = 0, mode = state.thum
     }
     if (response.status === 200) {
       img.loading = "eager";
+      img.fetchPriority = "high";
       img.onload = () => {
         img.classList.add("loaded");
         spinner.hidden = true;
@@ -495,6 +504,7 @@ function scheduleThumbnailRetry(entry, img, spinner, attempt, mode) {
 
 function showThumbnailFallback(entry, img, spinner) {
   img.loading = "eager";
+  img.fetchPriority = "high";
   img.onload = () => {
     img.classList.add("loaded");
     spinner.hidden = true;
@@ -550,6 +560,14 @@ function observeThumbnail(entry, img, spinner) {
   }
   img.parentElement.__thumbPayload = { entry, img, spinner };
   state.thumbObserver.observe(img.parentElement);
+  if (isNearViewport(img.parentElement, 420)) {
+    queueThumbnail(entry, img, spinner);
+  }
+}
+
+function isNearViewport(element, margin) {
+  const rect = element.getBoundingClientRect();
+  return rect.bottom >= -margin && rect.top <= window.innerHeight + margin;
 }
 
 function queueThumbnail(entry, img, spinner, attempt = 0) {
@@ -876,7 +894,10 @@ function queueOriginalPrefetch(entry) {
   if (state.originalPrefetchQueue.some((item) => item.path === entry.path)) {
     return;
   }
-  state.originalPrefetchQueue.push(entry);
+  state.originalPrefetchQueue.unshift(entry);
+  while (state.originalPrefetchQueue.length > ORIGINAL_PREFETCH_QUEUE_LIMIT) {
+    state.originalPrefetchQueue.pop();
+  }
 }
 
 function runOriginalPrefetchQueue() {

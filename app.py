@@ -20,8 +20,11 @@ JPG_EXTENSIONS = {".jpg", ".jpeg"}
 RATINGS_FILE = ".photo_share_ratings.json"
 THUMBNAIL_DIR = ".photo_share_thumbs"
 CACHE_DIR = APP_DIR / ".photo_share_cache"
-THUMBNAIL_WORKERS = max(1, os.cpu_count() or 1)
-CACHE_QUEUE_LIMIT = 100
+CPU_COUNT = os.cpu_count() or 1
+THUMBNAIL_WORKERS = min(8, max(2, CPU_COUNT))
+METADATA_WORKERS = min(4, max(2, CPU_COUNT // 2))
+THUMB_CACHE_QUEUE_LIMIT = 50
+PREVIEW_CACHE_QUEUE_LIMIT = 25
 DEFAULT_THUMBNAIL_SIZE = 360
 DEFAULT_THUMBNAIL_QUALITY = 74
 DEFAULT_PREVIEW_SIZE = 2560
@@ -68,7 +71,7 @@ def create_app(
             spec["size"],
             spec["quality"],
             f"thumb-{mode}",
-            queue_limit=CACHE_QUEUE_LIMIT,
+            queue_limit=THUMB_CACHE_QUEUE_LIMIT,
         )
         for mode, spec in thumbnail_modes.items()
     }
@@ -79,7 +82,7 @@ def create_app(
         preview_size,
         preview_quality,
         "preview",
-        queue_limit=300,
+        queue_limit=PREVIEW_CACHE_QUEUE_LIMIT,
     )
 
     @app.get("/")
@@ -109,6 +112,10 @@ def create_app(
                 if rating_override is None:
                     rating = metadata.get_rating_ready(child)
                     rating_pending = not metadata.is_ready(child)
+                    if filters.needs_rating and rating_pending:
+                        rating = read_embedded_rating(child)
+                        metadata.set_ready(child, rating)
+                        rating_pending = False
                 else:
                     rating = rating_override
                     rating_pending = False
@@ -295,7 +302,7 @@ class MetadataStore:
         self.lock = Lock()
         self.data: dict[str, dict[str, int]] = {}
         self.errors: dict[str, str] = {}
-        self.executor = ThreadPoolExecutor(max_workers=THUMBNAIL_WORKERS, thread_name_prefix="metadata")
+        self.executor = ThreadPoolExecutor(max_workers=METADATA_WORKERS, thread_name_prefix="metadata")
         self.inflight: set[str] = set()
 
     def get_rating_ready(self, photo_path: Path) -> int:
@@ -347,6 +354,13 @@ class MetadataStore:
         if cached and cached.get("mtime") == int(stat.st_mtime) and cached.get("size") == stat.st_size:
             return
         rating = read_embedded_rating(photo_path)
+        self.set_ready(photo_path, rating)
+
+    def set_ready(self, photo_path: Path, rating: int) -> None:
+        if not photo_path.exists():
+            return
+        rel = to_relative(self.root, photo_path)
+        stat = photo_path.stat()
         with self.lock:
             self.data[rel] = {
                 "mtime": int(stat.st_mtime),
@@ -374,7 +388,7 @@ class ImageCacheStore:
         size: int,
         quality: int,
         thread_name: str,
-        queue_limit: int = CACHE_QUEUE_LIMIT,
+        queue_limit: int = THUMB_CACHE_QUEUE_LIMIT,
     ) -> None:
         self.root = root
         self.cache_root = cache_root
@@ -496,6 +510,7 @@ class ImageCacheStore:
 class PhotoFilters:
     def __init__(self, ratings: set[int] | None, date_from: int | None, date_to: int | None) -> None:
         self.ratings = ratings
+        self.needs_rating = ratings is not None
         self.date_from = date_from
         self.date_to = date_to
 

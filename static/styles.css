@@ -198,6 +198,9 @@ main {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
+  contain: layout paint style;
+  content-visibility: auto;
+  contain-intrinsic-size: 250px 300px;
 }
 
 .tile-button {
@@ -267,7 +270,7 @@ main {
 }
 
 .meta {
-  padding: 10px;
+  padding: 10px 10px 8px;
 }
 
 .name {
@@ -277,17 +280,11 @@ main {
   font-size: 14px;
 }
 
-.detail {
-  margin-top: 6px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
 .rating {
   display: flex;
   align-items: center;
   gap: 3px;
-  margin-top: 8px;
+  margin-top: 4px;
   max-width: 100%;
   overflow: hidden;
 }
