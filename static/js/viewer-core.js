@@ -6,6 +6,7 @@ function openViewer(entry, originElement = null) {
   showViewerControls({ autoHide: true });
   if (!originElement || prefersReducedMotion()) {
     viewer.showModal();
+    enterViewerFullscreen();
     viewer.classList.remove("is-transitioning", "is-fading-out");
     return;
   }
@@ -31,6 +32,35 @@ function closeViewerFromUi() {
     return;
   }
   closeViewerAnimated();
+}
+
+function enterViewerFullscreen() {
+  if (document.fullscreenElement || !viewer.requestFullscreen) {
+    return;
+  }
+  viewer.requestFullscreen({ navigationUI: "hide" })
+    .then(() => {
+      state.viewerRequestedFullscreen = true;
+    })
+    .catch(() => {
+      state.viewerRequestedFullscreen = false;
+    });
+}
+
+function exitViewerFullscreen() {
+  if (!state.viewerRequestedFullscreen || document.fullscreenElement !== viewer || !document.exitFullscreen) {
+    state.viewerRequestedFullscreen = false;
+    return;
+  }
+  document.exitFullscreen().catch(() => null);
+  state.viewerRequestedFullscreen = false;
+}
+
+function finishViewerClose() {
+  state.viewerHistoryArmed = false;
+  state.closingViewerFromHistory = false;
+  viewer.close();
+  exitViewerFullscreen();
 }
 
 function setViewerControlsVisible(visible) {
@@ -496,32 +526,27 @@ function closeViewerAnimated() {
   if (!viewer.open) {
     state.viewerHistoryArmed = false;
     state.closingViewerFromHistory = false;
+    exitViewerFullscreen();
     return;
   }
   stopRapidNavigation(false);
   cancelStaleOriginalLoads();
   const entry = state.currentPhoto;
   if (!entry || prefersReducedMotion()) {
-    state.viewerHistoryArmed = false;
-    state.closingViewerFromHistory = false;
-    viewer.close();
+    finishViewerClose();
     return;
   }
   const sourceRect = getViewerDisplayRect();
   const targetElement = getGridMediaElement(entry.path);
   const targetRect = targetElement ? targetElement.getBoundingClientRect() : null;
   if (!sourceRect || !targetRect || !isRectVisible(targetRect)) {
-    state.viewerHistoryArmed = false;
-    state.closingViewerFromHistory = false;
-    viewer.close();
+    finishViewerClose();
     return;
   }
 
   const ghost = buildViewerTransitionGhost(entry, targetElement, true);
   if (!ghost) {
-    state.viewerHistoryArmed = false;
-    state.closingViewerFromHistory = false;
-    viewer.close();
+    finishViewerClose();
     return;
   }
 
@@ -538,9 +563,7 @@ function closeViewerAnimated() {
   window.setTimeout(() => {
     ghost.remove();
     viewer.classList.remove("is-transitioning", "is-fading-out");
-    state.viewerHistoryArmed = false;
-    state.closingViewerFromHistory = false;
-    viewer.close();
+    finishViewerClose();
   }, VIEWER_TRANSITION_MS);
 }
 
@@ -557,6 +580,7 @@ function startViewerEnterTransition(entry, originElement) {
   document.body.append(ghost);
   setGhostRect(ghost, sourceRect);
   viewer.showModal();
+  enterViewerFullscreen();
   requestAnimationFrame(() => {
     ghost.classList.add("is-animating");
     setGhostRect(ghost, targetRect);

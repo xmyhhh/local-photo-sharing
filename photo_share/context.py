@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .folder_counts import FolderCountIndex
 from .image_cache import ImageCacheStore
 from .rating_index import RatingIndex
 from .stores import MetadataStore, RatingStore
@@ -15,6 +16,7 @@ class RootServices:
     ratings: RatingStore
     metadata: MetadataStore
     rating_index: RatingIndex
+    folder_counts: FolderCountIndex
     thumbnails: dict[str, ImageCacheStore]
     default_thumbnails: ImageCacheStore
     previews: ImageCacheStore
@@ -30,3 +32,4 @@ class AppServices:
     bracket_cache_loaded: bool
     bracket_merge_tasks: dict[str, dict[str, Any]]
     thumbnail_queue_limits: dict[str, int]
+    upload_password: str

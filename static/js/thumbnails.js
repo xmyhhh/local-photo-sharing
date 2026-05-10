@@ -196,19 +196,6 @@ function scheduleVisibleWorkScan() {
   state.visibleScanTimer = window.setTimeout(scanVisibleWork, 80);
 }
 
-function scheduleLoadMoreIfNeeded() {
-  window.setTimeout(() => {
-    if (state.nextCursor === null) {
-      return;
-    }
-    const nearBottom = window.innerHeight + window.scrollY > document.documentElement.scrollHeight - LOAD_MORE_SCROLL_BUFFER;
-    const notFilled = document.documentElement.scrollHeight <= window.innerHeight + LOAD_MORE_SCROLL_BUFFER;
-    if (nearBottom || notFilled) {
-      loadMoreEntries();
-    }
-  }, 60);
-}
-
 function queueThumbnail(entry, img, spinner, attempt = 0) {
   if (!img.isConnected || img.classList.contains("loaded")) {
     return;
@@ -226,11 +213,31 @@ function queueThumbnail(entry, img, spinner, attempt = 0) {
 function trimThumbQueue() {
   const limit = THUMB_QUEUE_LIMITS[state.thumbMode] || THUMB_QUEUE_LIMITS.medium;
   while (state.thumbQueue.length > limit) {
-    const dropped = state.thumbQueue.pop();
-    if (dropped) {
-      state.thumbQueued.delete(dropped.key);
+    const dropIndex = findDroppableThumbQueueIndex();
+    if (dropIndex < 0) {
+      return;
+    }
+    const dropped = state.thumbQueue.splice(dropIndex, 1)[0];
+    state.thumbQueued.delete(dropped.key);
+  }
+}
+
+function findDroppableThumbQueueIndex() {
+  for (let index = state.thumbQueue.length - 1; index >= 0; index -= 1) {
+    const item = state.thumbQueue[index];
+    if (!isQueuedThumbnailProtected(item)) {
+      return index;
     }
   }
+  return -1;
+}
+
+function isQueuedThumbnailProtected(item) {
+  if (!item?.img?.isConnected || item.img.classList.contains("loaded") || item.mode !== state.thumbMode) {
+    return false;
+  }
+  const holder = item.img.closest(".thumb-holder");
+  return Boolean(holder && isNearViewport(holder, 0));
 }
 
 function runThumbQueue() {

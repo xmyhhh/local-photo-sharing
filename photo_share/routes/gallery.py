@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +20,6 @@ from ..context import AppServices, RootServices
 from ..filters import PhotoFilters, parse_optional_int
 from ..live_photos import find_case_insensitive_sibling, find_live_video
 from ..paths import (
-    iter_folder_children,
     join_rooted_path,
     normalize_rel_path,
     parse_rooted_path,
@@ -32,6 +32,12 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
     def index():
         return send_file(STATIC_DIR / "index.html")
 
+    @app.get("/static/sw.js")
+    def service_worker():
+        response = send_file(STATIC_DIR / "sw.js", mimetype="application/javascript")
+        response.headers["Service-Worker-Allowed"] = "/"
+        return response
+
     @app.get("/api/config")
     def config():
         return jsonify({
@@ -42,6 +48,7 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
             "defaultRootId": services.default_root_id,
             "allowDelete": True,
             "thumbnailQueueLimits": services.thumbnail_queue_limits,
+            "uploadPasswordRequired": bool(services.upload_password),
         })
 
     @app.get("/api/photos")
@@ -57,7 +64,7 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
         folder_path = _resolve_rooted_folder(services, root_id, folder)
         filters = PhotoFilters.from_request(request.args)
         cursor = parse_optional_int(request.args.get("cursor"), 0, 1_000_000) or 0
-        limit = parse_optional_int(request.args.get("limit"), 1, 2_000) or PHOTO_PAGE_SIZE
+        limit = parse_optional_int(request.args.get("limit"), 1, 50_000) or PHOTO_PAGE_SIZE
         entries: list[dict[str, Any]] = []
         indexing = False
 
@@ -65,23 +72,18 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
             root_services.rating_index.index_folder_budget(folder_path, FILTER_WAIT_SECONDS)
             indexing = not root_services.rating_index.is_folder_ready(folder_path)
 
-        seen = 0
         next_cursor: int | None = None
-        for child in iter_folder_children(folder_path):
-            if child.name in {RATINGS_FILE, THUMBNAIL_DIR}:
-                continue
-            if seen < cursor:
-                seen += 1
-                continue
-
-            entry = _build_entry(services, root_id, child, root_services, filters)
-            seen += 1
+        page = _folder_page(folder_path, cursor, limit)
+        for seen, child, sibling_map in page["items"]:
+            entry = _build_entry(services, root_id, child, root_services, filters, sibling_map)
             if entry is None:
                 continue
             entries.append(entry)
             if len(entries) >= limit:
                 next_cursor = seen
                 break
+        if next_cursor is None and page["has_more"]:
+            next_cursor = page["next_seen"]
 
         if filters.needs_rating and indexing:
             root_services.rating_index.ensure_folder_async(folder_path)
@@ -99,12 +101,8 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
 
 def _virtual_root_payload(services: AppServices) -> dict[str, Any]:
     entries = [
-        {
-            "type": "folder",
-            "name": root.name or root_id,
-            "path": root_id,
-        }
-        for root_id, root in services.roots.items()
+        _folder_entry(root_services, root_id, "", root_services.root.name or root_id, root_id)
+        for root_id, root_services in services.root_services.items()
     ]
     return {
         "root": "",
@@ -123,17 +121,14 @@ def _build_entry(
     child: Path,
     root_services: RootServices,
     filters: PhotoFilters,
+    sibling_map: dict[tuple[str, str], Path] | None = None,
 ) -> dict[str, Any] | None:
     rel = to_relative(root_services.root, child)
     rooted_path = join_rooted_path(root_id, rel)
     if child.is_dir():
-        return {
-            "type": "folder",
-            "name": child.name,
-            "path": rooted_path,
-        }
+        return _folder_entry(root_services, root_id, rel, child.name, rooted_path)
     suffix = child.suffix.lower()
-    if suffix in VIDEO_EXTENSIONS and _has_live_photo_still(child):
+    if suffix in VIDEO_EXTENSIONS and _has_live_photo_still(child, sibling_map):
         return None
     if suffix in VIDEO_EXTENSIONS:
         stat = child.stat()
@@ -157,7 +152,7 @@ def _build_entry(
         return None
     if not filters.matches_photo(rating, int(stat.st_mtime)):
         return None
-    live_video = find_live_video(child)
+    live_video = _find_live_video(child, sibling_map)
     return {
         "type": "photo",
         "name": child.name,
@@ -170,6 +165,41 @@ def _build_entry(
         "isLive": live_video is not None,
         "liveVideoPath": join_rooted_path(root_id, to_relative(root_services.root, live_video)) if live_video else None,
     }
+
+
+def _folder_page(folder_path: Path, cursor: int, limit: int) -> dict[str, Any]:
+    dirs: list[Path] = []
+    media: list[Path] = []
+    sibling_map: dict[tuple[str, str], Path] = {}
+    with os.scandir(folder_path) as items:
+        for item in items:
+            if item.name in {RATINGS_FILE, THUMBNAIL_DIR}:
+                continue
+            try:
+                if item.is_dir():
+                    dirs.append(Path(item.path))
+                elif item.is_file():
+                    path = Path(item.path)
+                    suffix = path.suffix.lower()
+                    if suffix in PHOTO_EXTENSIONS or suffix in VIDEO_EXTENSIONS:
+                        sibling_map[(path.stem.lower(), suffix)] = path
+                    if suffix in PHOTO_EXTENSIONS or suffix in VIDEO_EXTENSIONS:
+                        media.append(path)
+            except OSError:
+                continue
+
+    dirs.sort(key=lambda p: p.name.lower())
+    media.sort(key=lambda p: p.name.lower())
+    items_out: list[tuple[int, Path, dict[tuple[str, str], Path]]] = []
+    seen = 0
+    for child in [*dirs, *media]:
+        seen += 1
+        if seen <= cursor:
+            continue
+        if len(items_out) >= limit:
+            return {"items": items_out, "has_more": True, "next_seen": seen - 1}
+        items_out.append((seen, child, sibling_map))
+    return {"items": items_out, "has_more": False, "next_seen": seen}
 
 
 def _photo_rating(rel: str, photo_path: Path, root_services: RootServices) -> tuple[int, bool]:
@@ -185,10 +215,36 @@ def _photo_rating(rel: str, photo_path: Path, root_services: RootServices) -> tu
     return rating, rating_pending
 
 
-def _has_live_photo_still(video_path: Path) -> bool:
+def _folder_entry(root_services: RootServices, root_id: str, rel: str, name: str, rooted_path: str) -> dict[str, Any]:
+    folder_path = root_services.root if not rel else root_services.root / rel
+    count = root_services.folder_counts.get(folder_path)
+    return {
+        "type": "folder",
+        "name": name,
+        "path": rooted_path,
+        "photoCount": count,
+        "photoCountPending": count is None or not root_services.folder_counts.is_ready(),
+    }
+
+
+def _has_live_photo_still(video_path: Path, sibling_map: dict[tuple[str, str], Path] | None = None) -> bool:
     if video_path.suffix.lower() not in VIDEO_EXTENSIONS:
         return False
+    if sibling_map is not None:
+        stem = video_path.stem.lower()
+        return any((stem, suffix) in sibling_map for suffix in PHOTO_EXTENSIONS)
     return find_case_insensitive_sibling(video_path, PHOTO_EXTENSIONS) is not None
+
+
+def _find_live_video(photo_path: Path, sibling_map: dict[tuple[str, str], Path] | None = None) -> Path | None:
+    if sibling_map is None:
+        return find_live_video(photo_path)
+    stem = photo_path.stem.lower()
+    for suffix in VIDEO_EXTENSIONS:
+        video = sibling_map.get((stem, suffix))
+        if video is not None:
+            return video
+    return None
 
 
 def _resolve_rooted_folder(services: AppServices, root_id: str, folder: str) -> Path:

@@ -132,7 +132,6 @@ function resetFiltersForFolderNavigation() {
   state.filters.dateFrom = "";
   state.filters.dateTo = "";
   state.indexing = false;
-  state.nextCursor = null;
   ratingFilterInputs.forEach((input) => {
     input.checked = false;
   });

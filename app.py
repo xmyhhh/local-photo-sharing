@@ -10,6 +10,7 @@ from photo_share.config import (
     get_thumbnail_queue_limits,
     get_thumbnail_quality,
     get_thumbnail_size,
+    get_upload_password,
     load_config,
     parse_args,
 )
@@ -33,6 +34,7 @@ def main() -> None:
         preview_size=get_preview_size(config),
         preview_quality=get_preview_quality(config),
         thumbnail_queue_limits=get_thumbnail_queue_limits(config),
+        upload_password=get_upload_password(config),
     )
     print(f"Config: {config_path}")
     print("Sharing:")

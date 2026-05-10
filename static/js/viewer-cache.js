@@ -10,6 +10,8 @@
     photos[index - 1],
     photos[index + 2],
     photos[index - 2],
+    photos[index + 3],
+    photos[index - 3],
   ].filter(Boolean);
 
   candidates.forEach((entry) => queueOriginalPrefetch(entry));

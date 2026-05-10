@@ -21,7 +21,6 @@ const state = {
   roots: [],
   parent: "",
   entries: [],
-  nextCursor: null,
   loadingMore: false,
   loadingFolder: false,
   indexing: false,
@@ -29,6 +28,7 @@ const state = {
   viewerLiveMode: false,
   viewerControlsVisible: true,
   viewerControlsTimer: null,
+  viewerRequestedFullscreen: false,
   lastViewerTapTime: 0,
   deleteInProgress: false,
   zoom: 1,
@@ -48,6 +48,7 @@ const state = {
   ratingActive: 0,
   filterGeneration: 0,
   filterRefreshTimer: null,
+  folderCountRefreshTimer: null,
   previewTimer: null,
   originalCache: new Map(),
   originalCacheBytes: 0,
@@ -87,6 +88,7 @@ const state = {
   currentBracketMergeResult: null,
   currentBracketFolder: null,
   currentBracketRoot: null,
+  uploadPasswordRequired: false,
   filters: {
     ratings: [],
     dateFrom: "",
@@ -100,8 +102,7 @@ const ORIGINAL_PREFETCH_QUEUE_LIMIT = 25;
 const THUMB_LOAD_CONCURRENCY = 6;
 const RATING_STATUS_CONCURRENCY = 3;
 const RATING_QUEUE_LIMIT = 50;
-const PHOTO_PAGE_LIMIT = 2000;
-const LOAD_MORE_SCROLL_BUFFER = 3200;
+const ENTRY_PLACEHOLDER_LIMIT = 10000;
 
 const grid = document.querySelector("#grid");
 const emptyState = document.querySelector("#emptyState");
@@ -145,6 +146,8 @@ const uploadForm = document.querySelector("#uploadForm");
 const closeUploadBtn = document.querySelector("#closeUploadBtn");
 const uploadRootLabel = document.querySelector("#uploadRootLabel");
 const uploadFolderInput = document.querySelector("#uploadFolderInput");
+const uploadPasswordLabel = document.querySelector("#uploadPasswordLabel");
+const uploadPasswordInput = document.querySelector("#uploadPasswordInput");
 const uploadFilesInput = document.querySelector("#uploadFilesInput");
 const uploadStatus = document.querySelector("#uploadStatus");
 const createUploadFolderBtn = document.querySelector("#createUploadFolderBtn");

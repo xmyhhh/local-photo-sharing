@@ -2,7 +2,15 @@
   const response = await fetch(url, options);
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(text || `HTTP ${response.status}`);
+    try {
+      const data = JSON.parse(text);
+      throw new Error(data.message || text || `HTTP ${response.status}`);
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+      throw error;
+    }
   }
   return response.json();
 }

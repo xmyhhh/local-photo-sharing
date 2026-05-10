@@ -1,18 +1,17 @@
-﻿backBtn.addEventListener("click", () => {
+﻿backBtn?.addEventListener("click", () => {
   if (state.folder) {
     navigateFolder(state.parent);
   } else if (state.rootId) {
     navigateVirtualRoot();
   }
 });
-refreshBtn.addEventListener("click", () => loadFolder(state.folder));
+refreshBtn?.addEventListener("click", () => loadFolder(state.folder));
 openUploadBtn.addEventListener("click", openUploadDialog);
 openBracketProjectBtn.addEventListener("click", () => openBracketProject());
 filterPanelToggleBtn.addEventListener("click", () => {
   setFilterPanelOpen(filterPanel.hidden);
 });
 window.addEventListener("scroll", scheduleVisibleWorkScan, { passive: true });
-window.addEventListener("scroll", scheduleLoadMoreIfNeeded, { passive: true });
 window.addEventListener("scroll", updateScrollTopButton, { passive: true });
 scrollTopBtn.addEventListener("click", () => {
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -266,6 +265,11 @@ viewer.addEventListener("mousemove", () => {
     return;
   }
   showViewerControls({ autoHide: true });
+});
+document.addEventListener("fullscreenchange", () => {
+  if (document.fullscreenElement !== viewer) {
+    state.viewerRequestedFullscreen = false;
+  }
 });
 document.addEventListener("keydown", (event) => {
   if (!viewer.open) {

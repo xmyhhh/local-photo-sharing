@@ -2,6 +2,10 @@ async function loadConfig() {
   const config = await fetchJson("/api/config");
   state.roots = config.roots || [];
   state.rootId = "";
+  state.uploadPasswordRequired = Boolean(config.uploadPasswordRequired);
+  if (uploadPasswordLabel) {
+    uploadPasswordLabel.hidden = !state.uploadPasswordRequired;
+  }
   applyThumbnailQueueLimits(config.thumbnailQueueLimits);
 }
 
@@ -20,17 +24,19 @@ function applyThumbnailQueueLimits(limits) {
   });
 }
 
-async function loadFolder(folder = state.folder) {
+async function loadFolder(folder = state.folder, options = {}) {
   const generation = state.filterGeneration;
   const targetFolder = normalizeFolderPath(folder || "");
-  showFolderLoading(targetFolder);
-  state.nextCursor = null;
+  const silent = Boolean(options.silent);
+  if (!silent) {
+    showFolderLoading(targetFolder);
+  }
   const params = new URLSearchParams();
   if (state.rootId) {
     params.set("root", state.rootId);
   }
   params.set("folder", targetFolder);
-  params.set("limit", String(PHOTO_PAGE_LIMIT));
+  params.set("limit", String(ENTRY_PLACEHOLDER_LIMIT));
   state.filters.ratings.forEach((rating) => params.append("rating", rating));
   if (state.filters.dateFrom) {
     params.set("date_from", state.filters.dateFrom);
@@ -47,24 +53,32 @@ async function loadFolder(folder = state.folder) {
     state.folder = data.folder;
     state.parent = data.parent;
     state.entries = data.entries;
-    state.nextCursor = data.nextCursor;
     state.indexing = Boolean(data.indexing);
     state.loadingFolder = false;
+    if (silent) {
+      updateFolderCountTiles(data.entries);
+      scheduleFolderCountRefresh(generation);
+      return;
+    }
     renderBreadcrumb();
     renderGrid();
     if (data.indexing && state.filters.ratings.length) {
       scheduleFilterRefresh(generation);
     }
+    scheduleFolderCountRefresh(generation);
     updateGalleryHistoryState();
   } catch (error) {
     if (generation !== state.filterGeneration) {
       return;
     }
     state.loadingFolder = false;
-    state.entries = [];
-    state.nextCursor = null;
-    state.indexing = false;
-    updateEmptyState(error.message || "加载文件夹失败。");
+    if (silent) {
+      renderGrid();
+    } else {
+      state.entries = [];
+      state.indexing = false;
+      updateEmptyState(error.message || "加载文件夹失败。");
+    }
   }
 }
 
@@ -154,50 +168,6 @@ function qualifyPath(path) {
   return `${state.rootId}/${path}`;
 }
 
-async function loadMoreEntries() {
-  if (state.loadingMore || state.nextCursor === null) {
-    return;
-  }
-  state.loadingMore = true;
-  const generation = state.filterGeneration;
-  const params = new URLSearchParams();
-  if (state.rootId) {
-    params.set("root", state.rootId);
-  }
-  params.set("folder", state.folder);
-  params.set("cursor", String(state.nextCursor));
-  params.set("limit", String(PHOTO_PAGE_LIMIT));
-  state.filters.ratings.forEach((rating) => params.append("rating", rating));
-  if (state.filters.dateFrom) {
-    params.set("date_from", state.filters.dateFrom);
-  }
-  if (state.filters.dateTo) {
-    params.set("date_to", state.filters.dateTo);
-  }
-  try {
-    const data = await fetchJson(`/api/photos?${params.toString()}`);
-    if (generation !== state.filterGeneration) {
-      return;
-    }
-    state.nextCursor = data.nextCursor;
-    state.indexing = Boolean(data.indexing);
-    data.entries.forEach((entry) => {
-      entry.path = qualifyPath(entry.path);
-      if (state.entries.some((existing) => existing.path === entry.path)) {
-        return;
-      }
-      state.entries.push(entry);
-      appendGridEntry(entry);
-    });
-    if (data.indexing && state.filters.ratings.length) {
-      scheduleFilterRefresh(generation);
-    }
-    scheduleLoadMoreIfNeeded();
-  } finally {
-    state.loadingMore = false;
-  }
-}
-
 function renderBreadcrumb() {
   breadcrumb.innerHTML = "";
   const root = document.createElement("button");
@@ -207,7 +177,9 @@ function renderBreadcrumb() {
   breadcrumb.append(root);
 
   if (!state.rootId) {
-    backBtn.disabled = true;
+    if (backBtn) {
+      backBtn.disabled = true;
+    }
     return;
   }
 
@@ -237,7 +209,9 @@ function renderBreadcrumb() {
     breadcrumb.append(btn);
   });
 
-  backBtn.disabled = false;
+  if (backBtn) {
+    backBtn.disabled = false;
+  }
 }
 
 function navigateVirtualRoot() {
@@ -269,7 +243,7 @@ function renderGrid() {
     appendGridEntry(entry);
   });
   scheduleVisibleWorkScan();
-  scheduleLoadMoreIfNeeded();
+  scheduleFolderCountRefresh(state.filterGeneration);
 }
 
 function showFolderLoading(targetFolder) {
@@ -308,6 +282,8 @@ function appendGridEntry(entry) {
 function updateEmptyState(message = "") {
   if (state.entries.length > 0) {
     emptyState.hidden = true;
+    emptyState.classList.remove("loading");
+    emptyState.textContent = "";
     return;
   }
   emptyState.hidden = false;
@@ -332,6 +308,43 @@ function parentFolderPath(folder) {
   const parts = folder.split("/").filter(Boolean);
   parts.pop();
   return parts.join("/");
+}
+
+function scheduleFolderCountRefresh(generation) {
+  clearFolderCountRefreshTimer();
+  if (!state.entries.some((entry) => entry.type === "folder" && entry.photoCountPending)) {
+    return;
+  }
+  state.folderCountRefreshTimer = window.setTimeout(() => {
+    state.folderCountRefreshTimer = null;
+    if (generation === state.filterGeneration) {
+      loadFolder(state.folder, { silent: true });
+    }
+  }, 1200);
+}
+
+function clearFolderCountRefreshTimer() {
+  if (state.folderCountRefreshTimer) {
+    window.clearTimeout(state.folderCountRefreshTimer);
+    state.folderCountRefreshTimer = null;
+  }
+}
+
+function updateFolderCountTiles(entries) {
+  entries.forEach((entry) => {
+    if (entry.type !== "folder") {
+      return;
+    }
+    const path = qualifyPath(entry.path);
+    const tile = document.querySelector(`.tile[data-path="${CSS.escape(path)}"]`);
+    const count = tile?.querySelector(".folder-count");
+    if (!count) {
+      return;
+    }
+    count.textContent = entry.photoCountPending || entry.photoCount === null || entry.photoCount === undefined
+      ? "统计中"
+      : `${entry.photoCount} 张照片`;
+  });
 }
 
 function createGridTile(entry) {
@@ -384,6 +397,13 @@ function createGridTile(entry) {
       img.loading = "lazy";
       img.decoding = "async";
       img.alt = entry.name;
+      if (entry.browserRenderable !== false) {
+        img.src = `/api/image/${encodePath(entry.path)}`;
+        img.onload = () => {
+          img.classList.add("loaded");
+          spinner.hidden = true;
+        };
+      }
       holder.append(spinner, img);
       if (entry.isLive) {
         const liveBadge = document.createElement("div");
@@ -418,7 +438,9 @@ function createGridTile(entry) {
   } else if (entry.type === "folder") {
     const count = document.createElement("div");
     count.className = "folder-count";
-    count.textContent = "文件夹";
+    count.textContent = entry.photoCountPending || entry.photoCount === null || entry.photoCount === undefined
+      ? "统计中"
+      : `${entry.photoCount} 张照片`;
     meta.append(count);
   }
 

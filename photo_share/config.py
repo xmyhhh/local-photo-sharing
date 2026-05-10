@@ -142,6 +142,15 @@ def get_thumbnail_queue_limits(config: dict[str, Any]) -> dict[str, int]:
     return limits
 
 
+def get_upload_password(config: dict[str, Any]) -> str:
+    value = config.get("upload_password", DEFAULT_CONFIG["upload_password"])
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise ValueError("Config field upload_password must be a string.")
+    return value
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Share a local JPG folder on your LAN.")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG_FILE), help="JSON config file path. Default: config.json next to app.py")

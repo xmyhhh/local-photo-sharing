@@ -13,6 +13,7 @@ MEDIA_EXTENSIONS = PHOTO_EXTENSIONS | VIDEO_EXTENSIONS
 RATINGS_FILE = ".photo_share_ratings.json"
 THUMBNAIL_DIR = ".photo_share_thumbs"
 CACHE_DIR = APP_DIR / ".photo_share_cache"
+TRASH_DIR = APP_DIR / ".photo_share_trash"
 BRACKET_OUTPUT_DIR = APP_DIR / ".photo_share_bracket_results"
 BRACKET_CACHE_FILE = CACHE_DIR / "bracket_detection_cache.json"
 DEFAULT_BRACKET_PROJECT_FILE = APP_DIR / "bracket_project.prj"
@@ -23,7 +24,7 @@ BRACKET_FEATURE_WORKERS = min(16, max(2, CPU_COUNT))
 BRACKET_MERGE_WORKERS = min(4, max(1, CPU_COUNT // 2))
 PREVIEW_CACHE_QUEUE_LIMIT = 25
 FILTER_WAIT_SECONDS = 0.8
-PHOTO_PAGE_SIZE = 1000
+PHOTO_PAGE_SIZE = 2000
 DEFAULT_THUMBNAIL_SIZE = 360
 DEFAULT_THUMBNAIL_QUALITY = 74
 DEFAULT_PREVIEW_SIZE = 2560
@@ -51,4 +52,5 @@ DEFAULT_CONFIG = {
     },
     "preview_size": DEFAULT_PREVIEW_SIZE,
     "preview_quality": DEFAULT_PREVIEW_QUALITY,
+    "upload_password": "",
 }

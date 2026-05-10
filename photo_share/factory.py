@@ -18,7 +18,7 @@ from .constants import (
 from .context import AppServices, RootServices
 from .paths import build_thumbnail_modes, root_cache_key
 from .routes import register_routes
-from .services import ImageCacheStore, MetadataStore, RatingIndex, RatingStore
+from .services import FolderCountIndex, ImageCacheStore, MetadataStore, RatingIndex, RatingStore
 from .image_formats import register_image_formats
 
 
@@ -29,6 +29,7 @@ def create_app(
     preview_size: int = DEFAULT_PREVIEW_SIZE,
     preview_quality: int = DEFAULT_PREVIEW_QUALITY,
     thumbnail_queue_limits: dict[str, int] | None = None,
+    upload_password: str = "",
 ) -> Flask:
     register_image_formats()
     roots_input = [photo_roots] if isinstance(photo_roots, Path) else photo_roots
@@ -40,7 +41,9 @@ def create_app(
             raise ValueError(f"Photo root does not exist or is not a folder: {root}")
 
     app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="/static")
-    services = _create_services(roots, thumbnail_size, thumbnail_quality, preview_size, preview_quality, thumbnail_queue_limits)
+    services = _create_services(roots, thumbnail_size, thumbnail_quality, preview_size, preview_quality, thumbnail_queue_limits, upload_password)
+    for root_services in services.root_services.values():
+        root_services.folder_counts.ensure_async()
     register_routes(app, services)
     return app
 
@@ -52,6 +55,7 @@ def _create_services(
     preview_size: int,
     preview_quality: int,
     thumbnail_queue_limits: dict[str, int] | None,
+    upload_password: str,
 ) -> AppServices:
     root_map = {f"root{index + 1}": root for index, root in enumerate(roots)}
     root_services = {
@@ -67,6 +71,7 @@ def _create_services(
         bracket_cache_loaded=False,
         bracket_merge_tasks={},
         thumbnail_queue_limits=thumbnail_queue_limits or {},
+        upload_password=upload_password,
     )
 
 
@@ -82,6 +87,7 @@ def _create_root_services(
     cache_root = CACHE_DIR / root_cache_key(root)
     metadata = MetadataStore(root)
     rating_index = RatingIndex(root, ratings, metadata)
+    folder_counts = FolderCountIndex(root)
     thumbnail_modes = build_thumbnail_modes(thumbnail_size, thumbnail_quality, thumbnail_queue_limits)
     thumbnails = {
         mode: ImageCacheStore(
@@ -107,6 +113,7 @@ def _create_root_services(
         ratings=ratings,
         metadata=metadata,
         rating_index=rating_index,
+        folder_counts=folder_counts,
         thumbnails=thumbnails,
         default_thumbnails=thumbnails[DEFAULT_THUMBNAIL_MODE],
         previews=previews,

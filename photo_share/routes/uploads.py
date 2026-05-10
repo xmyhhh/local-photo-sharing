@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from hmac import compare_digest
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -25,6 +26,9 @@ def register_upload_routes(app: Flask, services: AppServices) -> None:
     @app.post("/api/upload-folder")
     def create_upload_folder():
         payload = request.get_json(silent=True) or {}
+        auth_error = _upload_password_error(services, str(payload.get("password", "")))
+        if auth_error:
+            return auth_error
         folder = str(payload.get("folder", "")).strip()
         try:
             target = _resolve_upload_folder(services, folder, create=True)
@@ -40,16 +44,31 @@ def register_upload_routes(app: Flask, services: AppServices) -> None:
 
     @app.post("/api/upload")
     def upload_files():
+        auth_error = _upload_password_error(services, request.form.get("password", ""))
+        if auth_error:
+            return auth_error
         folder = request.form.get("folder", "").strip()
         result, status = save_uploaded_files(services, folder)
         return jsonify(result), status
 
     @app.post("/share-target")
     def receive_shared_files():
+        auth_error = _upload_password_error(services, request.form.get("password", ""))
+        if auth_error:
+            return redirect(f"/?{urlencode({'shared': '1', 'upload_error': 'password_required'})}", code=303)
         folder = request.form.get("folder", "").strip() or "Shared from iPhone"
         result, _status = save_uploaded_files(services, folder)
         rel = result.get("folder", "")
         return redirect(f"/?{urlencode({'shared': '1', 'folder': rel})}", code=303)
+
+
+def _upload_password_error(services: AppServices, password: str):
+    required = services.upload_password
+    if not required:
+        return None
+    if compare_digest(password, required):
+        return None
+    return jsonify({"message": "上传密码不正确。"}), 403
 
 
 def save_uploaded_files(services: AppServices, folder: str) -> tuple[dict, int]:
@@ -85,6 +104,7 @@ def save_uploaded_files(services: AppServices, folder: str) -> tuple[dict, int]:
         })
 
     rel = to_relative(root, target) if target != root else ""
+    services.root_services[services.default_root_id].folder_counts.refresh_subtree_async(target)
     unpaired_live_candidates = [
         {
             "name": path.name,

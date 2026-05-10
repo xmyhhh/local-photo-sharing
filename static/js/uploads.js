@@ -2,6 +2,9 @@ function openUploadDialog() {
   const defaultFolder = state.folder || "";
   uploadFolderInput.value = defaultFolder;
   uploadFilesInput.value = "";
+  if (!state.uploadPasswordRequired) {
+    uploadPasswordInput.value = "";
+  }
   setUploadStatus("", "");
   updateUploadRootLabel();
   uploadDialog.showModal();
@@ -30,7 +33,7 @@ async function createUploadFolder() {
     const result = await fetchJson("/api/upload-folder", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folder }),
+      body: JSON.stringify({ folder, password: getUploadPassword() }),
     });
     uploadFolderInput.value = result.folder || folder;
     setUploadStatus("文件夹已创建。", "success");
@@ -55,6 +58,7 @@ async function submitUpload(event) {
 
   const formData = new FormData();
   formData.set("folder", normalizeUploadFolder(uploadFolderInput.value));
+  formData.set("password", getUploadPassword());
   files.forEach((file) => formData.append("files", file, file.name));
 
   setUploadBusy(true);
@@ -131,6 +135,7 @@ function setUploadBusy(busy) {
   closeUploadBtn.disabled = busy;
   uploadFilesInput.disabled = busy;
   uploadFolderInput.disabled = busy;
+  uploadPasswordInput.disabled = busy;
 }
 
 function setUploadStatus(message, kind) {
@@ -139,4 +144,8 @@ function setUploadStatus(message, kind) {
   if (kind) {
     uploadStatus.classList.add(kind);
   }
+}
+
+function getUploadPassword() {
+  return state.uploadPasswordRequired ? uploadPasswordInput.value : "";
 }

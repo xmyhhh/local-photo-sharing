@@ -12,14 +12,9 @@
   </head>
   <body>
     <header class="topbar">
-      <div>
-        <h1>照片共享</h1>
-      </div>
       <div class="actions">
         <button id="openUploadBtn" type="button">上传</button>
         <button id="openBracketProjectBtn" class="ghost" type="button">打开包围曝光项目</button>
-        <button id="backBtn" class="ghost" type="button">返回上级</button>
-        <button id="refreshBtn" type="button">刷新</button>
       </div>
     </header>
 
@@ -170,6 +165,10 @@
         <label>
           文件夹
           <input id="uploadFolderInput" name="folder" type="text" autocomplete="off" placeholder="例如 2026-05-10" />
+        </label>
+        <label id="uploadPasswordLabel" hidden>
+          上传密码
+          <input id="uploadPasswordInput" name="password" type="password" autocomplete="current-password" />
         </label>
         <label>
           文件
