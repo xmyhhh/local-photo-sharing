@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -10,7 +11,7 @@ from typing import Any
 import piexif
 from PIL import Image, ImageOps
 
-from .constants import BRACKET_SCAN_LIMIT, JPG_EXTENSIONS, THUMBNAIL_DIR
+from .constants import BRACKET_FEATURE_WORKERS, BRACKET_SCAN_LIMIT, JPG_EXTENSIONS, THUMBNAIL_DIR
 from .paths import thumb_url, to_relative
 
 BRACKET_GROUP_SIZES = {3, 5, 7}
@@ -81,16 +82,16 @@ def detect_exposure_brackets(
             photos = photos[: max(0, scan_limit - scanned)]
             truncated = True
         scanned += len(photos)
-        features: list[BracketFeature] = []
-        for photo in photos:
-            processed += 1
-            feature = read_bracket_feature(root, photo)
-            if feature is None:
-                report_progress(progress_callback, processed, total, len(groups))
-                continue
-            analyzed += 1
-            features.append(feature)
-            report_progress(progress_callback, processed, total, len(groups))
+        features, processed_delta, analyzed_delta = read_bracket_features_parallel(
+            root,
+            photos,
+            total,
+            processed,
+            len(groups),
+            progress_callback,
+        )
+        processed += processed_delta
+        analyzed += analyzed_delta
         groups.extend(find_bracket_groups_in_features(features))
         report_progress(progress_callback, processed, total, len(groups))
         if truncated:
@@ -113,6 +114,41 @@ def detect_exposure_brackets(
 def report_progress(progress_callback: Any | None, processed: int, total: int, groups_count: int) -> None:
     if progress_callback is None:
         return
+
+
+def read_bracket_features_parallel(
+    root: Path,
+    photos: list[Path],
+    total: int,
+    processed_base: int,
+    groups_count: int,
+    progress_callback: Any | None,
+) -> tuple[list[BracketFeature], int, int]:
+    if not photos:
+        return ([], 0, 0)
+    indexed_features: list[tuple[int, BracketFeature]] = []
+    processed = 0
+    analyzed = 0
+    worker_count = min(BRACKET_FEATURE_WORKERS, max(1, len(photos)))
+    with ThreadPoolExecutor(max_workers=worker_count, thread_name_prefix="bracket-feature") as executor:
+        future_map = {
+            executor.submit(read_bracket_feature, root, photo): index
+            for index, photo in enumerate(photos)
+        }
+        for future in as_completed(future_map):
+            index = future_map[future]
+            processed += 1
+            feature = None
+            try:
+                feature = future.result()
+            except Exception:
+                feature = None
+            if feature is not None:
+                analyzed += 1
+                indexed_features.append((index, feature))
+            report_progress(progress_callback, processed_base + processed, total, groups_count)
+    indexed_features.sort(key=lambda item: item[0])
+    return ([feature for _, feature in indexed_features], processed, analyzed)
     try:
         progress_callback(processed, total, groups_count)
     except Exception:
