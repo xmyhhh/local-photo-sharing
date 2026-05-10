@@ -13,6 +13,8 @@ const state = {
   originalCache: new Map(),
   originalCacheBytes: 0,
   originalFetches: new Map(),
+  originalPrefetchQueue: [],
+  originalPrefetchActive: 0,
   thumbObserver: null,
   activeTouches: new Map(),
   pinchDistance: 0,
@@ -20,6 +22,7 @@ const state = {
   swipeStart: null,
   swipeMoved: false,
   lastTapTime: 0,
+  contextFolder: null,
   filters: {
     minRating: "",
     dateFrom: "",
@@ -28,6 +31,7 @@ const state = {
 };
 
 const ORIGINAL_CACHE_LIMIT = 1024 * 1024 * 1024;
+const ORIGINAL_PREFETCH_CONCURRENCY = 2;
 
 const grid = document.querySelector("#grid");
 const emptyState = document.querySelector("#emptyState");
@@ -56,6 +60,13 @@ const deleteDialog = document.querySelector("#deleteDialog");
 const deleteDialogPath = document.querySelector("#deleteDialogPath");
 const cancelDeleteBtn = document.querySelector("#cancelDeleteBtn");
 const confirmDeleteBtn = document.querySelector("#confirmDeleteBtn");
+const folderContextMenu = document.querySelector("#folderContextMenu");
+const detectBracketsBtn = document.querySelector("#detectBracketsBtn");
+const bracketDialog = document.querySelector("#bracketDialog");
+const bracketDialogPath = document.querySelector("#bracketDialogPath");
+const bracketStatus = document.querySelector("#bracketStatus");
+const bracketResults = document.querySelector("#bracketResults");
+const closeBracketDialogBtn = document.querySelector("#closeBracketDialogBtn");
 
 async function loadConfig() {
   const config = await fetchJson("/api/config");
@@ -130,6 +141,7 @@ function renderGrid() {
       icon.textContent = "DIR";
       button.append(icon);
       button.addEventListener("click", () => loadFolder(entry.path));
+      button.addEventListener("contextmenu", (event) => openFolderContextMenu(event, entry));
     } else {
       const holder = document.createElement("div");
       holder.className = "thumb-holder";
@@ -165,6 +177,114 @@ function renderGrid() {
     tile.append(button, meta);
     grid.append(tile);
   });
+}
+
+function openFolderContextMenu(event, entry) {
+  event.preventDefault();
+  state.contextFolder = entry;
+  folderContextMenu.hidden = false;
+  const menuRect = folderContextMenu.getBoundingClientRect();
+  const left = Math.min(event.clientX, window.innerWidth - menuRect.width - 8);
+  const top = Math.min(event.clientY, window.innerHeight - menuRect.height - 8);
+  folderContextMenu.style.left = `${Math.max(8, left)}px`;
+  folderContextMenu.style.top = `${Math.max(8, top)}px`;
+}
+
+function closeFolderContextMenu() {
+  folderContextMenu.hidden = true;
+}
+
+async function detectBracketsInContextFolder() {
+  const folder = state.contextFolder;
+  closeFolderContextMenu();
+  if (!folder) {
+    return;
+  }
+  bracketDialogPath.textContent = folder.path || "根目录";
+  bracketStatus.textContent = "正在扫描 JPG 文件...";
+  bracketResults.innerHTML = "";
+  bracketDialog.showModal();
+
+  try {
+    const params = new URLSearchParams();
+    params.set("folder", folder.path);
+    const result = await fetchJson(`/api/bracket-detection?${params.toString()}`);
+    renderBracketDetection(result);
+  } catch (error) {
+    bracketStatus.textContent = error.message;
+  }
+}
+
+function renderBracketDetection(result) {
+  bracketResults.innerHTML = "";
+  if (!result.groups.length) {
+    bracketStatus.textContent = "没有发现明显的包围曝光组。";
+    return;
+  }
+  bracketStatus.textContent = `发现 ${result.groups.length} 组疑似包围曝光。`;
+
+  result.groups.forEach((group) => {
+    const section = document.createElement("section");
+    section.className = "bracket-group";
+
+    const title = document.createElement("div");
+    title.className = "bracket-group-title";
+    const exposureText = group.exposureRangeEv === null ? "无 EXIF 曝光跨度" : `曝光跨度 ${group.exposureRangeEv} EV`;
+    title.textContent = `第 ${group.id} 组 · ${group.size} 张 · 亮度跨度 ${group.brightnessRange} · 相似度 ${group.averageSimilarity} · ${exposureText}`;
+    section.append(title);
+
+    const strip = document.createElement("div");
+    strip.className = "bracket-strip";
+    group.photos.forEach((photo) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "bracket-photo";
+      item.title = photo.path;
+      const img = document.createElement("img");
+      img.alt = photo.name;
+      img.src = `${photo.thumbUrl}?v=${photo.mtime}`;
+      const name = document.createElement("span");
+      name.className = "bracket-photo-name";
+      name.textContent = photo.name;
+      const info = document.createElement("span");
+      info.className = "bracket-photo-info";
+      info.textContent = formatBracketPhotoInfo(photo);
+      item.append(img, name, info);
+      item.addEventListener("click", () => {
+        bracketDialog.close();
+        openViewer(photoToEntry(photo));
+      });
+      strip.append(item);
+    });
+    section.append(strip);
+    bracketResults.append(section);
+  });
+}
+
+function formatBracketPhotoInfo(photo) {
+  const exposure = photo.exposureTime ? ` · ${formatExposureTime(photo.exposureTime)}` : "";
+  return `亮度 ${photo.brightness}${exposure}`;
+}
+
+function formatExposureTime(seconds) {
+  if (seconds <= 0) {
+    return "";
+  }
+  if (seconds < 1) {
+    const denominator = Math.round(1 / seconds);
+    return `1/${denominator}s`;
+  }
+  return `${seconds.toFixed(seconds >= 10 ? 0 : 1)}s`;
+}
+
+function photoToEntry(photo) {
+  return {
+    type: "photo",
+    name: photo.name,
+    path: photo.path,
+    mtime: photo.mtime,
+    rating: 0,
+  };
 }
 
 async function loadThumbnail(entry, img, spinner, attempt = 0) {
@@ -341,7 +461,7 @@ function showPhoto(entry) {
   renderViewerRating();
   updatePageButtons();
   updateZoom();
-  preloadAdjacentPhotos();
+  preloadAdjacentPreviews();
 }
 
 async function loadPreviewImage(entry, attempt = 0) {
@@ -445,7 +565,7 @@ function updatePageButtons() {
   nextBtn.disabled = index < 0 || index >= last;
 }
 
-function preloadAdjacentPhotos() {
+function preloadAdjacentPreviews() {
   const photos = photosOnly();
   const index = currentPhotoIndex();
   [photos[index - 1], photos[index + 1]].forEach((entry) => {
@@ -453,8 +573,47 @@ function preloadAdjacentPhotos() {
       return;
     }
     fetch(`/api/preview-status/${encodePath(entry.path)}`, { cache: "no-store" }).catch(() => {});
-    loadOriginalImage(entry);
   });
+}
+
+function queueAdjacentOriginals() {
+  const photos = photosOnly();
+  const index = currentPhotoIndex();
+  const candidates = [
+    photos[index + 1],
+    photos[index - 1],
+    photos[index + 2],
+    photos[index - 2],
+  ].filter(Boolean);
+
+  candidates.forEach((entry) => queueOriginalPrefetch(entry));
+  runOriginalPrefetchQueue();
+}
+
+function queueOriginalPrefetch(entry) {
+  if (getOriginalCache(entry.path) || state.originalFetches.has(entry.path)) {
+    return;
+  }
+  if (state.originalPrefetchQueue.some((item) => item.path === entry.path)) {
+    return;
+  }
+  state.originalPrefetchQueue.push(entry);
+}
+
+function runOriginalPrefetchQueue() {
+  while (
+    state.originalPrefetchActive < ORIGINAL_PREFETCH_CONCURRENCY
+    && state.originalPrefetchQueue.length > 0
+  ) {
+    const entry = state.originalPrefetchQueue.shift();
+    state.originalPrefetchActive += 1;
+    loadOriginalImage(entry, false)
+      .catch(() => null)
+      .finally(() => {
+        state.originalPrefetchActive -= 1;
+        runOriginalPrefetchQueue();
+      });
+  }
 }
 
 async function loadOriginalImage(entry, forceDisplay = false) {
@@ -509,6 +668,7 @@ function showOriginalUrl(entry, url) {
   if (viewerImage.complete && viewerImage.naturalWidth > 0) {
     viewerImage.classList.add("ready");
   }
+  queueAdjacentOriginals();
 }
 
 function getOriginalCache(path) {
@@ -654,6 +814,18 @@ refreshBtn.addEventListener("click", () => loadFolder(state.folder));
 ratingFilter.addEventListener("change", applyFilters);
 dateFromFilter.addEventListener("change", applyFilters);
 dateToFilter.addEventListener("change", applyFilters);
+detectBracketsBtn.addEventListener("click", detectBracketsInContextFolder);
+closeBracketDialogBtn.addEventListener("click", () => bracketDialog.close());
+document.addEventListener("click", (event) => {
+  if (!folderContextMenu.hidden && !folderContextMenu.contains(event.target)) {
+    closeFolderContextMenu();
+  }
+});
+document.addEventListener("contextmenu", (event) => {
+  if (!event.target.closest(".tile-button")) {
+    closeFolderContextMenu();
+  }
+});
 clearFiltersBtn.addEventListener("click", () => {
   ratingFilter.value = "";
   dateFromFilter.value = "";

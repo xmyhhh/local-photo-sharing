@@ -47,6 +47,24 @@
       <div id="emptyState" class="empty" hidden>当前文件夹没有 JPG 图片或子文件夹。</div>
     </main>
 
+    <div id="folderContextMenu" class="context-menu" hidden>
+      <button id="detectBracketsBtn" type="button">检测包围曝光</button>
+    </div>
+
+    <dialog id="bracketDialog" class="bracket-dialog">
+      <div class="bracket-panel">
+        <div class="bracket-header">
+          <div>
+            <div class="bracket-title">包围曝光检测</div>
+            <div id="bracketDialogPath" class="bracket-path"></div>
+          </div>
+          <button id="closeBracketDialogBtn" class="ghost" type="button">关闭</button>
+        </div>
+        <div id="bracketStatus" class="bracket-status"></div>
+        <div id="bracketResults" class="bracket-results"></div>
+      </div>
+    </dialog>
+
     <dialog id="viewer" class="viewer">
       <div class="viewer-shell">
         <div class="viewer-toolbar">

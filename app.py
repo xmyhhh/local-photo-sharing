@@ -5,13 +5,14 @@ import hashlib
 import json
 import mimetypes
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Lock
 from typing import Any
 
 from flask import Flask, abort, jsonify, request, send_file
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageStat
 
 APP_DIR = Path(__file__).resolve().parent
 STATIC_DIR = APP_DIR / "static"
@@ -99,6 +100,13 @@ def create_app(
             parent = "" if str(parent_path) == "." else as_posix(parent_path)
 
         return jsonify({"folder": folder, "parent": parent, "entries": entries})
+
+    @app.get("/api/bracket-detection")
+    def bracket_detection():
+        folder = request.args.get("folder", "")
+        folder_path = resolve_folder(root, folder)
+        groups = detect_exposure_brackets(root, folder_path)
+        return jsonify({"folder": folder, "groups": groups, "count": len(groups)})
 
     @app.get("/api/image/<path:photo_path>")
     def image(photo_path: str):
@@ -433,6 +441,259 @@ class PhotoFilters:
         if self.date_to is not None and mtime > self.date_to:
             return False
         return True
+
+
+class BracketFeature:
+    def __init__(
+        self,
+        path: Path,
+        rel: str,
+        mtime: int,
+        width: int,
+        height: int,
+        brightness: float,
+        contrast: float,
+        pixels: tuple[float, ...],
+        exposure_time: float | None,
+        exposure_bias: float | None,
+        file_number: int | None,
+    ) -> None:
+        self.path = path
+        self.rel = rel
+        self.mtime = mtime
+        self.width = width
+        self.height = height
+        self.brightness = brightness
+        self.contrast = contrast
+        self.pixels = pixels
+        self.exposure_time = exposure_time
+        self.exposure_bias = exposure_bias
+        self.file_number = file_number
+
+
+def detect_exposure_brackets(root: Path, folder_path: Path) -> list[dict[str, Any]]:
+    groups: list[list[BracketFeature]] = []
+    for photo_dir in iter_photo_dirs(folder_path):
+        photos = [
+            child
+            for child in photo_dir.iterdir()
+            if child.is_file() and child.suffix.lower() in JPG_EXTENSIONS
+        ]
+        photos.sort(key=photo_sort_key)
+        features = [feature for feature in (read_bracket_feature(root, photo) for photo in photos) if feature is not None]
+        groups.extend(find_bracket_groups_in_features(features))
+
+    return [serialize_bracket_group(group, group_index + 1) for group_index, group in enumerate(groups)]
+
+
+def iter_photo_dirs(folder_path: Path) -> list[Path]:
+    photo_dirs: list[Path] = []
+    for current, dirnames, filenames in os.walk(folder_path):
+        dirnames[:] = [
+            dirname
+            for dirname in dirnames
+            if not dirname.startswith(".") and dirname not in {THUMBNAIL_DIR}
+        ]
+        current_path = Path(current)
+        if any(Path(filename).suffix.lower() in JPG_EXTENSIONS for filename in filenames):
+            photo_dirs.append(current_path)
+    return photo_dirs
+
+
+def find_bracket_groups_in_features(features: list[BracketFeature]) -> list[list[BracketFeature]]:
+    groups: list[list[BracketFeature]] = []
+    index = 0
+
+    while index < len(features):
+        current = [features[index]]
+        index += 1
+        while index < len(features) and are_bracket_neighbors(current[-1], features[index]):
+            current.append(features[index])
+            index += 1
+        if is_exposure_bracket_group(current):
+            groups.append(current)
+    return groups
+
+
+def read_bracket_feature(root: Path, photo_path: Path) -> BracketFeature | None:
+    try:
+        stat = photo_path.stat()
+        with Image.open(photo_path) as image:
+            image = ImageOps.exif_transpose(image)
+            width, height = image.size
+            exif = image.getexif()
+            exposure_time = rational_to_float(exif.get(33434))
+            exposure_bias = rational_to_float(exif.get(37380))
+            gray = image.convert("L")
+            gray.thumbnail((64, 64))
+            stat_info = ImageStat.Stat(gray)
+            brightness = float(stat_info.mean[0])
+            contrast = float(stat_info.stddev[0])
+            shape_gray = ImageOps.autocontrast(gray)
+            pixels = tuple(value / 255.0 for value in shape_gray.resize((16, 16)).getdata())
+    except Exception:
+        return None
+
+    return BracketFeature(
+        path=photo_path,
+        rel=to_relative(root, photo_path),
+        mtime=int(stat.st_mtime),
+        width=width,
+        height=height,
+        brightness=brightness,
+        contrast=contrast,
+        pixels=pixels,
+        exposure_time=exposure_time,
+        exposure_bias=exposure_bias,
+        file_number=trailing_number(photo_path.stem),
+    )
+
+
+def photo_sort_key(path: Path) -> tuple[str, int, str]:
+    prefix, number = split_trailing_number(path.stem)
+    return (prefix.lower(), number if number is not None else -1, path.name.lower())
+
+
+def split_trailing_number(value: str) -> tuple[str, int | None]:
+    match = re.search(r"(\d+)$", value)
+    if not match:
+        return (value, None)
+    return (value[: match.start()], int(match.group(1)))
+
+
+def trailing_number(value: str) -> int | None:
+    return split_trailing_number(value)[1]
+
+
+def are_bracket_neighbors(left: BracketFeature, right: BracketFeature) -> bool:
+    if not file_numbers_are_close(left, right):
+        return False
+    if not dimensions_are_close(left, right):
+        return False
+    similarity = image_similarity(left.pixels, right.pixels)
+    if similarity < 0.82:
+        return False
+    if exposure_step(left, right) < 0.28 and abs(left.brightness - right.brightness) < 9:
+        return False
+    return True
+
+
+def file_numbers_are_close(left: BracketFeature, right: BracketFeature) -> bool:
+    if left.file_number is None or right.file_number is None:
+        return True
+    return 1 <= right.file_number - left.file_number <= 2
+
+
+def dimensions_are_close(left: BracketFeature, right: BracketFeature) -> bool:
+    if left.width <= 0 or left.height <= 0 or right.width <= 0 or right.height <= 0:
+        return False
+    left_ratio = left.width / left.height
+    right_ratio = right.width / right.height
+    return abs(left_ratio - right_ratio) <= 0.04
+
+
+def exposure_step(left: BracketFeature, right: BracketFeature) -> float:
+    if left.exposure_time and right.exposure_time and left.exposure_time > 0 and right.exposure_time > 0:
+        import math
+
+        return abs(math.log2(right.exposure_time / left.exposure_time))
+    if left.exposure_bias is not None and right.exposure_bias is not None:
+        return abs(right.exposure_bias - left.exposure_bias)
+    return 0.0
+
+
+def is_exposure_bracket_group(group: list[BracketFeature]) -> bool:
+    if len(group) < 3:
+        return False
+    brightness_values = [feature.brightness for feature in group]
+    brightness_range = max(brightness_values) - min(brightness_values)
+    if brightness_range < 18:
+        return False
+    similar_pairs = [
+        image_similarity(group[index].pixels, group[index + 1].pixels)
+        for index in range(len(group) - 1)
+    ]
+    if min(similar_pairs) < 0.82 or sum(similar_pairs) / len(similar_pairs) < 0.88:
+        return False
+    exposure_steps = [
+        exposure_step(group[index], group[index + 1])
+        for index in range(len(group) - 1)
+    ]
+    has_exif_exposure = any(step >= 0.5 for step in exposure_steps)
+    return has_exif_exposure or brightness_range >= 28
+
+
+def image_similarity(left: tuple[float, ...], right: tuple[float, ...]) -> float:
+    if len(left) != len(right) or not left:
+        return 0.0
+    left_mean = sum(left) / len(left)
+    right_mean = sum(right) / len(right)
+    numerator = 0.0
+    left_energy = 0.0
+    right_energy = 0.0
+    for left_value, right_value in zip(left, right):
+        left_centered = left_value - left_mean
+        right_centered = right_value - right_mean
+        numerator += left_centered * right_centered
+        left_energy += left_centered * left_centered
+        right_energy += right_centered * right_centered
+    denominator = (left_energy * right_energy) ** 0.5
+    if denominator <= 0:
+        return 0.0
+    return max(-1.0, min(1.0, numerator / denominator))
+
+
+def serialize_bracket_group(group: list[BracketFeature], index: int) -> dict[str, Any]:
+    brightness_values = [feature.brightness for feature in group]
+    similarities = [
+        image_similarity(group[item_index].pixels, group[item_index + 1].pixels)
+        for item_index in range(len(group) - 1)
+    ]
+    exposure_values = [feature.exposure_time for feature in group if feature.exposure_time]
+    return {
+        "id": index,
+        "size": len(group),
+        "brightnessRange": round(max(brightness_values) - min(brightness_values), 1),
+        "averageSimilarity": round(sum(similarities) / len(similarities), 3) if similarities else 1,
+        "exposureRangeEv": round(exposure_range_ev(exposure_values), 2) if len(exposure_values) >= 2 else None,
+        "photos": [
+            {
+                "name": feature.path.name,
+                "path": feature.rel,
+                "mtime": feature.mtime,
+                "brightness": round(feature.brightness, 1),
+                "exposureTime": feature.exposure_time,
+                "exposureBias": feature.exposure_bias,
+                "thumbUrl": thumb_url(feature.rel),
+            }
+            for feature in group
+        ],
+    }
+
+
+def exposure_range_ev(values: list[float]) -> float:
+    import math
+
+    minimum = min(value for value in values if value > 0)
+    maximum = max(value for value in values if value > 0)
+    return abs(math.log2(maximum / minimum))
+
+
+def rational_to_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError, ZeroDivisionError):
+        pass
+    try:
+        numerator, denominator = value
+        denominator = float(denominator)
+        if denominator == 0:
+            return None
+        return float(numerator) / denominator
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
 
 
 def resolve_folder(root: Path, rel_path: str) -> Path:
