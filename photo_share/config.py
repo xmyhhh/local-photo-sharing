@@ -10,8 +10,6 @@ from .constants import (
     DEFAULT_CONFIG_FILE,
     DEFAULT_PREVIEW_QUALITY,
     DEFAULT_PREVIEW_SIZE,
-    DEFAULT_THUMBNAIL_QUALITY,
-    DEFAULT_THUMBNAIL_SIZE,
     THUMBNAIL_MODES,
 )
 
@@ -76,26 +74,42 @@ def get_port(config: dict[str, Any]) -> int:
     return port
 
 
-def get_thumbnail_size(config: dict[str, Any]) -> int:
-    value = config.get("thumbnail_size", DEFAULT_THUMBNAIL_SIZE)
-    try:
-        size = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Config field thumbnail_size must be an integer.") from exc
-    if size < 160 or size > 1200:
-        raise ValueError("Config field thumbnail_size must be between 160 and 1200.")
-    return size
+def get_thumbnail_mode_settings(config: dict[str, Any]) -> dict[str, dict[str, int]]:
+    defaults = {
+        mode: {
+            "size": int(spec["size"]),
+            "quality": int(spec["quality"]),
+        }
+        for mode, spec in THUMBNAIL_MODES.items()
+    }
+    value = config.get("thumbnail_modes", {})
+    if value is None:
+        return defaults
+    if not isinstance(value, dict):
+        raise ValueError("Config field thumbnail_modes must be an object.")
 
-
-def get_thumbnail_quality(config: dict[str, Any]) -> int:
-    value = config.get("thumbnail_quality", DEFAULT_THUMBNAIL_QUALITY)
-    try:
-        quality = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Config field thumbnail_quality must be an integer.") from exc
-    if quality < 40 or quality > 92:
-        raise ValueError("Config field thumbnail_quality must be between 40 and 92.")
-    return quality
+    settings = {mode: spec.copy() for mode, spec in defaults.items()}
+    for mode in defaults:
+        if mode not in value:
+            continue
+        item = value[mode]
+        if not isinstance(item, dict):
+            raise ValueError(f"Config field thumbnail_modes.{mode} must be an object.")
+        if "size" in item:
+            settings[mode]["size"] = _parse_int_range(
+                item["size"],
+                f"thumbnail_modes.{mode}.size",
+                120,
+                2400,
+            )
+        if "quality" in item:
+            settings[mode]["quality"] = _parse_int_range(
+                item["quality"],
+                f"thumbnail_modes.{mode}.quality",
+                40,
+                92,
+            )
+    return settings
 
 
 def get_preview_size(config: dict[str, Any]) -> int:
@@ -140,6 +154,16 @@ def get_thumbnail_queue_limits(config: dict[str, Any]) -> dict[str, int]:
             raise ValueError(f"Config field thumbnail_queue_limits.{mode} must be an integer.") from exc
         limits[mode] = max(10, parsed)
     return limits
+
+
+def _parse_int_range(value: Any, field: str, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Config field {field} must be an integer.") from exc
+    if parsed < minimum or parsed > maximum:
+        raise ValueError(f"Config field {field} must be between {minimum} and {maximum}.")
+    return parsed
 
 
 def get_upload_password(config: dict[str, Any]) -> str:

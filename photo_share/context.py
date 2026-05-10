@@ -32,4 +32,5 @@ class AppServices:
     bracket_cache_loaded: bool
     bracket_merge_tasks: dict[str, dict[str, Any]]
     thumbnail_queue_limits: dict[str, int]
+    thumbnail_mode_settings: dict[str, dict[str, int]]
     upload_password: str

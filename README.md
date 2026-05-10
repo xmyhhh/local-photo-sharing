@@ -102,8 +102,12 @@ D:\codex_prj\photo\.venv\Scripts\python.exe app.py
   "photo_folder": "D:/your/photo/folder",
   "host": "0.0.0.0",
   "port": 8000,
-  "thumbnail_size": 360,
-  "thumbnail_quality": 74,
+  "thumbnail_modes": {
+    "small": { "size": 180, "quality": 58 },
+    "medium": { "size": 300, "quality": 66 },
+    "large": { "size": 520, "quality": 76 },
+    "xlarge": { "size": 1280, "quality": 92 }
+  },
   "preview_size": 2560,
   "preview_quality": 88,
   "upload_password": ""

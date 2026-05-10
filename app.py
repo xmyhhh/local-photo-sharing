@@ -7,9 +7,8 @@ from photo_share.config import (
     get_port,
     get_preview_quality,
     get_preview_size,
+    get_thumbnail_mode_settings,
     get_thumbnail_queue_limits,
-    get_thumbnail_quality,
-    get_thumbnail_size,
     get_upload_password,
     load_config,
     parse_args,
@@ -29,11 +28,10 @@ def main() -> None:
     port = get_port(config)
     app = create_app(
         folders,
-        thumbnail_size=get_thumbnail_size(config),
-        thumbnail_quality=get_thumbnail_quality(config),
         preview_size=get_preview_size(config),
         preview_quality=get_preview_quality(config),
         thumbnail_queue_limits=get_thumbnail_queue_limits(config),
+        thumbnail_mode_settings=get_thumbnail_mode_settings(config),
         upload_password=get_upload_password(config),
     )
     print(f"Config: {config_path}")

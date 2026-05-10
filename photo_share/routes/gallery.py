@@ -48,6 +48,7 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
             "defaultRootId": services.default_root_id,
             "allowDelete": True,
             "thumbnailQueueLimits": services.thumbnail_queue_limits,
+            "thumbnailModes": services.thumbnail_mode_settings,
             "uploadPasswordRequired": bool(services.upload_password),
         })
 
