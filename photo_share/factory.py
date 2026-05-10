@@ -60,6 +60,8 @@ def _create_services(
         default_root_id="root1",
         bracket_tasks={},
         bracket_cache={},
+        bracket_cache_loaded=False,
+        bracket_merge_tasks={},
     )
 
 

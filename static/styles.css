@@ -465,12 +465,17 @@ main {
   gap: 6px;
 }
 
-.bracket-merge-panel input[type="number"] {
+.bracket-merge-panel input[type="number"],
+.bracket-merge-panel select {
   width: 72px;
   min-height: 34px;
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 0 8px;
+}
+
+.bracket-merge-panel select {
+  width: 112px;
 }
 
 .bracket-merge-output {
@@ -481,6 +486,11 @@ main {
 .bracket-merge-output a {
   color: var(--accent);
   font-weight: 700;
+}
+
+.bracket-merge-output progress {
+  width: min(520px, 100%);
+  height: 14px;
 }
 
 .bracket-results {

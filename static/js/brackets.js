@@ -190,22 +190,59 @@ async function mergeSelectedBracketGroups() {
     return;
   }
   bracketMergeOutput.hidden = false;
-  bracketMergeOutput.textContent = "正在合成...";
+  renderMergeProgress({ stage: "正在提交合成任务", progress: 0, processed: 0, total: groupIds.length });
   try {
-    const result = await fetchJson("/api/bracket-merge", {
+    const start = await fetchJson("/api/bracket-merge", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         root: state.currentBracketRoot,
         folder: state.currentBracketFolder,
         groupIds,
+        groups: state.currentBracketResult?.groups || [],
         params: getMergeParams(),
       }),
     });
-    renderMergeOutput(result);
+    pollBracketMerge(start.taskId);
   } catch (error) {
     bracketMergeOutput.textContent = error.message;
   }
+}
+
+async function pollBracketMerge(taskId) {
+  while (true) {
+    try {
+      const status = await fetchJson("/api/bracket-merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskId }),
+      });
+      if (status.state === "done") {
+        renderMergeOutput(status.result);
+        return;
+      }
+      if (status.state === "error") {
+        bracketMergeOutput.textContent = status.message || "合成失败";
+        return;
+      }
+      renderMergeProgress(status);
+    } catch (error) {
+      bracketMergeOutput.textContent = error.message;
+      return;
+    }
+    await sleep(500);
+  }
+}
+
+function renderMergeProgress(status) {
+  const progress = Math.max(0, Math.min(1, Number(status.progress) || 0));
+  bracketMergeOutput.innerHTML = "";
+  const text = document.createElement("div");
+  text.textContent = `${status.stage || "正在合成"} · ${Math.round(progress * 100)}% · ${status.processed || 0}/${status.total || 0}`;
+  const bar = document.createElement("progress");
+  bar.max = 100;
+  bar.value = Math.round(progress * 100);
+  bracketMergeOutput.append(text, bar);
 }
 
 function renderMergeOutput(result) {
@@ -219,11 +256,40 @@ function renderMergeOutput(result) {
     link.textContent = `下载第 ${file.groupId} 组合成结果`;
     link.download = file.name;
     bracketMergeOutput.append(link);
+    if (file.alignMethod) {
+      const method = document.createElement("div");
+      method.textContent = `第 ${file.groupId} 组：${formatMergeAlgorithm(file.algorithm)} · ${formatAlignMethod(file.alignMethod)}`;
+      bracketMergeOutput.append(method);
+    }
   });
+}
+
+function formatMergeAlgorithm(algorithm) {
+  if (algorithm === "debevec") {
+    return "Debevec HDR";
+  }
+  if (algorithm === "robertson") {
+    return "Robertson HDR";
+  }
+  return "Fusion";
+}
+
+function formatAlignMethod(method) {
+  if (method === "feature-homography") {
+    return "特征点单应性对齐";
+  }
+  if (method === "feature-affine") {
+    return "特征点仿射对齐";
+  }
+  if (method === "translation-fallback") {
+    return "平移降级对齐";
+  }
+  return method;
 }
 
 function getMergeParams() {
   return {
+    algorithm: mergeAlgorithm.value,
     exposure: mergeExposure.value,
     contrast: mergeContrast.value,
     saturation: mergeSaturation.value,

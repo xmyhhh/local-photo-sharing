@@ -78,6 +78,13 @@
         <div id="bracketStatus" class="bracket-status"></div>
         <div id="bracketMergePanel" class="bracket-merge-panel" hidden>
           <label><input id="selectAllBracketGroups" type="checkbox" /> 全选</label>
+          <label>算法
+            <select id="mergeAlgorithm">
+              <option value="fusion">Fusion</option>
+              <option value="debevec">Debevec</option>
+              <option value="robertson">Robertson</option>
+            </select>
+          </label>
           <label>曝光 <input id="mergeExposure" type="number" step="0.1" min="-2" max="2" value="0" /></label>
           <label>对比度 <input id="mergeContrast" type="number" step="0.05" min="0.5" max="2" value="1" /></label>
           <label>饱和度 <input id="mergeSaturation" type="number" step="0.05" min="0" max="2" value="1" /></label>

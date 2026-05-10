@@ -27,3 +27,5 @@ class AppServices:
     default_root_id: str
     bracket_tasks: dict[str, dict[str, Any]]
     bracket_cache: dict[str, dict[str, Any]]
+    bracket_cache_loaded: bool
+    bracket_merge_tasks: dict[str, dict[str, Any]]

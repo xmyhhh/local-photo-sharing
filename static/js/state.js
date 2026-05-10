@@ -116,6 +116,7 @@ const useBracketCacheBtn = document.querySelector("#useBracketCacheBtn");
 const rescanBracketsBtn = document.querySelector("#rescanBracketsBtn");
 const bracketMergePanel = document.querySelector("#bracketMergePanel");
 const selectAllBracketGroups = document.querySelector("#selectAllBracketGroups");
+const mergeAlgorithm = document.querySelector("#mergeAlgorithm");
 const mergeExposure = document.querySelector("#mergeExposure");
 const mergeContrast = document.querySelector("#mergeContrast");
 const mergeSaturation = document.querySelector("#mergeSaturation");

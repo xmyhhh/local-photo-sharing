@@ -446,11 +446,13 @@ def serialize_bracket_group(group: list[BracketFeature], index: int) -> dict[str
         for item_index in range(len(ordered_group) - 1)
     ]
     exposure_values = [feature.exposure_time for feature in ordered_group if feature.exposure_time and feature.exposure_time > 0]
+    exposure_biases = [feature.exposure_bias for feature in ordered_group if feature.exposure_bias is not None]
+    exposure_range = combined_exposure_range_ev(exposure_values, exposure_biases)
     return {
         "id": index,
         "size": len(ordered_group),
         "averageSimilarity": round(sum(similarities) / len(similarities), 3),
-        "exposureRangeEv": round(exposure_range_ev(exposure_values), 2) if len(exposure_values) >= 2 else None,
+        "exposureRangeEv": round(exposure_range, 2) if exposure_range is not None else None,
         "timeSpanSeconds": round(ordered_group[-1].capture_timestamp - ordered_group[0].capture_timestamp, 3)
         if ordered_group[0].capture_timestamp is not None and ordered_group[-1].capture_timestamp is not None
         else None,
@@ -481,6 +483,17 @@ def exposure_range_ev(values: list[float]) -> float:
     minimum = min(value for value in values if value > 0)
     maximum = max(value for value in values if value > 0)
     return abs(math.log2(maximum / minimum))
+
+
+def combined_exposure_range_ev(exposure_values: list[float], exposure_biases: list[float]) -> float | None:
+    ranges: list[float] = []
+    if len(exposure_values) >= 2:
+        ranges.append(exposure_range_ev(exposure_values))
+    if len(exposure_biases) >= 2:
+        ranges.append(max(exposure_biases) - min(exposure_biases))
+    if not ranges:
+        return None
+    return max(ranges)
 
 
 def rational_to_float(value: Any) -> float | None:

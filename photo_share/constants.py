@@ -10,6 +10,7 @@ RATINGS_FILE = ".photo_share_ratings.json"
 THUMBNAIL_DIR = ".photo_share_thumbs"
 CACHE_DIR = APP_DIR / ".photo_share_cache"
 BRACKET_OUTPUT_DIR = APP_DIR / ".photo_share_bracket_results"
+BRACKET_CACHE_FILE = CACHE_DIR / "bracket_detection_cache.json"
 CPU_COUNT = os.cpu_count() or 1
 THUMBNAIL_WORKERS = min(8, max(2, CPU_COUNT))
 METADATA_WORKERS = min(4, max(2, CPU_COUNT // 2))
