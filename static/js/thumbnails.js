@@ -175,12 +175,6 @@ function isNearViewport(element, margin) {
 
 function scanVisibleWork() {
   state.visibleScanTimer = null;
-  document.querySelectorAll(".thumb-holder").forEach((holder) => {
-    const payload = holder.__thumbPayload;
-    if (payload && isNearViewport(holder, 420)) {
-      queueThumbnail(payload.entry, payload.img, payload.spinner);
-    }
-  });
   document.querySelectorAll(".rating").forEach((ratingWrap) => {
     const payload = ratingWrap.__ratingPayload;
     if (payload && isNearViewport(ratingWrap, 220)) {

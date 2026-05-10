@@ -397,13 +397,6 @@ function createGridTile(entry) {
       img.loading = "lazy";
       img.decoding = "async";
       img.alt = entry.name;
-      if (entry.browserRenderable !== false) {
-        img.src = `/api/image/${encodePath(entry.path)}`;
-        img.onload = () => {
-          img.classList.add("loaded");
-          spinner.hidden = true;
-        };
-      }
       holder.append(spinner, img);
       if (entry.isLive) {
         const liveBadge = document.createElement("div");

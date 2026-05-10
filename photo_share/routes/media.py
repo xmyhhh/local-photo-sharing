@@ -69,6 +69,13 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
             download_name=path.name,
         )
 
+    @app.get("/api/info/<path:photo_path>")
+    def photo_info(photo_path: str):
+        root_id, rel_path = _split_rooted(photo_path)
+        root_services = _root_services(services, root_id)
+        path = resolve_media(root_services.root, rel_path)
+        return jsonify(build_media_info(path))
+
     @app.get("/api/live-video/<path:photo_path>")
     def live_video(photo_path: str):
         root_id, rel_path = _split_rooted(photo_path)
@@ -199,6 +206,110 @@ def unique_trash_path(path: Path) -> Path:
         if not candidate.exists():
             return candidate
     abort(409, "Too many duplicate files in trash.")
+
+
+def build_media_info(path: Path) -> dict:
+    stat = path.stat()
+    info = {
+        "name": path.name,
+        "size": stat.st_size,
+        "modified": int(stat.st_mtime),
+        "type": path.suffix.lower().lstrip(".").upper(),
+        "width": None,
+        "height": None,
+        "takenAt": None,
+        "camera": None,
+        "lens": None,
+        "exposureTime": None,
+        "fNumber": None,
+        "iso": None,
+        "focalLength": None,
+        "exposureBias": None,
+    }
+    if path.suffix.lower() not in PHOTO_EXTENSIONS:
+        return info
+    try:
+        with Image.open(path) as image:
+            info["width"], info["height"] = image.size
+    except Exception:
+        pass
+    try:
+        exif = piexif.load(str(path))
+    except Exception:
+        return info
+
+    zeroth = exif.get("0th", {})
+    exif_ifd = exif.get("Exif", {})
+    make = _decode_exif_text(zeroth.get(piexif.ImageIFD.Make))
+    model = _decode_exif_text(zeroth.get(piexif.ImageIFD.Model))
+    lens = _decode_exif_text(exif_ifd.get(piexif.ExifIFD.LensModel))
+    taken = (
+        _decode_exif_text(exif_ifd.get(piexif.ExifIFD.DateTimeOriginal))
+        or _decode_exif_text(exif_ifd.get(piexif.ExifIFD.DateTimeDigitized))
+        or _decode_exif_text(zeroth.get(piexif.ImageIFD.DateTime))
+    )
+    info.update({
+        "takenAt": taken,
+        "camera": " ".join(item for item in [make, model] if item) or None,
+        "lens": lens,
+        "exposureTime": _format_exif_rational(exif_ifd.get(piexif.ExifIFD.ExposureTime), reciprocal=True),
+        "fNumber": _format_f_number(exif_ifd.get(piexif.ExifIFD.FNumber)),
+        "iso": exif_ifd.get(piexif.ExifIFD.ISOSpeedRatings) or exif_ifd.get(piexif.ExifIFD.PhotographicSensitivity),
+        "focalLength": _format_mm(exif_ifd.get(piexif.ExifIFD.FocalLength)),
+        "exposureBias": _format_ev(exif_ifd.get(piexif.ExifIFD.ExposureBiasValue)),
+    })
+    return info
+
+
+def _decode_exif_text(value) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="ignore").strip("\x00 ")
+    return str(value).strip()
+
+
+def _rational_float(value) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, tuple) and len(value) == 2 and value[1]:
+        return float(value[0]) / float(value[1])
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _format_exif_rational(value, reciprocal: bool = False) -> str | None:
+    number = _rational_float(value)
+    if number is None or number <= 0:
+        return None
+    if reciprocal and number < 1:
+        denominator = round(1 / number)
+        return f"1/{denominator}s"
+    return f"{number:g}s" if reciprocal else f"{number:g}"
+
+
+def _format_f_number(value) -> str | None:
+    number = _rational_float(value)
+    if not number:
+        return None
+    text = f"{number:.1f}".rstrip("0").rstrip(".")
+    return f"f/{text}"
+
+
+def _format_mm(value) -> str | None:
+    number = _rational_float(value)
+    if not number:
+        return None
+    text = f"{number:.1f}".rstrip("0").rstrip(".")
+    return f"{text} mm"
+
+
+def _format_ev(value) -> str | None:
+    number = _rational_float(value)
+    if number is None:
+        return None
+    return f"{number:+.1f} EV".replace("+0.0", "0.0")
 
 
 def _rotate_jpeg_file(path: Path, angle: int) -> None:

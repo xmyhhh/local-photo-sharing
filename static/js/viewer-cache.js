@@ -7,11 +7,11 @@
   const index = currentPhotoIndex();
   const candidates = [
     photos[index + 1],
-    photos[index - 1],
     photos[index + 2],
-    photos[index - 2],
     photos[index + 3],
-    photos[index - 3],
+    photos[index + 4],
+    photos[index + 5],
+    photos[index - 1],
   ].filter(Boolean);
 
   candidates.forEach((entry) => queueOriginalPrefetch(entry));
@@ -28,14 +28,14 @@ function queueOriginalPrefetch(entry) {
   if (state.originalPrefetchQueue.some((item) => item.path === entry.path)) {
     return;
   }
-  state.originalPrefetchQueue.unshift(entry);
+  state.originalPrefetchQueue.push(entry);
   while (state.originalPrefetchQueue.length > ORIGINAL_PREFETCH_QUEUE_LIMIT) {
     state.originalPrefetchQueue.pop();
   }
 }
 
 function runOriginalPrefetchQueue() {
-  if (state.rapidNavDirection) {
+  if (!viewer.open || state.rapidNavDirection) {
     return;
   }
   while (
@@ -69,12 +69,21 @@ function scheduleCurrentOriginalLoad(entry) {
 }
 
 function cancelStaleOriginalLoads(keepPath = null) {
+  if (state.originalLoadTimer) {
+    window.clearTimeout(state.originalLoadTimer);
+    state.originalLoadTimer = null;
+  }
   state.originalPrefetchQueue = [];
   for (const [path, controller] of state.originalControllers.entries()) {
     if (path !== keepPath) {
       controller.abort();
     }
   }
+}
+
+function cancelViewerOriginalLoads() {
+  state.viewerGeneration += 1;
+  cancelStaleOriginalLoads();
 }
 
 async function loadOriginalImage(entry, forceDisplay = false, generation = state.viewerGeneration) {
@@ -131,7 +140,7 @@ async function loadOriginalImage(entry, forceDisplay = false, generation = state
 }
 
 function showOriginalUrl(entry, url) {
-  if (entry.type !== "photo" || state.currentPhoto?.path !== entry.path) {
+  if (!viewer.open || entry.type !== "photo" || state.currentPhoto?.path !== entry.path) {
     return;
   }
   const cached = getOriginalCache(entry.path);
@@ -192,7 +201,10 @@ function putOriginalCache(path, url, bytes, decoded = false) {
 }
 
 function trimOriginalCache() {
-  while (state.originalCacheBytes > ORIGINAL_CACHE_LIMIT && state.originalCache.size > 0) {
+  while (
+    (state.originalCacheBytes > ORIGINAL_CACHE_BYTES_LIMIT || state.originalCache.size > ORIGINAL_CACHE_COUNT_LIMIT)
+    && state.originalCache.size > 0
+  ) {
     const [path, item] = state.originalCache.entries().next().value;
     URL.revokeObjectURL(item.url);
     state.originalCacheBytes -= item.bytes;

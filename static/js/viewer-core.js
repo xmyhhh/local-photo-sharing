@@ -57,8 +57,11 @@ function exitViewerFullscreen() {
 }
 
 function finishViewerClose() {
+  cancelViewerOriginalLoads();
+  closePhotoInfoPanel();
   state.viewerHistoryArmed = false;
   state.closingViewerFromHistory = false;
+  state.currentPhoto = null;
   viewer.close();
   exitViewerFullscreen();
 }
@@ -102,7 +105,7 @@ function scheduleViewerControlsAutoHide(enabled = true) {
     window.clearTimeout(state.viewerControlsTimer);
     state.viewerControlsTimer = null;
   }
-  if (!enabled || isViewerLocked()) {
+  if (!enabled || isViewerLocked() || !photoInfoPanel.hidden) {
     return;
   }
   state.viewerControlsTimer = window.setTimeout(() => {
@@ -131,6 +134,7 @@ function showPhoto(entry) {
   state.activeTouches.clear();
   state.pinchDistance = 0;
   state.swipeStart = null;
+  refreshPhotoInfoForCurrentEntry();
   viewerTitle.textContent = entry.path;
   viewerImage.alt = entry.name;
   viewerVideo.pause();
@@ -212,6 +216,144 @@ function showPhoto(entry) {
   updateZoom();
   updateDownloadButton();
   preloadAdjacentPreviews();
+}
+
+function togglePhotoInfoPanel() {
+  if (photoInfoPanel.hidden) {
+    openPhotoInfoPanel();
+    return;
+  }
+  closePhotoInfoPanel();
+}
+
+function openPhotoInfoPanel() {
+  if (!state.currentPhoto) {
+    return;
+  }
+  photoInfoPanel.hidden = false;
+  infoBtn.classList.add("active");
+  showViewerControls({ autoHide: false });
+  loadPhotoInfo(state.currentPhoto);
+}
+
+function closePhotoInfoPanel() {
+  photoInfoPanel.hidden = true;
+  infoBtn.classList.remove("active");
+  state.photoInfoPath = "";
+  if (state.photoInfoController) {
+    state.photoInfoController.abort();
+    state.photoInfoController = null;
+  }
+}
+
+function refreshPhotoInfoForCurrentEntry() {
+  if (photoInfoPanel.hidden) {
+    return;
+  }
+  loadPhotoInfo(state.currentPhoto);
+}
+
+async function loadPhotoInfo(entry) {
+  if (!entry) {
+    closePhotoInfoPanel();
+    return;
+  }
+  if (state.photoInfoController) {
+    state.photoInfoController.abort();
+  }
+  state.photoInfoPath = entry.path;
+  state.photoInfoController = new AbortController();
+  photoInfoBody.innerHTML = '<div class="photo-info-status">正在读取信息...</div>';
+  try {
+    const info = await fetchJson(`/api/info/${encodePath(entry.path)}`, {
+      signal: state.photoInfoController.signal,
+      cache: "no-store",
+    });
+    if (state.photoInfoPath !== entry.path || photoInfoPanel.hidden) {
+      return;
+    }
+    renderPhotoInfo(info);
+  } catch (error) {
+    if (error.name === "AbortError") {
+      return;
+    }
+    photoInfoBody.innerHTML = '<div class="photo-info-status error">信息读取失败</div>';
+  } finally {
+    if (state.photoInfoPath === entry.path) {
+      state.photoInfoController = null;
+    }
+  }
+}
+
+function renderPhotoInfo(info) {
+  photoInfoBody.innerHTML = "";
+  const rows = [
+    ["文件名", info.name],
+    ["格式", info.type],
+    ["大小", formatFileSize(info.size)],
+    ["尺寸", formatDimensions(info.width, info.height)],
+    ["拍照时间", formatExifDate(info.takenAt)],
+    ["修改时间", formatTimestamp(info.modified)],
+    ["相机", info.camera],
+    ["镜头", info.lens],
+    ["快门", info.exposureTime],
+    ["光圈", info.fNumber],
+    ["ISO", info.iso],
+    ["焦距", info.focalLength],
+    ["曝光补偿", info.exposureBias],
+  ].filter(([, value]) => value !== null && value !== undefined && value !== "");
+
+  if (!rows.length) {
+    photoInfoBody.innerHTML = '<div class="photo-info-status">没有可显示的信息</div>';
+    return;
+  }
+
+  rows.forEach(([label, value]) => {
+    const row = document.createElement("div");
+    row.className = "photo-info-row";
+    const name = document.createElement("div");
+    name.className = "photo-info-label";
+    name.textContent = label;
+    const data = document.createElement("div");
+    data.className = "photo-info-value";
+    data.textContent = String(value);
+    row.append(name, data);
+    photoInfoBody.append(row);
+  });
+}
+
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes)) {
+    return "";
+  }
+  const units = ["B", "KB", "MB", "GB"];
+  let size = bytes;
+  let unit = 0;
+  while (size >= 1024 && unit < units.length - 1) {
+    size /= 1024;
+    unit += 1;
+  }
+  const digits = unit === 0 || size >= 100 ? 0 : 1;
+  return `${size.toFixed(digits)} ${units[unit]}`;
+}
+
+function formatDimensions(width, height) {
+  return width && height ? `${width} x ${height}` : "";
+}
+
+function formatTimestamp(timestamp) {
+  if (!timestamp) {
+    return "";
+  }
+  return new Date(timestamp * 1000).toLocaleString();
+}
+
+function formatExifDate(value) {
+  if (!value) {
+    return "";
+  }
+  const match = String(value).match(/^(\d{4}):(\d{2}):(\d{2})\s+(.*)$/);
+  return match ? `${match[1]}-${match[2]}-${match[3]} ${match[4]}` : value;
 }
 
 function toggleLivePhotoPlayback() {
@@ -497,7 +639,7 @@ function isViewerLocked() {
 
 function updateViewerControlsLock() {
   const locked = isViewerLocked();
-  [closeBtn, prevBtn, nextBtn, livePhotoBtn, downloadBtn, deleteBtn, rotateBtn, viewerRatingBtn, zoomResetBtn].forEach((button) => {
+  [closeBtn, prevBtn, nextBtn, livePhotoBtn, infoBtn, downloadBtn, deleteBtn, rotateBtn, viewerRatingBtn, zoomResetBtn].forEach((button) => {
     if (button) {
       button.disabled = locked;
     }
@@ -530,16 +672,30 @@ function closeViewerAnimated() {
     return;
   }
   stopRapidNavigation(false);
-  cancelStaleOriginalLoads();
+  cancelViewerOriginalLoads();
   const entry = state.currentPhoto;
-  if (!entry || prefersReducedMotion()) {
+  if (!entry) {
     finishViewerClose();
     return;
   }
   const sourceRect = getViewerDisplayRect();
+  scrollGridToEntry(entry.path);
+  if (!sourceRect || prefersReducedMotion()) {
+    finishViewerClose();
+    return;
+  }
+  requestAnimationFrame(() => {
+    closeViewerAnimatedToGrid(entry, sourceRect);
+  });
+}
+
+function closeViewerAnimatedToGrid(entry, sourceRect) {
+  if (!viewer.open || state.currentPhoto?.path !== entry.path) {
+    return;
+  }
   const targetElement = getGridMediaElement(entry.path);
   const targetRect = targetElement ? targetElement.getBoundingClientRect() : null;
-  if (!sourceRect || !targetRect || !isRectVisible(targetRect)) {
+  if (!targetRect || !isRectVisible(targetRect)) {
     finishViewerClose();
     return;
   }
@@ -653,6 +809,15 @@ function getReferenceAspectRatio(referenceElement) {
 
 function getGridMediaElement(path) {
   return document.querySelector(`.tile[data-path="${CSS.escape(path)}"] .thumb-holder`);
+}
+
+function scrollGridToEntry(path) {
+  const tile = document.querySelector(`.tile[data-path="${CSS.escape(path)}"]`);
+  if (!tile) {
+    return;
+  }
+  tile.scrollIntoView({ block: "center", inline: "nearest", behavior: "auto" });
+  scheduleVisibleWorkScan();
 }
 
 function getViewerDisplayRect() {

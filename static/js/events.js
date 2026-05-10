@@ -81,6 +81,8 @@ closeBtn.addEventListener("click", () => closeViewerFromUi());
 bindPageButton(prevBtn, -1);
 bindPageButton(nextBtn, 1);
 livePhotoBtn.addEventListener("click", toggleLivePhotoPlayback);
+infoBtn.addEventListener("click", togglePhotoInfoPanel);
+closeInfoBtn.addEventListener("click", closePhotoInfoPanel);
 downloadBtn.addEventListener("click", downloadCurrentPhoto);
 deleteBtn.addEventListener("click", requestDeleteCurrentPhoto);
 rotateBtn.addEventListener("click", rotateCurrentPhoto);

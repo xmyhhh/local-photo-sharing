@@ -10,7 +10,7 @@ from ..constants import (
     FILTER_WAIT_SECONDS,
     JPG_EXTENSIONS,
     PHOTO_EXTENSIONS,
-    PHOTO_PAGE_SIZE,
+    DEFAULT_ENTRY_PLACEHOLDER_LIMIT,
     RATINGS_FILE,
     STATIC_DIR,
     THUMBNAIL_DIR,
@@ -64,7 +64,7 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
         folder_path = _resolve_rooted_folder(services, root_id, folder)
         filters = PhotoFilters.from_request(request.args)
         cursor = parse_optional_int(request.args.get("cursor"), 0, 1_000_000) or 0
-        limit = parse_optional_int(request.args.get("limit"), 1, 50_000) or PHOTO_PAGE_SIZE
+        limit = parse_optional_int(request.args.get("limit"), 1, 50_000) or DEFAULT_ENTRY_PLACEHOLDER_LIMIT
         entries: list[dict[str, Any]] = []
         indexing = False
 

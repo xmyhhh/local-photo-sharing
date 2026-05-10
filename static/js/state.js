@@ -58,6 +58,8 @@ const state = {
   originalPrefetchActive: 0,
   originalLoadTimer: null,
   viewerGeneration: 0,
+  photoInfoController: null,
+  photoInfoPath: "",
   rapidNavTimer: null,
   rapidNavStopTimer: null,
   rapidNavDirection: 0,
@@ -96,7 +98,8 @@ const state = {
   },
 };
 
-const ORIGINAL_CACHE_LIMIT = 1024 * 1024 * 1024;
+const ORIGINAL_CACHE_BYTES_LIMIT = 2 * 1024 * 1024 * 1024;
+const ORIGINAL_CACHE_COUNT_LIMIT = 200;
 const ORIGINAL_PREFETCH_CONCURRENCY = 2;
 const ORIGINAL_PREFETCH_QUEUE_LIMIT = 25;
 const THUMB_LOAD_CONCURRENCY = 6;
@@ -129,6 +132,10 @@ const viewerVideo = document.querySelector("#viewerVideo");
 const viewerRatingBtn = document.querySelector("#viewerRatingBtn");
 const viewerRatingMenu = document.querySelector("#viewerRatingMenu");
 const livePhotoBtn = document.querySelector("#livePhotoBtn");
+const infoBtn = document.querySelector("#infoBtn");
+const photoInfoPanel = document.querySelector("#photoInfoPanel");
+const photoInfoBody = document.querySelector("#photoInfoBody");
+const closeInfoBtn = document.querySelector("#closeInfoBtn");
 const imageStage = document.querySelector("#imageStage");
 const zoomResetBtn = document.querySelector("#zoomResetBtn");
 const rotateBtn = document.querySelector("#rotateBtn");

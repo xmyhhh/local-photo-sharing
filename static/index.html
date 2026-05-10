@@ -129,9 +129,17 @@
             </div>
             <button id="livePhotoBtn" type="button" hidden>播放实况</button>
             <button id="rotateBtn" class="icon-button" type="button" aria-label="顺时针旋转" title="顺时针旋转">↻</button>
+            <button id="infoBtn" class="icon-button info-icon-button" type="button" aria-label="照片信息" title="照片信息">i</button>
             <button id="downloadBtn" type="button">下载</button>
             <button id="deleteBtn" class="danger" type="button">删除</button>
           </div>
+        </div>
+        <div id="photoInfoPanel" class="photo-info-panel" hidden>
+          <div class="photo-info-header">
+            <div>照片信息</div>
+            <button id="closeInfoBtn" type="button" aria-label="关闭照片信息">×</button>
+          </div>
+          <div id="photoInfoBody" class="photo-info-body"></div>
         </div>
         <div id="imageStage" class="image-stage">
           <img id="viewerImage" alt="" />
