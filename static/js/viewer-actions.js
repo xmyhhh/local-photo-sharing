@@ -2,23 +2,61 @@
   if (!state.currentPhoto) {
     return;
   }
+  state.deleteInProgress = true;
+  updateViewerControlsLock();
   const entry = state.currentPhoto;
   const mediaEntries = photosOnly();
   const index = mediaEntries.findIndex((item) => item.path === entry.path);
   const nextEntry = index >= 0 ? mediaEntries[index + 1] || mediaEntries[index - 1] || null : null;
 
-  await fetchJson(`/api/photo/${encodePath(entry.path)}`, { method: "DELETE" });
+  try {
+    releaseCurrentVideo();
+    await fetchJson(`/api/photo/${encodePath(entry.path)}`, { method: "DELETE" });
 
-  state.entries = state.entries.filter((item) => item.path !== entry.path);
-  renderGrid();
+    state.entries = state.entries.filter((item) => item.path !== entry.path);
+    renderGrid();
 
-  if (nextEntry) {
-    showPhoto(nextEntry);
+    if (nextEntry) {
+      showPhoto(nextEntry);
+      return;
+    }
+
+    state.currentPhoto = null;
+    closeViewerFromUi();
+  } finally {
+    state.deleteInProgress = false;
+    updateViewerControlsLock();
+  }
+}
+
+async function rotateCurrentPhoto() {
+  const entry = state.currentPhoto;
+  if (!entry || entry.type !== "photo") {
     return;
   }
-
-  state.currentPhoto = null;
-  closeViewerFromUi();
+  rotateBtn.disabled = true;
+  try {
+    const updated = await fetchJson(`/api/rotate/${encodePath(entry.path)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ direction: "right" }),
+    });
+    entry.mtime = updated.mtime;
+    entry.originalUrl = "";
+    entry.previewUrl = "";
+    entry.originalReady = false;
+    state.originalCache.delete(entry.path);
+    state.originalFetches.delete(entry.path);
+    state.viewerGeneration += 1;
+    cancelStaleOriginalLoads(entry.path);
+    viewerImage.classList.remove("ready");
+    viewerImage.classList.add("loading");
+    viewerImage.onload = () => viewerImage.classList.add("ready");
+    viewerImage.src = `${updated.imageUrl}?v=${updated.mtime}`;
+    renderGrid();
+  } finally {
+    rotateBtn.disabled = false;
+  }
 }
 
 function requestDeleteCurrentPhoto() {
@@ -27,6 +65,7 @@ function requestDeleteCurrentPhoto() {
   }
   deleteDialogPath.textContent = state.currentPhoto.path;
   deleteDialog.showModal();
+  updateViewerControlsLock();
 }
 
 async function downloadCurrentPhoto() {
@@ -80,6 +119,14 @@ async function fetchPhotoBlob(entry) {
     throw new Error(`HTTP ${response.status}`);
   }
   return response.blob();
+}
+
+function releaseCurrentVideo() {
+  viewerVideo.pause();
+  viewerVideo.hidden = true;
+  viewerVideo.removeAttribute("src");
+  viewerVideo.load();
+  state.viewerLiveMode = false;
 }
 
 

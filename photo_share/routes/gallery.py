@@ -9,6 +9,7 @@ from ..constants import (
     FILTER_WAIT_SECONDS,
     JPG_EXTENSIONS,
     MEDIA_EXTENSIONS,
+    PHOTO_EXTENSIONS,
     PHOTO_PAGE_SIZE,
     RATINGS_FILE,
     STATIC_DIR,
@@ -17,6 +18,7 @@ from ..constants import (
 )
 from ..context import AppServices, RootServices
 from ..filters import PhotoFilters, parse_optional_int
+from ..live_photos import find_case_insensitive_sibling, find_live_video
 from ..paths import (
     iter_folder_children,
     join_rooted_path,
@@ -108,6 +110,8 @@ def _build_entry(
             "photoCount": _count_photos_recursive(child),
         }
     suffix = child.suffix.lower()
+    if suffix in VIDEO_EXTENSIONS and _has_live_photo_still(child):
+        return None
     if suffix in VIDEO_EXTENSIONS:
         stat = child.stat()
         if not filters.matches_photo(0, int(stat.st_mtime)):
@@ -121,7 +125,7 @@ def _build_entry(
             "rating": 0,
             "ratingPending": False,
         }
-    if suffix not in JPG_EXTENSIONS:
+    if suffix not in PHOTO_EXTENSIONS:
         return None
 
     stat = child.stat()
@@ -130,6 +134,7 @@ def _build_entry(
         return None
     if not filters.matches_photo(rating, int(stat.st_mtime)):
         return None
+    live_video = find_live_video(child)
     return {
         "type": "photo",
         "name": child.name,
@@ -138,6 +143,9 @@ def _build_entry(
         "mtime": int(stat.st_mtime),
         "rating": rating,
         "ratingPending": rating_pending,
+        "browserRenderable": suffix in JPG_EXTENSIONS,
+        "isLive": live_video is not None,
+        "liveVideoPath": join_rooted_path(root_id, to_relative(root_services.root, live_video)) if live_video else None,
     }
 
 
@@ -169,8 +177,16 @@ def _count_photos_recursive(folder_path: Path) -> int:
             if child.is_dir():
                 stack.append(child)
             elif child.is_file() and child.suffix.lower() in MEDIA_EXTENSIONS:
+                if child.suffix.lower() in VIDEO_EXTENSIONS and _has_live_photo_still(child):
+                    continue
                 count += 1
     return count
+
+
+def _has_live_photo_still(video_path: Path) -> bool:
+    if video_path.suffix.lower() not in VIDEO_EXTENSIONS:
+        return False
+    return find_case_insensitive_sibling(video_path, PHOTO_EXTENSIONS) is not None
 
 
 def _resolve_rooted_folder(services: AppServices, root_id: str, folder: str) -> Path:

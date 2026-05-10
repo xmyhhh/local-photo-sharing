@@ -37,6 +37,7 @@ function showPhoto(entry) {
     return;
   }
   state.viewerGeneration += 1;
+  state.viewerLiveMode = false;
   cancelStaleOriginalLoads(entry.type === "photo" ? entry.path : null);
   state.currentPhoto = entry;
   state.zoom = 1;
@@ -53,6 +54,8 @@ function showPhoto(entry) {
   viewerVideo.hidden = true;
   viewerVideo.removeAttribute("src");
   viewerVideo.load();
+  livePhotoBtn.hidden = !(entry.type === "photo" && entry.isLive);
+  livePhotoBtn.textContent = "播放实况";
   viewerImage.hidden = entry.type === "video";
 
   if (entry.type === "video") {
@@ -108,6 +111,33 @@ function showPhoto(entry) {
   updateZoom();
   updateDownloadButton();
   preloadAdjacentPreviews();
+}
+
+function toggleLivePhotoPlayback() {
+  const entry = state.currentPhoto;
+  if (!entry || entry.type !== "photo" || !entry.isLive) {
+    return;
+  }
+  if (state.viewerLiveMode) {
+    state.viewerLiveMode = false;
+    viewerVideo.pause();
+    viewerVideo.hidden = true;
+    viewerVideo.removeAttribute("src");
+    viewerVideo.load();
+    viewerImage.hidden = false;
+    livePhotoBtn.textContent = "播放实况";
+    updateZoom();
+    return;
+  }
+  state.viewerLiveMode = true;
+  viewerImage.hidden = true;
+  viewerVideo.hidden = false;
+  viewerVideo.currentTime = 0;
+  viewerVideo.src = `/api/live-video/${encodePath(entry.path)}`;
+  viewerVideo.load();
+  viewerVideo.play().catch(() => null);
+  livePhotoBtn.textContent = "显示照片";
+  updateZoom();
 }
 
 function updateDownloadButton() {
@@ -168,11 +198,50 @@ function showOriginalImageFallback(entry) {
 }
 
 function renderViewerRating() {
-  viewerRating.innerHTML = "";
-  viewerRating.hidden = !state.currentPhoto || state.currentPhoto.type !== "photo";
-  if (state.currentPhoto && state.currentPhoto.type === "photo") {
-    viewerRating.append(createRating(state.currentPhoto, true));
+  viewerRatingMenu.innerHTML = "";
+  const isPhoto = Boolean(state.currentPhoto && state.currentPhoto.type === "photo");
+  viewerRatingBtn.hidden = !isPhoto;
+  viewerRatingMenu.hidden = true;
+  viewerRatingBtn.setAttribute("aria-expanded", "false");
+  if (!isPhoto) {
+    viewerRatingBtn.textContent = "☆";
+    return;
   }
+
+  updateViewerRatingButton();
+  [
+    { value: 0, label: "Off" },
+    { value: 1, label: "1 星" },
+    { value: 2, label: "2 星" },
+    { value: 3, label: "3 星" },
+    { value: 4, label: "4 星" },
+    { value: 5, label: "5 星" },
+  ].forEach((item) => {
+    const option = document.createElement("button");
+    option.type = "button";
+    option.textContent = item.label;
+    option.className = state.currentPhoto.rating === item.value ? "active" : "";
+    option.addEventListener("click", async () => {
+      await setRating(state.currentPhoto, item.value);
+      setViewerRatingMenuOpen(false);
+    });
+    viewerRatingMenu.append(option);
+  });
+}
+
+function updateViewerRatingButton() {
+  const rating = state.currentPhoto?.rating || 0;
+  viewerRatingBtn.textContent = rating > 0 ? `${rating} ★` : "☆";
+  viewerRatingBtn.classList.toggle("active", rating > 0);
+  viewerRatingBtn.title = rating > 0 ? `${rating} 星` : "未评分";
+}
+
+function setViewerRatingMenuOpen(open) {
+  if (viewerRatingBtn.hidden) {
+    open = false;
+  }
+  viewerRatingMenu.hidden = !open;
+  viewerRatingBtn.setAttribute("aria-expanded", String(open));
 }
 
 async function setRating(entry, rating) {
@@ -185,16 +254,47 @@ async function setRating(entry, rating) {
     body: JSON.stringify({ rating }),
   });
   entry.rating = updated.rating;
+  entry.ratingPending = false;
   if (state.currentPhoto?.path === entry.path) {
     state.currentPhoto.rating = updated.rating;
-    renderViewerRating();
-  } else {
-    renderGrid();
+    state.currentPhoto.ratingPending = false;
+    updateViewerRatingButton();
+    if (!viewerRatingMenu.hidden) {
+      renderViewerRating();
+      setViewerRatingMenuOpen(true);
+    }
   }
+  if (!entryMatchesActiveRatingFilter(entry)) {
+    removeGridEntry(entry);
+    return;
+  }
+  updateGridRating(entry);
+}
+
+function entryMatchesActiveRatingFilter(entry) {
+  if (!state.filters.ratings.length) {
+    return true;
+  }
+  return state.filters.ratings.includes(String(entry.rating));
+}
+
+function removeGridEntry(entry) {
+  state.entries = state.entries.filter((item) => item.path !== entry.path);
+  document.querySelector(`.tile[data-path="${CSS.escape(entry.path)}"]`)?.remove();
+  updateEmptyState();
+}
+
+function updateGridRating(entry) {
+  const tile = document.querySelector(`.tile[data-path="${CSS.escape(entry.path)}"]`);
+  const currentRating = tile?.querySelector(".rating");
+  if (!currentRating) {
+    return;
+  }
+  currentRating.replaceWith(createRating(entry, false));
 }
 
 function updateZoom() {
-  if (state.currentPhoto?.type === "video") {
+  if (state.currentPhoto?.type === "video" || state.viewerLiveMode) {
     zoomResetBtn.textContent = "100%";
     imageStage.classList.remove("is-zoomed");
     viewerVideo.style.transform = "";
@@ -279,10 +379,34 @@ function stopRapidNavigation(runCurrentLoad = true) {
 }
 
 function updatePageButtons() {
+  if (isViewerLocked()) {
+    prevBtn.disabled = true;
+    nextBtn.disabled = true;
+    return;
+  }
   const index = currentPhotoIndex();
   const last = photosOnly().length - 1;
   prevBtn.disabled = index <= 0;
   nextBtn.disabled = index < 0 || index >= last;
+}
+
+function isViewerLocked() {
+  return deleteDialog.open || state.deleteInProgress;
+}
+
+function updateViewerControlsLock() {
+  const locked = isViewerLocked();
+  [closeBtn, prevBtn, nextBtn, livePhotoBtn, downloadBtn, deleteBtn, rotateBtn, viewerRatingBtn, zoomResetBtn].forEach((button) => {
+    if (button) {
+      button.disabled = locked;
+    }
+  });
+  if (locked) {
+    setViewerRatingMenuOpen(false);
+  }
+  if (!locked) {
+    updatePageButtons();
+  }
 }
 
 function preloadAdjacentPreviews() {
@@ -374,7 +498,7 @@ function startViewerEnterTransition(entry, originElement) {
 function buildViewerTransitionGhost(entry, referenceElement, fromViewer) {
   const ghost = document.createElement("div");
   ghost.className = "viewer-transition-ghost";
-  if (entry.type === "video") {
+  if (entry.type === "video" || (fromViewer && state.viewerLiveMode)) {
     const icon = document.createElement("div");
     icon.className = "viewer-transition-video";
     icon.textContent = "▶";
@@ -436,7 +560,7 @@ function getGridMediaElement(path) {
 }
 
 function getViewerDisplayRect() {
-  if (state.currentPhoto?.type === "video" && !viewerVideo.hidden) {
+  if ((state.currentPhoto?.type === "video" || state.viewerLiveMode) && !viewerVideo.hidden) {
     return viewerVideo.getBoundingClientRect();
   }
   if (!viewerImage.hidden && (viewerImage.currentSrc || viewerImage.src)) {

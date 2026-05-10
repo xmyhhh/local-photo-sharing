@@ -281,6 +281,12 @@ function createGridTile(entry) {
       img.decoding = "async";
       img.alt = entry.name;
       holder.append(spinner, img);
+      if (entry.isLive) {
+        const liveBadge = document.createElement("div");
+        liveBadge.className = "media-badge live-badge";
+        liveBadge.textContent = "LIVE";
+        holder.append(liveBadge);
+      }
     }
     button.append(holder);
     if (img) {

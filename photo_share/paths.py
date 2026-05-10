@@ -7,7 +7,7 @@ from typing import Any
 
 from flask import abort, send_file
 
-from .constants import DEFAULT_THUMBNAIL_MODE, JPG_EXTENSIONS, MEDIA_EXTENSIONS, RATINGS_FILE, THUMBNAIL_DIR, THUMBNAIL_MODES
+from .constants import DEFAULT_THUMBNAIL_MODE, MEDIA_EXTENSIONS, PHOTO_EXTENSIONS, RATINGS_FILE, THUMBNAIL_DIR, THUMBNAIL_MODES
 
 
 def resolve_folder(root: Path, rel_path: str) -> Path:
@@ -19,7 +19,7 @@ def resolve_folder(root: Path, rel_path: str) -> Path:
 
 def resolve_photo(root: Path, rel_path: str) -> Path:
     path = resolve_inside(root, rel_path)
-    if not path.is_file() or path.suffix.lower() not in JPG_EXTENSIONS:
+    if not path.is_file() or path.suffix.lower() not in PHOTO_EXTENSIONS:
         abort(404)
     return path
 

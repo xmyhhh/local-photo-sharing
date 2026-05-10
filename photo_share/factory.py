@@ -19,6 +19,7 @@ from .context import AppServices, RootServices
 from .paths import build_thumbnail_modes, root_cache_key
 from .routes import register_routes
 from .services import ImageCacheStore, MetadataStore, RatingIndex, RatingStore
+from .image_formats import register_image_formats
 
 
 def create_app(
@@ -29,6 +30,7 @@ def create_app(
     preview_quality: int = DEFAULT_PREVIEW_QUALITY,
     thumbnail_queue_limits: dict[str, int] | None = None,
 ) -> Flask:
+    register_image_formats()
     roots_input = [photo_roots] if isinstance(photo_roots, Path) else photo_roots
     roots = [root.resolve() for root in roots_input]
     if not roots:

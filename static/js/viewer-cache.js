@@ -17,6 +17,9 @@
 }
 
 function queueOriginalPrefetch(entry) {
+  if (entry.browserRenderable === false) {
+    return;
+  }
   if (getOriginalCache(entry.path) || state.originalFetches.has(entry.path)) {
     return;
   }
@@ -74,6 +77,9 @@ function cancelStaleOriginalLoads(keepPath = null) {
 
 async function loadOriginalImage(entry, forceDisplay = false, generation = state.viewerGeneration) {
   if (entry.type !== "photo") {
+    return null;
+  }
+  if (entry.browserRenderable === false) {
     return null;
   }
   const cached = getOriginalCache(entry.path);

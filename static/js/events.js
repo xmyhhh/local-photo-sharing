@@ -54,6 +54,9 @@ document.addEventListener("click", (event) => {
   if (!ratingFilterMenu.hidden && !ratingFilterMenu.contains(event.target) && event.target !== ratingFilterBtn) {
     setRatingMenuOpen(false);
   }
+  if (!viewerRatingMenu.hidden && !viewerRatingMenu.contains(event.target) && event.target !== viewerRatingBtn) {
+    setViewerRatingMenuOpen(false);
+  }
   if (!folderContextMenu.hidden && !folderContextMenu.contains(event.target)) {
     closeFolderContextMenu();
   }
@@ -75,24 +78,28 @@ clearFiltersBtn.addEventListener("click", () => {
 closeBtn.addEventListener("click", () => closeViewerFromUi());
 bindPageButton(prevBtn, -1);
 bindPageButton(nextBtn, 1);
+livePhotoBtn.addEventListener("click", toggleLivePhotoPlayback);
 downloadBtn.addEventListener("click", downloadCurrentPhoto);
 deleteBtn.addEventListener("click", requestDeleteCurrentPhoto);
-cancelDeleteBtn.addEventListener("click", () => deleteDialog.close());
+rotateBtn.addEventListener("click", rotateCurrentPhoto);
+viewerRatingBtn.addEventListener("click", (event) => {
+  event.stopPropagation();
+  setViewerRatingMenuOpen(viewerRatingMenu.hidden);
+});
+viewerRatingMenu.addEventListener("click", (event) => event.stopPropagation());
+cancelDeleteBtn.addEventListener("click", () => {
+  deleteDialog.close();
+});
+deleteDialog.addEventListener("close", updateViewerControlsLock);
 confirmDeleteBtn.addEventListener("click", async () => {
   deleteDialog.close();
   await deleteCurrentPhoto();
-});
-zoomInBtn.addEventListener("click", () => {
-  setZoom(state.zoom + 0.25);
-});
-zoomOutBtn.addEventListener("click", () => {
-  setZoom(state.zoom - 0.25);
 });
 zoomResetBtn.addEventListener("click", () => {
   setZoom(1);
 });
 function handleViewerWheel(event) {
-  if (!viewer.open) {
+  if (!viewer.open || isViewerLocked()) {
     return;
   }
   event.preventDefault();
@@ -117,7 +124,7 @@ document.addEventListener("wheel", handleViewerWheel, { capture: true, passive: 
 document.addEventListener("mousewheel", handleViewerWheel, { capture: true, passive: false });
 document.addEventListener("DOMMouseScroll", handleViewerWheel, { capture: true, passive: false });
 imageStage.addEventListener("pointerdown", (event) => {
-  if (event.pointerType !== "mouse" || state.zoom <= 1) {
+  if (isViewerLocked() || event.pointerType !== "mouse" || state.zoom <= 1) {
     return;
   }
   event.preventDefault();
@@ -126,7 +133,7 @@ imageStage.addEventListener("pointerdown", (event) => {
   state.dragStart = { x: event.clientX, y: event.clientY, panX: state.panX, panY: state.panY };
 });
 imageStage.addEventListener("pointermove", (event) => {
-  if (!state.isDragging || !state.dragStart) {
+  if (isViewerLocked() || !state.isDragging || !state.dragStart) {
     return;
   }
   event.preventDefault();
@@ -144,10 +151,16 @@ imageStage.addEventListener("pointercancel", () => {
   state.dragStart = null;
 });
 imageStage.addEventListener("dblclick", (event) => {
+  if (isViewerLocked()) {
+    return;
+  }
   event.preventDefault();
   setZoom(state.zoom > 1 ? 1 : 2, event.clientX, event.clientY);
 });
 imageStage.addEventListener("touchstart", (event) => {
+  if (isViewerLocked()) {
+    return;
+  }
   event.preventDefault();
   for (const touch of event.changedTouches) {
     state.activeTouches.set(touch.identifier, { x: touch.clientX, y: touch.clientY });
@@ -167,6 +180,9 @@ imageStage.addEventListener("touchstart", (event) => {
 imageStage.addEventListener(
   "touchmove",
   (event) => {
+    if (isViewerLocked()) {
+      return;
+    }
     event.preventDefault();
     for (const touch of event.changedTouches) {
       state.activeTouches.set(touch.identifier, { x: touch.clientX, y: touch.clientY });
@@ -199,6 +215,12 @@ imageStage.addEventListener(
   { passive: false },
 );
 imageStage.addEventListener("touchend", (event) => {
+  if (isViewerLocked()) {
+    clearEndedTouches(event);
+    state.swipeStart = null;
+    state.dragStart = null;
+    return;
+  }
   const wasSingleTouch = state.activeTouches.size === 1 && event.changedTouches.length === 1;
   if (state.swipeStart && state.zoom === 1 && event.changedTouches.length === 1) {
     const touch = event.changedTouches[0];
@@ -228,6 +250,12 @@ document.addEventListener("keydown", (event) => {
   if (!viewer.open) {
     return;
   }
+  if (isViewerLocked()) {
+    if (["ArrowLeft", "ArrowRight", "Escape", "Delete"].includes(event.key)) {
+      event.preventDefault();
+    }
+    return;
+  }
   if (event.key === "ArrowLeft") {
     event.preventDefault();
     if (event.repeat) {
@@ -245,9 +273,16 @@ document.addEventListener("keydown", (event) => {
   } else if (event.key === "Escape") {
     event.preventDefault();
     closeViewerFromUi();
+  } else if (event.key === "Delete" && !event.repeat && !deleteDialog.open) {
+    event.preventDefault();
+    requestDeleteCurrentPhoto();
   }
 });
 document.addEventListener("keyup", (event) => {
+  if (isViewerLocked()) {
+    stopRapidNavigation(false);
+    return;
+  }
   if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
     stopRapidNavigation();
   }
@@ -265,7 +300,7 @@ window.addEventListener("popstate", () => {
 
 function bindPageButton(button, direction) {
   button.addEventListener("click", (event) => {
-    if (state.rapidNavSuppressClick) {
+    if (isViewerLocked() || state.rapidNavSuppressClick) {
       event.preventDefault();
       event.stopPropagation();
       return;
@@ -273,7 +308,7 @@ function bindPageButton(button, direction) {
     showAdjacentPhoto(direction);
   });
   button.addEventListener("pointerdown", (event) => {
-    if (!viewer.open || button.disabled) {
+    if (!viewer.open || button.disabled || isViewerLocked()) {
       return;
     }
     button.setPointerCapture(event.pointerId);

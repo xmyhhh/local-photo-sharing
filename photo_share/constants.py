@@ -6,8 +6,10 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parent.parent
 STATIC_DIR = APP_DIR / "static"
 JPG_EXTENSIONS = {".jpg", ".jpeg"}
+PHOTO_EXTENSIONS = JPG_EXTENSIONS | {".heic", ".heif"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".m4v", ".webm"}
-MEDIA_EXTENSIONS = JPG_EXTENSIONS | VIDEO_EXTENSIONS
+LIVE_VIDEO_EXTENSIONS = {".mov", ".m4v"}
+MEDIA_EXTENSIONS = PHOTO_EXTENSIONS | VIDEO_EXTENSIONS
 RATINGS_FILE = ".photo_share_ratings.json"
 THUMBNAIL_DIR = ".photo_share_thumbs"
 CACHE_DIR = APP_DIR / ".photo_share_cache"

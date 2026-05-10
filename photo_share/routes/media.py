@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import mimetypes
+import os
+from pathlib import Path
 
-from flask import Flask, jsonify, request
+import piexif
+from flask import Flask, abort, jsonify, request
+from PIL import Image, ImageOps
 
-from ..constants import JPG_EXTENSIONS
+from ..constants import PHOTO_EXTENSIONS
 from ..context import AppServices
+from ..live_photos import find_live_video
 from ..paths import (
     get_thumbnail_mode,
     image_url,
@@ -63,6 +68,16 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
             download_name=path.name,
         )
 
+    @app.get("/api/live-video/<path:photo_path>")
+    def live_video(photo_path: str):
+        root_id, rel_path = _split_rooted(photo_path)
+        root_services = _root_services(services, root_id)
+        photo = resolve_photo(root_services.root, rel_path)
+        video = find_live_video(photo)
+        if video is None:
+            abort(404)
+        return send_cached_file(video, mimetype=mimetypes.guess_type(video.name)[0] or "video/quicktime")
+
     @app.get("/api/thumb/<path:photo_path>")
     def thumbnail(photo_path: str):
         root_id, rel_path = _split_rooted(photo_path)
@@ -98,15 +113,50 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
         root_services = _root_services(services, root_id)
         path = resolve_media(root_services.root, rel_path)
         rel = rel_path
+        live_video_path = find_live_video(path) if path.suffix.lower() in PHOTO_EXTENSIONS else None
+        live_delete_failed = False
+        if live_video_path is not None:
+            try:
+                live_video_path.unlink()
+            except OSError:
+                live_delete_failed = True
         path.unlink()
         root_services.ratings.delete(rel)
-        if path.suffix.lower() in JPG_EXTENSIONS:
+        if path.suffix.lower() in PHOTO_EXTENSIONS:
             for thumb_store in root_services.thumbnails.values():
                 thumb_store.delete(path)
             root_services.previews.delete(path)
             root_services.metadata.delete(path)
             root_services.rating_index.delete(rel)
-        return jsonify({"deleted": f"{root_id}/{rel}"})
+        return jsonify({"deleted": f"{root_id}/{rel}", "liveVideoDeleted": not live_delete_failed})
+
+    @app.post("/api/rotate/<path:photo_path>")
+    def rotate_photo(photo_path: str):
+        root_id, rel_path = _split_rooted(photo_path)
+        root_services = _root_services(services, root_id)
+        path = resolve_photo(root_services.root, rel_path)
+        data = request.get_json(silent=True) or {}
+        direction = data.get("direction", "right")
+        if direction not in {"left", "right"}:
+            abort(400, "direction must be left or right")
+
+        _rotate_jpeg_file(path, -90 if direction == "right" else 90)
+        for thumb_store in root_services.thumbnails.values():
+            thumb_store.delete(path)
+        root_services.previews.delete(path)
+        root_services.metadata.delete(path)
+        rating = root_services.ratings.get_override(rel_path)
+        if rating is not None:
+            root_services.metadata.set_ready(path, rating)
+            root_services.rating_index.set(rel_path, rating, path)
+        stat = path.stat()
+        return jsonify({
+            "path": f"{root_id}/{rel_path}",
+            "mtime": int(stat.st_mtime),
+            "imageUrl": image_url(photo_path),
+            "thumbUrl": thumb_url(photo_path),
+            "previewUrl": preview_url(photo_path),
+        })
 
 
 def _split_rooted(value: str) -> tuple[str, str]:
@@ -114,3 +164,28 @@ def _split_rooted(value: str) -> tuple[str, str]:
     if len(parts) == 1:
         return parts[0], ""
     return parts[0], parts[1]
+
+
+def _rotate_jpeg_file(path: Path, angle: int) -> None:
+    try:
+        exif_dict = piexif.load(str(path))
+    except Exception:
+        exif_dict = {}
+    zeroth = exif_dict.setdefault("0th", {})
+    zeroth.pop(piexif.ImageIFD.Orientation, None)
+    exif_bytes = piexif.dump(exif_dict) if exif_dict else b""
+    tmp_path = path.with_name(f".{path.name}.rotate.tmp")
+    try:
+        with Image.open(path) as image:
+            rotated = ImageOps.exif_transpose(image).rotate(angle, expand=True)
+            if rotated.mode not in {"RGB", "L"}:
+                rotated = rotated.convert("RGB")
+            save_kwargs = {"format": "JPEG", "quality": 95, "optimize": True}
+            if exif_bytes:
+                save_kwargs["exif"] = exif_bytes
+            rotated.save(tmp_path, **save_kwargs)
+        os.replace(tmp_path, path)
+    except Exception as error:
+        if tmp_path.exists():
+            tmp_path.unlink()
+        abort(500, f"failed to rotate JPEG: {error}")

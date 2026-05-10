@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Lock
 
-from .constants import JPG_EXTENSIONS, METADATA_WORKERS
+from .constants import PHOTO_EXTENSIONS, METADATA_WORKERS
 from .paths import to_relative
 from .ratings import read_embedded_rating, read_xmp_head_rating
 from .stores import MetadataStore, RatingStore
@@ -30,7 +30,7 @@ class RatingIndex:
                 return
 
         try:
-            photos = [child for child in folder_path.iterdir() if child.suffix.lower() in JPG_EXTENSIONS and child.is_file()]
+            photos = [child for child in folder_path.iterdir() if child.suffix.lower() in PHOTO_EXTENSIONS and child.is_file()]
             list(self.executor.map(self.ensure_photo_quick, photos))
             with self.lock:
                 self.indexed_folders[folder_key] = newest
@@ -57,7 +57,7 @@ class RatingIndex:
         deadline = time.perf_counter() + budget
         complete = True
         for child in sorted(folder_path.iterdir(), key=lambda p: p.name.lower()):
-            if child.suffix.lower() not in JPG_EXTENSIONS or not child.is_file():
+            if child.suffix.lower() not in PHOTO_EXTENSIONS or not child.is_file():
                 continue
             if time.perf_counter() >= deadline:
                 complete = False
@@ -142,7 +142,7 @@ class RatingIndex:
     def _folder_signature(self, folder_path: Path) -> int:
         newest = 0
         for child in folder_path.iterdir():
-            if child.suffix.lower() in JPG_EXTENSIONS and child.is_file():
+            if child.suffix.lower() in PHOTO_EXTENSIONS and child.is_file():
                 newest = max(newest, int(child.stat().st_mtime))
         return newest
 

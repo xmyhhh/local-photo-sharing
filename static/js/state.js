@@ -25,6 +25,8 @@ const state = {
   loadingMore: false,
   indexing: false,
   currentPhoto: null,
+  viewerLiveMode: false,
+  deleteInProgress: false,
   zoom: 1,
   panX: 0,
   panY: 0,
@@ -118,10 +120,9 @@ const viewerImage = document.querySelector("#viewerImage");
 const viewerVideo = document.querySelector("#viewerVideo");
 const viewerRatingBtn = document.querySelector("#viewerRatingBtn");
 const viewerRatingMenu = document.querySelector("#viewerRatingMenu");
+const livePhotoBtn = document.querySelector("#livePhotoBtn");
 const imageStage = document.querySelector("#imageStage");
-const zoomOutBtn = document.querySelector("#zoomOutBtn");
 const zoomResetBtn = document.querySelector("#zoomResetBtn");
-const zoomInBtn = document.querySelector("#zoomInBtn");
 const rotateBtn = document.querySelector("#rotateBtn");
 const downloadBtn = document.querySelector("#downloadBtn");
 const deleteBtn = document.querySelector("#deleteBtn");
