@@ -20,15 +20,29 @@ RATINGS_FILE = ".photo_share_ratings.json"
 THUMBNAIL_DIR = ".photo_share_thumbs"
 CACHE_DIR = APP_DIR / ".photo_share_cache"
 THUMBNAIL_WORKERS = max(1, os.cpu_count() or 1)
+DEFAULT_THUMBNAIL_SIZE = 320
+DEFAULT_THUMBNAIL_QUALITY = 68
+DEFAULT_PREVIEW_SIZE = 1800
+DEFAULT_PREVIEW_QUALITY = 82
 DEFAULT_CONFIG_FILE = APP_DIR / "config.json"
 DEFAULT_CONFIG = {
     "photo_folder": "D:/your/photo/folder",
     "host": "0.0.0.0",
     "port": 8000,
+    "thumbnail_size": DEFAULT_THUMBNAIL_SIZE,
+    "thumbnail_quality": DEFAULT_THUMBNAIL_QUALITY,
+    "preview_size": DEFAULT_PREVIEW_SIZE,
+    "preview_quality": DEFAULT_PREVIEW_QUALITY,
 }
 
 
-def create_app(photo_root: Path) -> Flask:
+def create_app(
+    photo_root: Path,
+    thumbnail_size: int = DEFAULT_THUMBNAIL_SIZE,
+    thumbnail_quality: int = DEFAULT_THUMBNAIL_QUALITY,
+    preview_size: int = DEFAULT_PREVIEW_SIZE,
+    preview_quality: int = DEFAULT_PREVIEW_QUALITY,
+) -> Flask:
     root = photo_root.resolve()
     if not root.exists() or not root.is_dir():
         raise ValueError(f"Photo root does not exist or is not a folder: {root}")
@@ -37,7 +51,8 @@ def create_app(photo_root: Path) -> Flask:
     ratings = RatingStore(root / RATINGS_FILE)
     cache_root = CACHE_DIR / root_cache_key(root)
     metadata = MetadataStore(root, cache_root / "metadata.json")
-    thumbnails = ThumbnailStore(root, cache_root / "thumbs")
+    thumbnails = ImageCacheStore(root, cache_root / "thumbs", thumbnail_size, thumbnail_quality, "thumb")
+    previews = ImageCacheStore(root, cache_root / "previews", preview_size, preview_quality, "preview")
 
     @app.get("/")
     def index():
@@ -64,7 +79,7 @@ def create_app(photo_root: Path) -> Flask:
                 stat = child.stat()
                 rating = ratings.get(rel)
                 if rating == 0:
-                    rating = metadata.get_rating(child)
+                    rating = metadata.get_rating_ready(child)
                 if not filters.matches_photo(rating, int(stat.st_mtime)):
                     continue
                 entries.append(
@@ -88,12 +103,30 @@ def create_app(photo_root: Path) -> Flask:
     @app.get("/api/image/<path:photo_path>")
     def image(photo_path: str):
         path = resolve_photo(root, photo_path)
-        return send_file(path, mimetype=mimetypes.guess_type(path.name)[0] or "image/jpeg")
+        return send_cached_file(path, mimetype=mimetypes.guess_type(path.name)[0] or "image/jpeg")
+
+    @app.get("/api/preview/<path:photo_path>")
+    def preview(photo_path: str):
+        path = resolve_photo(root, photo_path)
+        preview_path = previews.get_ready(path)
+        if preview_path is None:
+            previews.ensure(path)
+            return jsonify({"status": "processing", "url": preview_url(photo_path)}), 202
+        return send_cached_file(preview_path, mimetype="image/jpeg")
+
+    @app.get("/api/preview-status/<path:photo_path>")
+    def preview_status(photo_path: str):
+        path = resolve_photo(root, photo_path)
+        preview_path = previews.get_ready(path)
+        if preview_path is not None:
+            return jsonify({"status": "ready", "url": preview_url(photo_path)})
+        queued = previews.ensure(path)
+        return jsonify({"status": "queued" if queued else "processing", "url": preview_url(photo_path)}), 202
 
     @app.get("/api/download/<path:photo_path>")
     def download(photo_path: str):
         path = resolve_photo(root, photo_path)
-        return send_file(
+        return send_cached_file(
             path,
             mimetype=mimetypes.guess_type(path.name)[0] or "image/jpeg",
             as_attachment=True,
@@ -106,17 +139,18 @@ def create_app(photo_root: Path) -> Flask:
         thumb = thumbnails.get_ready(path)
         if thumb is None:
             thumbnails.ensure(path)
-            return jsonify({"status": "processing"}), 202
-        return send_file(thumb, mimetype="image/jpeg")
+            return jsonify({"status": "processing", "url": thumb_url(photo_path)}), 202
+        return send_cached_file(thumb, mimetype="image/jpeg")
 
     @app.get("/api/thumb-status/<path:photo_path>")
     def thumbnail_status(photo_path: str):
         path = resolve_photo(root, photo_path)
+        metadata.ensure(path)
         thumb = thumbnails.get_ready(path)
         if thumb is not None:
-            return jsonify({"status": "ready"})
+            return jsonify({"status": "ready", "url": thumb_url(photo_path)})
         queued = thumbnails.ensure(path)
-        return jsonify({"status": "queued" if queued else "processing"}), 202
+        return jsonify({"status": "queued" if queued else "processing", "url": thumb_url(photo_path)}), 202
 
     @app.post("/api/rating/<path:photo_path>")
     def set_rating(photo_path: str):
@@ -137,6 +171,7 @@ def create_app(photo_root: Path) -> Flask:
         path.unlink()
         ratings.delete(rel)
         thumbnails.delete(path)
+        previews.delete(path)
         metadata.delete(path)
         return jsonify({"deleted": rel})
 
@@ -195,6 +230,8 @@ class MetadataStore:
         self.path = path
         self.lock = Lock()
         self.data: dict[str, dict[str, int]] = self._load()
+        self.executor = ThreadPoolExecutor(max_workers=THUMBNAIL_WORKERS, thread_name_prefix="metadata")
+        self.inflight: set[str] = set()
 
     def _load(self) -> dict[str, dict[str, int]]:
         if not self.path.exists():
@@ -226,13 +263,38 @@ class MetadataStore:
             encoding="utf-8",
         )
 
-    def get_rating(self, photo_path: Path) -> int:
+    def get_rating_ready(self, photo_path: Path) -> int:
         rel = to_relative(self.root, photo_path)
         stat = photo_path.stat()
         cached = self.data.get(rel)
         if cached and cached.get("mtime") == int(stat.st_mtime) and cached.get("size") == stat.st_size:
             return cached.get("rating", 0)
+        return 0
 
+    def ensure(self, photo_path: Path) -> bool:
+        task_key = self._task_key(photo_path)
+        with self.lock:
+            if task_key in self.inflight:
+                return False
+            self.inflight.add(task_key)
+        self.executor.submit(self._read_with_cleanup, photo_path, task_key)
+        return True
+
+    def _read_with_cleanup(self, photo_path: Path, task_key: str) -> None:
+        try:
+            self._read(photo_path)
+        finally:
+            with self.lock:
+                self.inflight.discard(task_key)
+
+    def _read(self, photo_path: Path) -> None:
+        if not photo_path.exists():
+            return
+        rel = to_relative(self.root, photo_path)
+        stat = photo_path.stat()
+        cached = self.data.get(rel)
+        if cached and cached.get("mtime") == int(stat.st_mtime) and cached.get("size") == stat.st_size:
+            return
         rating = read_embedded_rating(photo_path)
         with self.lock:
             self.data[rel] = {
@@ -241,7 +303,6 @@ class MetadataStore:
                 "rating": rating,
             }
             self._save()
-        return rating
 
     def delete(self, photo_path: Path) -> None:
         rel = to_relative(self.root, photo_path)
@@ -249,26 +310,33 @@ class MetadataStore:
             self.data.pop(rel, None)
             self._save()
 
+    def _task_key(self, photo_path: Path) -> str:
+        stat = photo_path.stat()
+        rel = to_relative(self.root, photo_path)
+        return f"{rel}:{int(stat.st_mtime)}:{stat.st_size}"
 
-class ThumbnailStore:
-    def __init__(self, root: Path, thumb_root: Path) -> None:
+
+class ImageCacheStore:
+    def __init__(self, root: Path, cache_root: Path, size: int, quality: int, thread_name: str) -> None:
         self.root = root
-        self.thumb_root = thumb_root
+        self.cache_root = cache_root
+        self.size = size
+        self.quality = quality
         self.lock = Lock()
-        self.executor = ThreadPoolExecutor(max_workers=THUMBNAIL_WORKERS, thread_name_prefix="thumb")
+        self.executor = ThreadPoolExecutor(max_workers=THUMBNAIL_WORKERS, thread_name_prefix=thread_name)
         self.inflight: set[str] = set()
 
     def get_ready(self, photo_path: Path) -> Path | None:
         rel = to_relative(self.root, photo_path)
-        thumb_path = self.thumb_root / f"{hash_text(rel)}.jpg"
+        cache_path = self.cache_root / f"{hash_text(rel)}.jpg"
         source_stat = photo_path.stat()
 
         if (
-            thumb_path.exists()
-            and thumb_path.stat().st_mtime >= source_stat.st_mtime
-            and thumb_path.stat().st_size > 0
+            cache_path.exists()
+            and cache_path.stat().st_mtime >= source_stat.st_mtime
+            and cache_path.stat().st_size > 0
         ):
-            return thumb_path
+            return cache_path
         return None
 
     def ensure(self, photo_path: Path) -> bool:
@@ -291,31 +359,31 @@ class ThumbnailStore:
     def _generate(self, photo_path: Path, rel: str) -> None:
         if not photo_path.exists():
             return
-        thumb_path = self.thumb_root / f"{hash_text(rel)}.jpg"
+        cache_path = self.cache_root / f"{hash_text(rel)}.jpg"
         source_stat = photo_path.stat()
 
         if (
-            thumb_path.exists()
-            and thumb_path.stat().st_mtime >= source_stat.st_mtime
-            and thumb_path.stat().st_size > 0
+            cache_path.exists()
+            and cache_path.stat().st_mtime >= source_stat.st_mtime
+            and cache_path.stat().st_size > 0
         ):
             return
 
-        thumb_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = thumb_path.with_suffix(".tmp")
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = cache_path.with_suffix(".tmp")
         with Image.open(photo_path) as image:
             image = ImageOps.exif_transpose(image)
-            image.thumbnail((360, 360))
+            image.thumbnail((self.size, self.size))
             if image.mode not in {"RGB", "L"}:
                 image = image.convert("RGB")
-            image.save(tmp_path, format="JPEG", quality=72, optimize=True)
-        tmp_path.replace(thumb_path)
+            image.save(tmp_path, format="JPEG", quality=self.quality, optimize=True, progressive=True)
+        tmp_path.replace(cache_path)
 
     def delete(self, photo_path: Path) -> None:
         rel = to_relative(self.root, photo_path)
-        thumb_path = self.thumb_root / f"{hash_text(rel)}.jpg"
+        cache_path = self.cache_root / f"{hash_text(rel)}.jpg"
         try:
-            thumb_path.unlink()
+            cache_path.unlink()
         except FileNotFoundError:
             pass
 
@@ -386,6 +454,26 @@ def to_relative(root: Path, path: Path) -> str:
 
 def as_posix(path: Path) -> str:
     return path.as_posix()
+
+
+def send_cached_file(path: Path, **kwargs: Any) -> Any:
+    response = send_file(path, conditional=True, max_age=31536000, etag=True, **kwargs)
+    response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
+
+
+def thumb_url(photo_path: str) -> str:
+    return f"/api/thumb/{quote_path(normalize_rel_path(photo_path))}"
+
+
+def preview_url(photo_path: str) -> str:
+    return f"/api/preview/{quote_path(normalize_rel_path(photo_path))}"
+
+
+def quote_path(path: str) -> str:
+    from urllib.parse import quote
+
+    return "/".join(quote(part) for part in path.split("/"))
 
 
 def root_cache_key(root: Path) -> str:
@@ -560,6 +648,50 @@ def get_port(config: dict[str, Any]) -> int:
     return port
 
 
+def get_thumbnail_size(config: dict[str, Any]) -> int:
+    value = config.get("thumbnail_size", DEFAULT_THUMBNAIL_SIZE)
+    try:
+        size = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Config field thumbnail_size must be an integer.") from exc
+    if size < 160 or size > 1200:
+        raise ValueError("Config field thumbnail_size must be between 160 and 1200.")
+    return size
+
+
+def get_thumbnail_quality(config: dict[str, Any]) -> int:
+    value = config.get("thumbnail_quality", DEFAULT_THUMBNAIL_QUALITY)
+    try:
+        quality = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Config field thumbnail_quality must be an integer.") from exc
+    if quality < 40 or quality > 92:
+        raise ValueError("Config field thumbnail_quality must be between 40 and 92.")
+    return quality
+
+
+def get_preview_size(config: dict[str, Any]) -> int:
+    value = config.get("preview_size", DEFAULT_PREVIEW_SIZE)
+    try:
+        size = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Config field preview_size must be an integer.") from exc
+    if size < 800 or size > 4000:
+        raise ValueError("Config field preview_size must be between 800 and 4000.")
+    return size
+
+
+def get_preview_quality(config: dict[str, Any]) -> int:
+    value = config.get("preview_quality", DEFAULT_PREVIEW_QUALITY)
+    try:
+        quality = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Config field preview_quality must be an integer.") from exc
+    if quality < 50 or quality > 95:
+        raise ValueError("Config field preview_quality must be between 50 and 95.")
+    return quality
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Share a local JPG folder on your LAN.")
     parser.add_argument(
@@ -580,7 +712,17 @@ if __name__ == "__main__":
     folder = get_photo_folder(config)
     host = get_host(config)
     port = get_port(config)
-    app = create_app(folder)
+    thumbnail_size = get_thumbnail_size(config)
+    thumbnail_quality = get_thumbnail_quality(config)
+    preview_size = get_preview_size(config)
+    preview_quality = get_preview_quality(config)
+    app = create_app(
+        folder,
+        thumbnail_size=thumbnail_size,
+        thumbnail_quality=thumbnail_quality,
+        preview_size=preview_size,
+        preview_quality=preview_quality,
+    )
     print(f"Config: {config_path}")
     print(f"Sharing: {folder.resolve()}")
     print(f"Open on this computer: http://127.0.0.1:{port}")

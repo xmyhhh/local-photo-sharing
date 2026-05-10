@@ -5,6 +5,12 @@ const state = {
   currentPhoto: null,
   zoom: 1,
   thumbTimers: new Map(),
+  thumbObserver: null,
+  activeTouches: new Map(),
+  pinchDistance: 0,
+  pinchZoom: 1,
+  swipeStart: null,
+  swipeMoved: false,
   filters: {
     minRating: "",
     dateFrom: "",
@@ -33,6 +39,8 @@ const zoomInBtn = document.querySelector("#zoomInBtn");
 const downloadBtn = document.querySelector("#downloadBtn");
 const deleteBtn = document.querySelector("#deleteBtn");
 const closeBtn = document.querySelector("#closeBtn");
+const prevBtn = document.querySelector("#prevBtn");
+const nextBtn = document.querySelector("#nextBtn");
 
 async function loadConfig() {
   const config = await fetchJson("/api/config");
@@ -87,6 +95,7 @@ function renderBreadcrumb() {
 
 function renderGrid() {
   clearThumbTimers();
+  resetThumbObserver();
   grid.innerHTML = "";
   emptyState.hidden = state.entries.length > 0;
 
@@ -117,7 +126,7 @@ function renderGrid() {
       img.alt = entry.name;
       holder.append(spinner, img);
       button.append(holder);
-      loadThumbnail(entry, img, spinner);
+      observeThumbnail(entry, img, spinner);
       button.addEventListener("click", () => openViewer(entry));
     }
 
@@ -143,13 +152,14 @@ function renderGrid() {
 
 async function loadThumbnail(entry, img, spinner, attempt = 0) {
   try {
-    const response = await fetch(`/api/thumb/${encodePath(entry.path)}`, { cache: "no-store" });
+    const response = await fetch(`/api/thumb-status/${encodePath(entry.path)}`, { cache: "no-store" });
+    const data = await response.json();
     if (response.status === 200) {
       img.onload = () => {
         img.classList.add("loaded");
         spinner.hidden = true;
       };
-      img.src = `/api/thumb/${encodePath(entry.path)}?v=${entry.mtime}`;
+      img.src = `${data.url}?v=${entry.mtime}`;
       return;
     }
     if (response.status !== 202) {
@@ -167,6 +177,35 @@ async function loadThumbnail(entry, img, spinner, attempt = 0) {
     loadThumbnail(entry, img, spinner, attempt + 1);
   }, delay);
   state.thumbTimers.set(entry.path, timer);
+}
+
+function observeThumbnail(entry, img, spinner) {
+  if (!state.thumbObserver) {
+    state.thumbObserver = new IntersectionObserver(
+      (items) => {
+        items.forEach((item) => {
+          if (!item.isIntersecting) {
+            return;
+          }
+          state.thumbObserver.unobserve(item.target);
+          const payload = item.target.__thumbPayload;
+          if (payload) {
+            loadThumbnail(payload.entry, payload.img, payload.spinner);
+          }
+        });
+      },
+      { rootMargin: "900px 0px" },
+    );
+  }
+  img.parentElement.__thumbPayload = { entry, img, spinner };
+  state.thumbObserver.observe(img.parentElement);
+}
+
+function resetThumbObserver() {
+  if (state.thumbObserver) {
+    state.thumbObserver.disconnect();
+    state.thumbObserver = null;
+  }
 }
 
 function clearThumbTimers() {
@@ -206,14 +245,28 @@ function createRating(entry, large) {
 }
 
 function openViewer(entry) {
+  showPhoto(entry);
+  viewer.showModal();
+}
+
+function showPhoto(entry) {
+  if (!entry || entry.type !== "photo") {
+    return;
+  }
   state.currentPhoto = entry;
   state.zoom = 1;
+  state.activeTouches.clear();
+  state.pinchDistance = 0;
+  state.swipeStart = null;
   viewerTitle.textContent = entry.path;
   viewerImage.alt = entry.name;
+  viewerImage.classList.remove("ready");
+  viewerImage.onload = () => viewerImage.classList.add("ready");
   viewerImage.src = `/api/image/${encodePath(entry.path)}`;
   renderViewerRating();
+  updatePageButtons();
   updateZoom();
-  viewer.showModal();
+  preloadAdjacentPhotos();
 }
 
 function renderViewerRating() {
@@ -230,16 +283,66 @@ async function setRating(entry, rating) {
     body: JSON.stringify({ rating }),
   });
   entry.rating = updated.rating;
-  renderGrid();
   if (state.currentPhoto?.path === entry.path) {
     state.currentPhoto.rating = updated.rating;
     renderViewerRating();
+  } else {
+    renderGrid();
   }
 }
 
 function updateZoom() {
-  viewerImage.style.width = `${Math.round(state.zoom * 100)}%`;
+  viewerImage.style.transform = `scale(${state.zoom})`;
   zoomResetBtn.textContent = `${Math.round(state.zoom * 100)}%`;
+}
+
+function currentPhotoIndex() {
+  if (!state.currentPhoto) {
+    return -1;
+  }
+  return photosOnly().findIndex((entry) => entry.path === state.currentPhoto.path);
+}
+
+function photosOnly() {
+  return state.entries.filter((entry) => entry.type === "photo");
+}
+
+function showAdjacentPhoto(direction) {
+  const photos = photosOnly();
+  const current = currentPhotoIndex();
+  const next = current + direction;
+  if (next < 0 || next >= photos.length) {
+    return;
+  }
+  showPhoto(photos[next]);
+}
+
+function updatePageButtons() {
+  const index = currentPhotoIndex();
+  const last = photosOnly().length - 1;
+  prevBtn.disabled = index <= 0;
+  nextBtn.disabled = index < 0 || index >= last;
+}
+
+function preloadAdjacentPhotos() {
+  const photos = photosOnly();
+  const index = currentPhotoIndex();
+  [photos[index - 1], photos[index + 1]].forEach((entry) => {
+    if (!entry) {
+      return;
+    }
+    const image = new Image();
+    image.src = `/api/image/${encodePath(entry.path)}`;
+  });
+}
+
+function distanceBetweenTouches() {
+  const touches = Array.from(state.activeTouches.values());
+  if (touches.length < 2) {
+    return 0;
+  }
+  const [first, second] = touches;
+  return Math.hypot(first.x - second.x, first.y - second.y);
 }
 
 async function deleteCurrentPhoto() {
@@ -300,6 +403,8 @@ clearFiltersBtn.addEventListener("click", () => {
   applyFilters();
 });
 closeBtn.addEventListener("click", () => viewer.close());
+prevBtn.addEventListener("click", () => showAdjacentPhoto(-1));
+nextBtn.addEventListener("click", () => showAdjacentPhoto(1));
 downloadBtn.addEventListener("click", downloadCurrentPhoto);
 deleteBtn.addEventListener("click", deleteCurrentPhoto);
 zoomInBtn.addEventListener("click", () => {
@@ -322,6 +427,77 @@ imageStage.addEventListener("wheel", (event) => {
   state.zoom = event.deltaY < 0 ? Math.min(5, state.zoom + 0.1) : Math.max(0.25, state.zoom - 0.1);
   updateZoom();
 });
+imageStage.addEventListener("touchstart", (event) => {
+  for (const touch of event.changedTouches) {
+    state.activeTouches.set(touch.identifier, { x: touch.clientX, y: touch.clientY });
+  }
+  if (state.activeTouches.size >= 2) {
+    state.pinchDistance = distanceBetweenTouches();
+    state.pinchZoom = state.zoom;
+  } else if (event.changedTouches.length === 1) {
+    const touch = event.changedTouches[0];
+    state.swipeStart = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+    state.swipeMoved = false;
+  }
+});
+imageStage.addEventListener(
+  "touchmove",
+  (event) => {
+    for (const touch of event.changedTouches) {
+      state.activeTouches.set(touch.identifier, { x: touch.clientX, y: touch.clientY });
+    }
+    if (state.activeTouches.size >= 2 && state.pinchDistance > 0) {
+      event.preventDefault();
+      const nextDistance = distanceBetweenTouches();
+      state.zoom = Math.max(0.25, Math.min(5, state.pinchZoom * (nextDistance / state.pinchDistance)));
+      updateZoom();
+    } else if (state.swipeStart && state.zoom === 1 && event.changedTouches.length === 1) {
+      const touch = event.changedTouches[0];
+      const dx = touch.clientX - state.swipeStart.x;
+      const dy = touch.clientY - state.swipeStart.y;
+      if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.4) {
+        state.swipeMoved = true;
+        event.preventDefault();
+      }
+    }
+  },
+  { passive: false },
+);
+imageStage.addEventListener("touchend", (event) => {
+  if (state.swipeStart && state.zoom === 1 && event.changedTouches.length === 1) {
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - state.swipeStart.x;
+    const dy = touch.clientY - state.swipeStart.y;
+    const elapsed = Date.now() - state.swipeStart.time;
+    if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.4 && elapsed < 900) {
+      showAdjacentPhoto(dx < 0 ? 1 : -1);
+    }
+  }
+  clearEndedTouches(event);
+  state.swipeStart = null;
+});
+imageStage.addEventListener("touchcancel", clearEndedTouches);
+document.addEventListener("keydown", (event) => {
+  if (!viewer.open) {
+    return;
+  }
+  if (event.key === "ArrowLeft") {
+    showAdjacentPhoto(-1);
+  } else if (event.key === "ArrowRight") {
+    showAdjacentPhoto(1);
+  } else if (event.key === "Escape") {
+    viewer.close();
+  }
+});
+
+function clearEndedTouches(event) {
+  for (const touch of event.changedTouches) {
+    state.activeTouches.delete(touch.identifier);
+  }
+  if (state.activeTouches.size < 2) {
+    state.pinchDistance = 0;
+  }
+}
 
 loadConfig()
   .then(() => loadFolder(""))
