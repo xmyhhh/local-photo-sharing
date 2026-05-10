@@ -23,6 +23,7 @@ const state = {
   entries: [],
   nextCursor: null,
   loadingMore: false,
+  loadingFolder: false,
   indexing: false,
   currentPhoto: null,
   viewerLiveMode: false,
@@ -99,6 +100,8 @@ const ORIGINAL_PREFETCH_QUEUE_LIMIT = 25;
 const THUMB_LOAD_CONCURRENCY = 6;
 const RATING_STATUS_CONCURRENCY = 3;
 const RATING_QUEUE_LIMIT = 50;
+const PHOTO_PAGE_LIMIT = 2000;
+const LOAD_MORE_SCROLL_BUFFER = 3200;
 
 const grid = document.querySelector("#grid");
 const emptyState = document.querySelector("#emptyState");

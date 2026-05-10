@@ -1002,11 +1002,14 @@ main {
 }
 
 .viewer.controls-hidden .viewer-toolbar,
-.viewer.controls-hidden .viewer-control-bar,
-.viewer.controls-hidden .page-btn {
+.viewer.controls-hidden .viewer-control-bar {
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
+}
+
+.viewer.controls-hidden .page-btn {
+  opacity: 0;
 }
 
 .viewer.controls-hidden .viewer-toolbar {

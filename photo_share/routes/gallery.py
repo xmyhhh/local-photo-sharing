@@ -8,7 +8,6 @@ from flask import Flask, abort, jsonify, request, send_file
 from ..constants import (
     FILTER_WAIT_SECONDS,
     JPG_EXTENSIONS,
-    MEDIA_EXTENSIONS,
     PHOTO_EXTENSIONS,
     PHOTO_PAGE_SIZE,
     RATINGS_FILE,
@@ -58,7 +57,7 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
         folder_path = _resolve_rooted_folder(services, root_id, folder)
         filters = PhotoFilters.from_request(request.args)
         cursor = parse_optional_int(request.args.get("cursor"), 0, 1_000_000) or 0
-        limit = parse_optional_int(request.args.get("limit"), 1, 300) or PHOTO_PAGE_SIZE
+        limit = parse_optional_int(request.args.get("limit"), 1, 2_000) or PHOTO_PAGE_SIZE
         entries: list[dict[str, Any]] = []
         indexing = False
 
@@ -104,7 +103,6 @@ def _virtual_root_payload(services: AppServices) -> dict[str, Any]:
             "type": "folder",
             "name": root.name or root_id,
             "path": root_id,
-            "photoCount": _count_photos_recursive(root),
         }
         for root_id, root in services.roots.items()
     ]
@@ -133,7 +131,6 @@ def _build_entry(
             "type": "folder",
             "name": child.name,
             "path": rooted_path,
-            "photoCount": _count_photos_recursive(child),
         }
     suffix = child.suffix.lower()
     if suffix in VIDEO_EXTENSIONS and _has_live_photo_still(child):
@@ -186,27 +183,6 @@ def _photo_rating(rel: str, photo_path: Path, root_services: RootServices) -> tu
     if indexed_rating is not None:
         return indexed_rating, False
     return rating, rating_pending
-
-
-def _count_photos_recursive(folder_path: Path) -> int:
-    count = 0
-    stack = [folder_path]
-    while stack:
-        current = stack.pop()
-        try:
-            children = list(current.iterdir())
-        except OSError:
-            continue
-        for child in children:
-            if child.name in {RATINGS_FILE, THUMBNAIL_DIR}:
-                continue
-            if child.is_dir():
-                stack.append(child)
-            elif child.is_file() and child.suffix.lower() in MEDIA_EXTENSIONS:
-                if child.suffix.lower() in VIDEO_EXTENSIONS and _has_live_photo_still(child):
-                    continue
-                count += 1
-    return count
 
 
 def _has_live_photo_still(video_path: Path) -> bool:

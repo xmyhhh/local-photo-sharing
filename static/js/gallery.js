@@ -23,13 +23,14 @@ function applyThumbnailQueueLimits(limits) {
 async function loadFolder(folder = state.folder) {
   const generation = state.filterGeneration;
   const targetFolder = normalizeFolderPath(folder || "");
+  showFolderLoading(targetFolder);
   state.nextCursor = null;
   const params = new URLSearchParams();
   if (state.rootId) {
     params.set("root", state.rootId);
   }
   params.set("folder", targetFolder);
-  params.set("limit", "80");
+  params.set("limit", String(PHOTO_PAGE_LIMIT));
   state.filters.ratings.forEach((rating) => params.append("rating", rating));
   if (state.filters.dateFrom) {
     params.set("date_from", state.filters.dateFrom);
@@ -37,22 +38,34 @@ async function loadFolder(folder = state.folder) {
   if (state.filters.dateTo) {
     params.set("date_to", state.filters.dateTo);
   }
-  const data = await fetchJson(`/api/photos?${params.toString()}`);
-  if (generation !== state.filterGeneration) {
-    return;
+  try {
+    const data = await fetchJson(`/api/photos?${params.toString()}`);
+    if (generation !== state.filterGeneration) {
+      return;
+    }
+    clearFilterRefreshTimer();
+    state.folder = data.folder;
+    state.parent = data.parent;
+    state.entries = data.entries;
+    state.nextCursor = data.nextCursor;
+    state.indexing = Boolean(data.indexing);
+    state.loadingFolder = false;
+    renderBreadcrumb();
+    renderGrid();
+    if (data.indexing && state.filters.ratings.length) {
+      scheduleFilterRefresh(generation);
+    }
+    updateGalleryHistoryState();
+  } catch (error) {
+    if (generation !== state.filterGeneration) {
+      return;
+    }
+    state.loadingFolder = false;
+    state.entries = [];
+    state.nextCursor = null;
+    state.indexing = false;
+    updateEmptyState(error.message || "加载文件夹失败。");
   }
-  clearFilterRefreshTimer();
-  state.folder = data.folder;
-  state.parent = data.parent;
-  state.entries = data.entries;
-  state.nextCursor = data.nextCursor;
-  state.indexing = Boolean(data.indexing);
-  renderBreadcrumb();
-  renderGrid();
-  if (data.indexing && state.filters.ratings.length) {
-    scheduleFilterRefresh(generation);
-  }
-  updateGalleryHistoryState();
 }
 
 function navigateFolder(folder) {
@@ -153,7 +166,7 @@ async function loadMoreEntries() {
   }
   params.set("folder", state.folder);
   params.set("cursor", String(state.nextCursor));
-  params.set("limit", "80");
+  params.set("limit", String(PHOTO_PAGE_LIMIT));
   state.filters.ratings.forEach((rating) => params.append("rating", rating));
   if (state.filters.dateFrom) {
     params.set("date_from", state.filters.dateFrom);
@@ -179,6 +192,7 @@ async function loadMoreEntries() {
     if (data.indexing && state.filters.ratings.length) {
       scheduleFilterRefresh(generation);
     }
+    scheduleLoadMoreIfNeeded();
   } finally {
     state.loadingMore = false;
   }
@@ -258,6 +272,26 @@ function renderGrid() {
   scheduleLoadMoreIfNeeded();
 }
 
+function showFolderLoading(targetFolder) {
+  clearVisibleWorkScan();
+  clearThumbTimers();
+  clearRatingTimers();
+  resetThumbObserver();
+  resetRatingObserver();
+  state.loadingFolder = true;
+  state.folder = targetFolder;
+  state.parent = parentFolderPath(targetFolder);
+  state.entries = [];
+  state.indexing = false;
+  grid.innerHTML = "";
+  grid.className = `grid thumb-${state.thumbMode}`;
+  grid.classList.toggle("compact-mode", state.compactMode);
+  compactToggleBtn.textContent = state.compactMode ? "展开" : "精简";
+  renderBreadcrumb();
+  updateEmptyState();
+  updateGalleryHistoryState();
+}
+
 function appendGridEntry(entry) {
   const tile = createGridTile(entry);
   grid.append(tile.element);
@@ -271,19 +305,33 @@ function appendGridEntry(entry) {
   scheduleVisibleWorkScan();
 }
 
-function updateEmptyState() {
+function updateEmptyState(message = "") {
   if (state.entries.length > 0) {
     emptyState.hidden = true;
     return;
   }
   emptyState.hidden = false;
-  if (state.filters.ratings.length && state.indexing) {
+  emptyState.classList.toggle("loading", state.loadingFolder);
+  if (state.loadingFolder) {
+    emptyState.innerHTML = '<span class="spinner inline-spinner" aria-hidden="true"></span><span>正在打开文件夹...</span>';
+  } else if (message) {
+    emptyState.textContent = message;
+  } else if (state.filters.ratings.length && state.indexing) {
     emptyState.textContent = "正在执行筛选...";
   } else if (state.filters.ratings.length) {
     emptyState.textContent = "没有找到满足筛选条件的媒体文件。";
   } else {
     emptyState.textContent = "当前文件夹没有图片、视频或子文件夹。";
   }
+}
+
+function parentFolderPath(folder) {
+  if (!folder) {
+    return "";
+  }
+  const parts = folder.split("/").filter(Boolean);
+  parts.pop();
+  return parts.join("/");
 }
 
 function createGridTile(entry) {
@@ -370,7 +418,7 @@ function createGridTile(entry) {
   } else if (entry.type === "folder") {
     const count = document.createElement("div");
     count.className = "folder-count";
-    count.textContent = `${entry.photoCount || 0} 张照片`;
+    count.textContent = "文件夹";
     meta.append(count);
   }
 

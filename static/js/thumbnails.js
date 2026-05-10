@@ -201,8 +201,8 @@ function scheduleLoadMoreIfNeeded() {
     if (state.nextCursor === null) {
       return;
     }
-    const nearBottom = window.innerHeight + window.scrollY > document.documentElement.scrollHeight - 1200;
-    const notFilled = document.documentElement.scrollHeight <= window.innerHeight + 400;
+    const nearBottom = window.innerHeight + window.scrollY > document.documentElement.scrollHeight - LOAD_MORE_SCROLL_BUFFER;
+    const notFilled = document.documentElement.scrollHeight <= window.innerHeight + LOAD_MORE_SCROLL_BUFFER;
     if (nearBottom || notFilled) {
       loadMoreEntries();
     }
