@@ -69,6 +69,17 @@
       </div>
     </dialog>
 
+    <dialog id="deleteDialog" class="confirm-dialog">
+      <form method="dialog" class="confirm-panel">
+        <div class="confirm-title">删除这张照片？</div>
+        <div id="deleteDialogPath" class="confirm-path"></div>
+        <div class="confirm-actions">
+          <button id="cancelDeleteBtn" class="ghost" value="cancel" type="button">取消</button>
+          <button id="confirmDeleteBtn" class="danger" value="confirm" type="button">确认删除</button>
+        </div>
+      </form>
+    </dialog>
+
     <script src="/static/app.js"></script>
   </body>
 </html>

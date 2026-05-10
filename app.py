@@ -117,6 +117,9 @@ def create_app(
     @app.get("/api/preview-status/<path:photo_path>")
     def preview_status(photo_path: str):
         path = resolve_photo(root, photo_path)
+        error = previews.get_error(path)
+        if error:
+            return jsonify({"status": "error", "url": image_url(photo_path), "error": error}), 500
         preview_path = previews.get_ready(path)
         if preview_path is not None:
             return jsonify({"status": "ready", "url": preview_url(photo_path)})
@@ -146,6 +149,9 @@ def create_app(
     def thumbnail_status(photo_path: str):
         path = resolve_photo(root, photo_path)
         metadata.ensure(path)
+        error = thumbnails.get_error(path)
+        if error:
+            return jsonify({"status": "error", "url": image_url(photo_path), "error": error}), 500
         thumb = thumbnails.get_ready(path)
         if thumb is not None:
             return jsonify({"status": "ready", "url": thumb_url(photo_path)})
@@ -325,6 +331,7 @@ class ImageCacheStore:
         self.lock = Lock()
         self.executor = ThreadPoolExecutor(max_workers=THUMBNAIL_WORKERS, thread_name_prefix=thread_name)
         self.inflight: set[str] = set()
+        self.errors: dict[str, str] = {}
 
     def get_ready(self, photo_path: Path) -> Path | None:
         rel = to_relative(self.root, photo_path)
@@ -346,12 +353,17 @@ class ImageCacheStore:
             if task_key in self.inflight:
                 return False
             self.inflight.add(task_key)
+            self.errors.pop(self._error_key(photo_path), None)
         self.executor.submit(self._generate_with_cleanup, photo_path, rel, task_key)
         return True
 
     def _generate_with_cleanup(self, photo_path: Path, rel: str, task_key: str) -> None:
         try:
             self._generate(photo_path, rel)
+        except Exception as exc:
+            print(f"Failed to generate cache for {photo_path}: {exc}")
+            with self.lock:
+                self.errors[self._error_key(photo_path)] = str(exc)
         finally:
             with self.lock:
                 self.inflight.discard(task_key)
@@ -370,7 +382,7 @@ class ImageCacheStore:
             return
 
         cache_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = cache_path.with_suffix(".tmp")
+        tmp_path = cache_path.with_name(f"{cache_path.stem}.tmp.jpg")
         with Image.open(photo_path) as image:
             image = ImageOps.exif_transpose(image)
             image.thumbnail((self.size, self.size))
@@ -387,10 +399,17 @@ class ImageCacheStore:
         except FileNotFoundError:
             pass
 
+    def get_error(self, photo_path: Path) -> str | None:
+        with self.lock:
+            return self.errors.get(self._error_key(photo_path))
+
     def _task_key(self, photo_path: Path) -> str:
         stat = photo_path.stat()
         rel = to_relative(self.root, photo_path)
         return f"{rel}:{int(stat.st_mtime)}:{stat.st_size}"
+
+    def _error_key(self, photo_path: Path) -> str:
+        return to_relative(self.root, photo_path)
 
 
 class PhotoFilters:
@@ -468,6 +487,10 @@ def thumb_url(photo_path: str) -> str:
 
 def preview_url(photo_path: str) -> str:
     return f"/api/preview/{quote_path(normalize_rel_path(photo_path))}"
+
+
+def image_url(photo_path: str) -> str:
+    return f"/api/image/{quote_path(normalize_rel_path(photo_path))}"
 
 
 def quote_path(path: str) -> str:

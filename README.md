@@ -43,7 +43,9 @@ D:\codex_prj\photo\.venv\Scripts\python.exe app.py
   "host": "0.0.0.0",
   "port": 8000,
   "thumbnail_size": 320,
-  "thumbnail_quality": 68
+  "thumbnail_quality": 68,
+  "preview_size": 1800,
+  "preview_quality": 82
 }
 ```
 

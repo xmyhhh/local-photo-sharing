@@ -5,6 +5,7 @@ const state = {
   currentPhoto: null,
   zoom: 1,
   thumbTimers: new Map(),
+  previewTimer: null,
   thumbObserver: null,
   activeTouches: new Map(),
   pinchDistance: 0,
@@ -41,6 +42,10 @@ const deleteBtn = document.querySelector("#deleteBtn");
 const closeBtn = document.querySelector("#closeBtn");
 const prevBtn = document.querySelector("#prevBtn");
 const nextBtn = document.querySelector("#nextBtn");
+const deleteDialog = document.querySelector("#deleteDialog");
+const deleteDialogPath = document.querySelector("#deleteDialogPath");
+const cancelDeleteBtn = document.querySelector("#cancelDeleteBtn");
+const confirmDeleteBtn = document.querySelector("#confirmDeleteBtn");
 
 async function loadConfig() {
   const config = await fetchJson("/api/config");
@@ -158,25 +163,42 @@ async function loadThumbnail(entry, img, spinner, attempt = 0) {
       img.onload = () => {
         img.classList.add("loaded");
         spinner.hidden = true;
+        entry.thumbUrl = img.src;
       };
       img.src = `${data.url}?v=${entry.mtime}`;
       return;
     }
     if (response.status !== 202) {
-      spinner.classList.add("failed");
+      showThumbnailFallback(entry, img, spinner);
       return;
     }
   } catch {
-    spinner.classList.add("failed");
+    showThumbnailFallback(entry, img, spinner);
     return;
   }
 
+  if (attempt >= 8) {
+    showThumbnailFallback(entry, img, spinner);
+    return;
+  }
   const delay = Math.min(3000, 450 + attempt * 250);
   const timer = window.setTimeout(() => {
     state.thumbTimers.delete(entry.path);
     loadThumbnail(entry, img, spinner, attempt + 1);
   }, delay);
   state.thumbTimers.set(entry.path, timer);
+}
+
+function showThumbnailFallback(entry, img, spinner) {
+  img.onload = () => {
+    img.classList.add("loaded");
+    spinner.hidden = true;
+    entry.thumbUrl = img.src;
+  };
+  img.onerror = () => {
+    spinner.classList.add("failed");
+  };
+  img.src = `/api/image/${encodePath(entry.path)}`;
 }
 
 function observeThumbnail(entry, img, spinner) {
@@ -261,12 +283,65 @@ function showPhoto(entry) {
   viewerTitle.textContent = entry.path;
   viewerImage.alt = entry.name;
   viewerImage.classList.remove("ready");
-  viewerImage.onload = () => viewerImage.classList.add("ready");
-  viewerImage.src = `/api/image/${encodePath(entry.path)}`;
+  viewerImage.classList.add("loading");
+  if (entry.thumbUrl) {
+    viewerImage.src = entry.thumbUrl;
+    viewerImage.classList.add("ready");
+  } else {
+    viewerImage.removeAttribute("src");
+  }
+  loadPreviewImage(entry);
   renderViewerRating();
   updatePageButtons();
   updateZoom();
   preloadAdjacentPhotos();
+}
+
+async function loadPreviewImage(entry, attempt = 0) {
+  if (state.previewTimer) {
+    window.clearTimeout(state.previewTimer);
+    state.previewTimer = null;
+  }
+  try {
+    const response = await fetch(`/api/preview-status/${encodePath(entry.path)}`, { cache: "no-store" });
+    const data = await response.json();
+    if (response.status === 200) {
+      if (state.currentPhoto?.path !== entry.path) {
+        return;
+      }
+      viewerImage.classList.remove("ready");
+      viewerImage.classList.remove("loading");
+      viewerImage.onload = () => viewerImage.classList.add("ready");
+      viewerImage.src = `${data.url}?v=${entry.mtime}`;
+      return;
+    }
+    if (response.status !== 202) {
+      showOriginalImageFallback(entry);
+      return;
+    }
+  } catch {
+    showOriginalImageFallback(entry);
+    return;
+  }
+
+  if (attempt >= 8) {
+    showOriginalImageFallback(entry);
+    return;
+  }
+  const delay = Math.min(2500, 350 + attempt * 220);
+  state.previewTimer = window.setTimeout(() => {
+    loadPreviewImage(entry, attempt + 1);
+  }, delay);
+}
+
+function showOriginalImageFallback(entry) {
+  if (state.currentPhoto?.path !== entry.path) {
+    return;
+  }
+  viewerImage.classList.remove("ready");
+  viewerImage.classList.remove("loading");
+  viewerImage.onload = () => viewerImage.classList.add("ready");
+  viewerImage.src = `/api/image/${encodePath(entry.path)}`;
 }
 
 function renderViewerRating() {
@@ -331,8 +406,7 @@ function preloadAdjacentPhotos() {
     if (!entry) {
       return;
     }
-    const image = new Image();
-    image.src = `/api/image/${encodePath(entry.path)}`;
+    fetch(`/api/preview-status/${encodePath(entry.path)}`, { cache: "no-store" }).catch(() => {});
   });
 }
 
@@ -349,14 +423,18 @@ async function deleteCurrentPhoto() {
   if (!state.currentPhoto) {
     return;
   }
-  const ok = window.confirm(`确认删除这张图片？\n${state.currentPhoto.path}`);
-  if (!ok) {
-    return;
-  }
   await fetchJson(`/api/photo/${encodePath(state.currentPhoto.path)}`, { method: "DELETE" });
   viewer.close();
   state.currentPhoto = null;
   await loadFolder(state.folder);
+}
+
+function requestDeleteCurrentPhoto() {
+  if (!state.currentPhoto) {
+    return;
+  }
+  deleteDialogPath.textContent = state.currentPhoto.path;
+  deleteDialog.showModal();
 }
 
 function downloadCurrentPhoto() {
@@ -406,7 +484,12 @@ closeBtn.addEventListener("click", () => viewer.close());
 prevBtn.addEventListener("click", () => showAdjacentPhoto(-1));
 nextBtn.addEventListener("click", () => showAdjacentPhoto(1));
 downloadBtn.addEventListener("click", downloadCurrentPhoto);
-deleteBtn.addEventListener("click", deleteCurrentPhoto);
+deleteBtn.addEventListener("click", requestDeleteCurrentPhoto);
+cancelDeleteBtn.addEventListener("click", () => deleteDialog.close());
+confirmDeleteBtn.addEventListener("click", async () => {
+  deleteDialog.close();
+  await deleteCurrentPhoto();
+});
 zoomInBtn.addEventListener("click", () => {
   state.zoom = Math.min(5, state.zoom + 0.25);
   updateZoom();
