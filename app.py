@@ -8,7 +8,7 @@ import os
 import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from threading import Lock
+from threading import Lock, Thread
 from typing import Any
 
 from flask import Flask, abort, jsonify, request, send_file
@@ -21,10 +21,18 @@ RATINGS_FILE = ".photo_share_ratings.json"
 THUMBNAIL_DIR = ".photo_share_thumbs"
 CACHE_DIR = APP_DIR / ".photo_share_cache"
 THUMBNAIL_WORKERS = max(1, os.cpu_count() or 1)
-DEFAULT_THUMBNAIL_SIZE = 320
-DEFAULT_THUMBNAIL_QUALITY = 68
-DEFAULT_PREVIEW_SIZE = 1800
-DEFAULT_PREVIEW_QUALITY = 82
+CACHE_QUEUE_LIMIT = 100
+DEFAULT_THUMBNAIL_SIZE = 360
+DEFAULT_THUMBNAIL_QUALITY = 74
+DEFAULT_PREVIEW_SIZE = 2560
+DEFAULT_PREVIEW_QUALITY = 88
+THUMBNAIL_MODES = {
+    "small": {"size": 260, "quality": 68},
+    "medium": {"size": DEFAULT_THUMBNAIL_SIZE, "quality": DEFAULT_THUMBNAIL_QUALITY},
+    "large": {"size": 640, "quality": 84},
+}
+DEFAULT_THUMBNAIL_MODE = "medium"
+BRACKET_SCAN_LIMIT = 500
 DEFAULT_CONFIG_FILE = APP_DIR / "config.json"
 DEFAULT_CONFIG = {
     "photo_folder": "D:/your/photo/folder",
@@ -51,9 +59,28 @@ def create_app(
     app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="/static")
     ratings = RatingStore(root / RATINGS_FILE)
     cache_root = CACHE_DIR / root_cache_key(root)
-    metadata = MetadataStore(root, cache_root / "metadata.json")
-    thumbnails = ImageCacheStore(root, cache_root / "thumbs", thumbnail_size, thumbnail_quality, "thumb")
-    previews = ImageCacheStore(root, cache_root / "previews", preview_size, preview_quality, "preview")
+    metadata = MetadataStore(root)
+    thumbnail_modes = build_thumbnail_modes(thumbnail_size, thumbnail_quality)
+    thumbnails = {
+        mode: ImageCacheStore(
+            root,
+            cache_root / f"thumbs_{mode}_{spec['size']}_{spec['quality']}",
+            spec["size"],
+            spec["quality"],
+            f"thumb-{mode}",
+            queue_limit=CACHE_QUEUE_LIMIT,
+        )
+        for mode, spec in thumbnail_modes.items()
+    }
+    default_thumbnails = thumbnails[DEFAULT_THUMBNAIL_MODE]
+    previews = ImageCacheStore(
+        root,
+        cache_root / f"previews_{preview_size}_{preview_quality}",
+        preview_size,
+        preview_quality,
+        "preview",
+        queue_limit=300,
+    )
 
     @app.get("/")
     def index():
@@ -78,9 +105,13 @@ def create_app(
                 entries.append({"type": "folder", "name": child.name, "path": rel})
             elif child.suffix.lower() in JPG_EXTENSIONS:
                 stat = child.stat()
-                rating = ratings.get(rel)
-                if rating == 0:
+                rating_override = ratings.get_override(rel)
+                if rating_override is None:
                     rating = metadata.get_rating_ready(child)
+                    rating_pending = not metadata.is_ready(child)
+                else:
+                    rating = rating_override
+                    rating_pending = False
                 if not filters.matches_photo(rating, int(stat.st_mtime)):
                     continue
                 entries.append(
@@ -91,6 +122,7 @@ def create_app(
                         "size": stat.st_size,
                         "mtime": int(stat.st_mtime),
                         "rating": rating,
+                        "ratingPending": rating_pending,
                     }
                 )
 
@@ -105,8 +137,8 @@ def create_app(
     def bracket_detection():
         folder = request.args.get("folder", "")
         folder_path = resolve_folder(root, folder)
-        groups = detect_exposure_brackets(root, folder_path)
-        return jsonify({"folder": folder, "groups": groups, "count": len(groups)})
+        result = detect_exposure_brackets(root, folder_path, default_thumbnails)
+        return jsonify({"folder": folder, **result})
 
     @app.get("/api/image/<path:photo_path>")
     def image(photo_path: str):
@@ -147,24 +179,42 @@ def create_app(
     @app.get("/api/thumb/<path:photo_path>")
     def thumbnail(photo_path: str):
         path = resolve_photo(root, photo_path)
-        thumb = thumbnails.get_ready(path)
+        mode = get_thumbnail_mode(request.args.get("mode"))
+        thumb_store = thumbnails[mode]
+        thumb = thumb_store.get_ready(path)
         if thumb is None:
-            thumbnails.ensure(path)
-            return jsonify({"status": "processing", "url": thumb_url(photo_path)}), 202
+            thumb_store.ensure(path)
+            return jsonify({"status": "processing", "url": thumb_url(photo_path, mode)}), 202
         return send_cached_file(thumb, mimetype="image/jpeg")
 
     @app.get("/api/thumb-status/<path:photo_path>")
     def thumbnail_status(photo_path: str):
         path = resolve_photo(root, photo_path)
-        metadata.ensure(path)
-        error = thumbnails.get_error(path)
+        mode = get_thumbnail_mode(request.args.get("mode"))
+        thumb_store = thumbnails[mode]
+        error = thumb_store.get_error(path)
         if error:
             return jsonify({"status": "error", "url": image_url(photo_path), "error": error}), 500
-        thumb = thumbnails.get_ready(path)
+        thumb = thumb_store.get_ready(path)
         if thumb is not None:
-            return jsonify({"status": "ready", "url": thumb_url(photo_path)})
-        queued = thumbnails.ensure(path)
-        return jsonify({"status": "queued" if queued else "processing", "url": thumb_url(photo_path)}), 202
+            return jsonify({"status": "ready", "url": thumb_url(photo_path, mode)})
+        queued = thumb_store.ensure(path)
+        return jsonify({"status": "queued" if queued else "processing", "url": thumb_url(photo_path, mode)}), 202
+
+    @app.get("/api/rating-status/<path:photo_path>")
+    def rating_status(photo_path: str):
+        path = resolve_photo(root, photo_path)
+        rel = normalize_rel_path(photo_path)
+        rating_override = ratings.get_override(rel)
+        if rating_override is not None:
+            return jsonify({"status": "ready", "rating": rating_override, "source": "user"})
+        error = metadata.get_error(path)
+        if error:
+            return jsonify({"status": "error", "rating": 0, "error": error}), 500
+        if metadata.is_ready(path):
+            return jsonify({"status": "ready", "rating": metadata.get_rating_ready(path), "source": "embedded"})
+        queued = metadata.ensure(path)
+        return jsonify({"status": "queued" if queued else "processing", "rating": 0}), 202
 
     @app.post("/api/rating/<path:photo_path>")
     def set_rating(photo_path: str):
@@ -184,7 +234,8 @@ def create_app(
         rel = to_relative(root, path)
         path.unlink()
         ratings.delete(rel)
-        thumbnails.delete(path)
+        for thumb_store in thumbnails.values():
+            thumb_store.delete(path)
         previews.delete(path)
         metadata.delete(path)
         return jsonify({"deleted": rel})
@@ -211,7 +262,7 @@ class RatingStore:
                 rating = int(value)
             except (TypeError, ValueError):
                 continue
-            if 1 <= rating <= 5:
+            if 0 <= rating <= 5:
                 clean[str(key)] = rating
         return clean
 
@@ -224,12 +275,12 @@ class RatingStore:
     def get(self, rel_path: str) -> int:
         return self.data.get(rel_path, 0)
 
+    def get_override(self, rel_path: str) -> int | None:
+        return self.data.get(rel_path)
+
     def set(self, rel_path: str, value: int) -> None:
         with self.lock:
-            if value == 0:
-                self.data.pop(rel_path, None)
-            else:
-                self.data[rel_path] = value
+            self.data[rel_path] = value
             self._save()
 
     def delete(self, rel_path: str) -> None:
@@ -239,43 +290,13 @@ class RatingStore:
 
 
 class MetadataStore:
-    def __init__(self, root: Path, path: Path) -> None:
+    def __init__(self, root: Path) -> None:
         self.root = root
-        self.path = path
         self.lock = Lock()
-        self.data: dict[str, dict[str, int]] = self._load()
+        self.data: dict[str, dict[str, int]] = {}
+        self.errors: dict[str, str] = {}
         self.executor = ThreadPoolExecutor(max_workers=THUMBNAIL_WORKERS, thread_name_prefix="metadata")
         self.inflight: set[str] = set()
-
-    def _load(self) -> dict[str, dict[str, int]]:
-        if not self.path.exists():
-            return {}
-        try:
-            raw = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return {}
-        if not isinstance(raw, dict):
-            return {}
-        clean: dict[str, dict[str, int]] = {}
-        for key, value in raw.items():
-            if not isinstance(value, dict):
-                continue
-            try:
-                clean[str(key)] = {
-                    "mtime": int(value.get("mtime", 0)),
-                    "size": int(value.get("size", 0)),
-                    "rating": int(value.get("rating", 0)),
-                }
-            except (TypeError, ValueError):
-                continue
-        return clean
-
-    def _save(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
-            json.dumps(self.data, ensure_ascii=False, indent=2, sort_keys=True),
-            encoding="utf-8",
-        )
 
     def get_rating_ready(self, photo_path: Path) -> int:
         rel = to_relative(self.root, photo_path)
@@ -285,18 +306,34 @@ class MetadataStore:
             return cached.get("rating", 0)
         return 0
 
+    def is_ready(self, photo_path: Path) -> bool:
+        rel = to_relative(self.root, photo_path)
+        stat = photo_path.stat()
+        cached = self.data.get(rel)
+        return bool(cached and cached.get("mtime") == int(stat.st_mtime) and cached.get("size") == stat.st_size)
+
+    def get_error(self, photo_path: Path) -> str | None:
+        return self.errors.get(self._task_key(photo_path))
+
     def ensure(self, photo_path: Path) -> bool:
+        if self.is_ready(photo_path):
+            return False
         task_key = self._task_key(photo_path)
         with self.lock:
             if task_key in self.inflight:
                 return False
             self.inflight.add(task_key)
+            self.errors.pop(task_key, None)
         self.executor.submit(self._read_with_cleanup, photo_path, task_key)
         return True
 
     def _read_with_cleanup(self, photo_path: Path, task_key: str) -> None:
         try:
             self._read(photo_path)
+        except Exception as exc:
+            print(f"Failed to read metadata for {photo_path}: {exc}")
+            with self.lock:
+                self.errors[task_key] = str(exc)
         finally:
             with self.lock:
                 self.inflight.discard(task_key)
@@ -316,13 +353,12 @@ class MetadataStore:
                 "size": stat.st_size,
                 "rating": rating,
             }
-            self._save()
 
     def delete(self, photo_path: Path) -> None:
         rel = to_relative(self.root, photo_path)
         with self.lock:
             self.data.pop(rel, None)
-            self._save()
+            self.errors.pop(self._task_key(photo_path), None)
 
     def _task_key(self, photo_path: Path) -> str:
         stat = photo_path.stat()
@@ -331,15 +367,27 @@ class MetadataStore:
 
 
 class ImageCacheStore:
-    def __init__(self, root: Path, cache_root: Path, size: int, quality: int, thread_name: str) -> None:
+    def __init__(
+        self,
+        root: Path,
+        cache_root: Path,
+        size: int,
+        quality: int,
+        thread_name: str,
+        queue_limit: int = CACHE_QUEUE_LIMIT,
+    ) -> None:
         self.root = root
         self.cache_root = cache_root
         self.size = size
         self.quality = quality
+        self.queue_limit = queue_limit
         self.lock = Lock()
-        self.executor = ThreadPoolExecutor(max_workers=THUMBNAIL_WORKERS, thread_name_prefix=thread_name)
+        self.queue: list[tuple[Path, str, str]] = []
+        self.queued: set[str] = set()
         self.inflight: set[str] = set()
         self.errors: dict[str, str] = {}
+        for index in range(THUMBNAIL_WORKERS):
+            Thread(target=self._worker_loop, name=f"{thread_name}_{index}", daemon=True).start()
 
     def get_ready(self, photo_path: Path) -> Path | None:
         rel = to_relative(self.root, photo_path)
@@ -358,12 +406,37 @@ class ImageCacheStore:
         rel = to_relative(self.root, photo_path)
         task_key = self._task_key(photo_path)
         with self.lock:
-            if task_key in self.inflight:
+            if task_key in self.inflight or task_key in self.queued:
                 return False
-            self.inflight.add(task_key)
             self.errors.pop(self._error_key(photo_path), None)
-        self.executor.submit(self._generate_with_cleanup, photo_path, rel, task_key)
+            self.queue.insert(0, (photo_path, rel, task_key))
+            self.queued.add(task_key)
+            while len(self.queue) > self.queue_limit:
+                _, _, dropped_key = self.queue.pop()
+                self.queued.discard(dropped_key)
         return True
+
+    def _worker_loop(self) -> None:
+        import time
+
+        while True:
+            task = self._next_task()
+            if task is None:
+                time.sleep(0.03)
+                continue
+            photo_path, rel, task_key = task
+            self._generate_with_cleanup(photo_path, rel, task_key)
+
+    def _next_task(self) -> tuple[Path, str, str] | None:
+        with self.lock:
+            while self.queue:
+                photo_path, rel, task_key = self.queue.pop(0)
+                self.queued.discard(task_key)
+                if task_key in self.inflight:
+                    continue
+                self.inflight.add(task_key)
+                return photo_path, rel, task_key
+        return None
 
     def _generate_with_cleanup(self, photo_path: Path, rel: str, task_key: str) -> None:
         try:
@@ -421,20 +494,20 @@ class ImageCacheStore:
 
 
 class PhotoFilters:
-    def __init__(self, rating: int | None, date_from: int | None, date_to: int | None) -> None:
-        self.rating = rating
+    def __init__(self, ratings: set[int] | None, date_from: int | None, date_to: int | None) -> None:
+        self.ratings = ratings
         self.date_from = date_from
         self.date_to = date_to
 
     @classmethod
     def from_request(cls, args: Any) -> "PhotoFilters":
-        rating = parse_optional_int(args.get("rating"), 0, 5)
+        ratings = parse_rating_filter(args)
         date_from = parse_date_start(args.get("date_from"))
         date_to = parse_date_end(args.get("date_to"))
-        return cls(rating, date_from, date_to)
+        return cls(ratings, date_from, date_to)
 
     def matches_photo(self, photo_rating: int, mtime: int) -> bool:
-        if self.rating is not None and photo_rating != self.rating:
+        if self.ratings is not None and photo_rating not in self.ratings:
             return False
         if self.date_from is not None and mtime < self.date_from:
             return False
@@ -471,8 +544,12 @@ class BracketFeature:
         self.file_number = file_number
 
 
-def detect_exposure_brackets(root: Path, folder_path: Path) -> list[dict[str, Any]]:
+def detect_exposure_brackets(root: Path, folder_path: Path, thumbnails: ImageCacheStore | None = None) -> dict[str, Any]:
     groups: list[list[BracketFeature]] = []
+    scanned = 0
+    analyzed = 0
+    queued = 0
+    truncated = False
     for photo_dir in iter_photo_dirs(folder_path):
         photos = [
             child
@@ -480,10 +557,31 @@ def detect_exposure_brackets(root: Path, folder_path: Path) -> list[dict[str, An
             if child.is_file() and child.suffix.lower() in JPG_EXTENSIONS
         ]
         photos.sort(key=photo_sort_key)
-        features = [feature for feature in (read_bracket_feature(root, photo) for photo in photos) if feature is not None]
+        if scanned + len(photos) > BRACKET_SCAN_LIMIT:
+            photos = photos[: max(0, BRACKET_SCAN_LIMIT - scanned)]
+            truncated = True
+        scanned += len(photos)
+        features = []
+        for photo in photos:
+            feature = read_bracket_feature(root, photo, thumbnails)
+            if feature is None:
+                queued += 1
+                continue
+            analyzed += 1
+            features.append(feature)
         groups.extend(find_bracket_groups_in_features(features))
+        if truncated:
+            break
 
-    return [serialize_bracket_group(group, group_index + 1) for group_index, group in enumerate(groups)]
+    serialized = [serialize_bracket_group(group, group_index + 1) for group_index, group in enumerate(groups)]
+    return {
+        "groups": serialized,
+        "count": len(serialized),
+        "scanned": scanned,
+        "analyzed": analyzed,
+        "queued": queued,
+        "truncated": truncated,
+    }
 
 
 def iter_photo_dirs(folder_path: Path) -> list[Path]:
@@ -515,22 +613,27 @@ def find_bracket_groups_in_features(features: list[BracketFeature]) -> list[list
     return groups
 
 
-def read_bracket_feature(root: Path, photo_path: Path) -> BracketFeature | None:
+def read_bracket_feature(root: Path, photo_path: Path, thumbnails: ImageCacheStore | None = None) -> BracketFeature | None:
     try:
         stat = photo_path.stat()
-        with Image.open(photo_path) as image:
-            image = ImageOps.exif_transpose(image)
+        width = 0
+        height = 0
+        exposure_time = None
+        exposure_bias = None
+
+        feature_source = thumbnails.get_ready(photo_path) if thumbnails is not None else None
+        if feature_source is None:
+            return None
+        with Image.open(feature_source) as image:
             width, height = image.size
-            exif = image.getexif()
-            exposure_time = rational_to_float(exif.get(33434))
-            exposure_bias = rational_to_float(exif.get(37380))
+            image.draft("L", (64, 64))
             gray = image.convert("L")
-            gray.thumbnail((64, 64))
-            stat_info = ImageStat.Stat(gray)
-            brightness = float(stat_info.mean[0])
-            contrast = float(stat_info.stddev[0])
-            shape_gray = ImageOps.autocontrast(gray)
-            pixels = tuple(value / 255.0 for value in shape_gray.resize((16, 16)).getdata())
+        gray.thumbnail((64, 64))
+        stat_info = ImageStat.Stat(gray)
+        brightness = float(stat_info.mean[0])
+        contrast = float(stat_info.stddev[0])
+        shape_gray = ImageOps.autocontrast(gray)
+        pixels = tuple(value / 255.0 for value in shape_gray.resize((16, 16)).getdata())
     except Exception:
         return None
 
@@ -742,8 +845,9 @@ def send_cached_file(path: Path, **kwargs: Any) -> Any:
     return response
 
 
-def thumb_url(photo_path: str) -> str:
-    return f"/api/thumb/{quote_path(normalize_rel_path(photo_path))}"
+def thumb_url(photo_path: str, mode: str = DEFAULT_THUMBNAIL_MODE) -> str:
+    safe_mode = get_thumbnail_mode(mode)
+    return f"/api/thumb/{quote_path(normalize_rel_path(photo_path))}?mode={safe_mode}"
 
 
 def preview_url(photo_path: str) -> str:
@@ -768,6 +872,20 @@ def hash_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
+def build_thumbnail_modes(base_size: int, base_quality: int) -> dict[str, dict[str, int]]:
+    modes = {mode: spec.copy() for mode, spec in THUMBNAIL_MODES.items()}
+    modes[DEFAULT_THUMBNAIL_MODE] = {"size": base_size, "quality": base_quality}
+    return modes
+
+
+def get_thumbnail_mode(value: str | None) -> str:
+    if not value:
+        return DEFAULT_THUMBNAIL_MODE
+    if value not in THUMBNAIL_MODES:
+        abort(400, "thumbnail mode must be small, medium, or large.")
+    return value
+
+
 def parse_optional_int(value: str | None, minimum: int, maximum: int) -> int | None:
     if value is None or value == "":
         return None
@@ -778,6 +896,21 @@ def parse_optional_int(value: str | None, minimum: int, maximum: int) -> int | N
     if parsed < minimum or parsed > maximum:
         abort(400, f"Expected integer from {minimum} to {maximum}.")
     return parsed
+
+
+def parse_rating_filter(args: Any) -> set[int] | None:
+    raw_values = args.getlist("rating") if hasattr(args, "getlist") else [args.get("rating")]
+    ratings: set[int] = set()
+    for raw in raw_values:
+        if raw is None or raw == "":
+            continue
+        for item in str(raw).split(","):
+            if item == "":
+                continue
+            rating = parse_optional_int(item, 0, 5)
+            if rating is not None:
+                ratings.add(rating)
+    return ratings or None
 
 
 def parse_date_start(value: str | None) -> int | None:
@@ -830,26 +963,43 @@ def read_exif_rating(photo_path: Path) -> int:
 
 def read_xmp_rating(photo_path: Path) -> int:
     try:
-        raw = photo_path.read_bytes()
+        file_size = photo_path.stat().st_size
+        with photo_path.open("rb") as file:
+            head = file.read(1024 * 1024)
+            if file_size > 1024 * 1024:
+                file.seek(max(0, file_size - 256 * 1024))
+                raw = head + file.read()
+            else:
+                raw = head
     except OSError:
-        return 0
+        raw = b""
 
-    marker = b"xmp:Rating"
-    index = raw.find(marker)
-    if index < 0:
-        return 0
-    window = raw[index : index + 80].decode("utf-8", errors="ignore")
+    rating = parse_xmp_rating(raw)
+    if rating:
+        return rating
 
-    for separator in ('="', "='", ">"):
-        pos = window.find(separator)
-        if pos < 0:
-            continue
-        tail = window[pos + len(separator) :]
-        for char in tail:
-            if char.isdigit():
-                return normalize_rating_value(char)
-            if char not in {" ", "\t", "\r", "\n"}:
-                break
+    sidecar = photo_path.with_suffix(".xmp")
+    if sidecar.exists():
+        try:
+            return parse_xmp_rating(sidecar.read_bytes())
+        except OSError:
+            return 0
+    return 0
+
+
+def parse_xmp_rating(raw: bytes) -> int:
+    if not raw:
+        return 0
+    text = raw.decode("utf-8", errors="ignore")
+    patterns = (
+        r"\bxmp:Rating\s*=\s*['\"]\s*(-?\d+)\s*['\"]",
+        r"<\s*xmp:Rating\s*>\s*(-?\d+)\s*<\s*/\s*xmp:Rating\s*>",
+        r"\brating\s*=\s*['\"]\s*(-?\d+)\s*['\"]",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return normalize_rating_value(match.group(1))
     return 0
 
 

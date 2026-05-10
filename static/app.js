@@ -9,6 +9,15 @@ const state = {
   isDragging: false,
   dragStart: null,
   thumbTimers: new Map(),
+  thumbQueue: [],
+  thumbQueued: new Set(),
+  thumbActive: 0,
+  thumbControllers: new Map(),
+  ratingTimers: new Map(),
+  ratingObserver: null,
+  ratingQueue: [],
+  ratingQueued: new Set(),
+  ratingActive: 0,
   previewTimer: null,
   originalCache: new Map(),
   originalCacheBytes: 0,
@@ -16,6 +25,7 @@ const state = {
   originalPrefetchQueue: [],
   originalPrefetchActive: 0,
   thumbObserver: null,
+  thumbMode: getStoredThumbMode(),
   activeTouches: new Map(),
   pinchDistance: 0,
   pinchZoom: 1,
@@ -24,7 +34,7 @@ const state = {
   lastTapTime: 0,
   contextFolder: null,
   filters: {
-    minRating: "",
+    ratings: [],
     dateFrom: "",
     dateTo: "",
   },
@@ -32,6 +42,10 @@ const state = {
 
 const ORIGINAL_CACHE_LIMIT = 1024 * 1024 * 1024;
 const ORIGINAL_PREFETCH_CONCURRENCY = 2;
+const THUMB_LOAD_CONCURRENCY = 6;
+const THUMB_QUEUE_LIMIT = 120;
+const RATING_STATUS_CONCURRENCY = 3;
+const RATING_QUEUE_LIMIT = 100;
 
 const grid = document.querySelector("#grid");
 const emptyState = document.querySelector("#emptyState");
@@ -39,9 +53,12 @@ const breadcrumb = document.querySelector("#breadcrumb");
 const rootPath = document.querySelector("#rootPath");
 const backBtn = document.querySelector("#backBtn");
 const refreshBtn = document.querySelector("#refreshBtn");
-const ratingFilter = document.querySelector("#ratingFilter");
+const ratingFilterBtn = document.querySelector("#ratingFilterBtn");
+const ratingFilterMenu = document.querySelector("#ratingFilterMenu");
+const ratingFilterInputs = Array.from(document.querySelectorAll("#ratingFilterMenu input"));
 const dateFromFilter = document.querySelector("#dateFromFilter");
 const dateToFilter = document.querySelector("#dateToFilter");
+const thumbModeSelect = document.querySelector("#thumbModeSelect");
 const clearFiltersBtn = document.querySelector("#clearFiltersBtn");
 const viewer = document.querySelector("#viewer");
 const viewerTitle = document.querySelector("#viewerTitle");
@@ -67,6 +84,7 @@ const bracketDialogPath = document.querySelector("#bracketDialogPath");
 const bracketStatus = document.querySelector("#bracketStatus");
 const bracketResults = document.querySelector("#bracketResults");
 const closeBracketDialogBtn = document.querySelector("#closeBracketDialogBtn");
+const isAppleMobileBrowser = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
 async function loadConfig() {
   const config = await fetchJson("/api/config");
@@ -76,9 +94,7 @@ async function loadConfig() {
 async function loadFolder(folder = state.folder) {
   const params = new URLSearchParams();
   params.set("folder", folder);
-  if (state.filters.minRating) {
-    params.set("rating", state.filters.minRating);
-  }
+  state.filters.ratings.forEach((rating) => params.append("rating", rating));
   if (state.filters.dateFrom) {
     params.set("date_from", state.filters.dateFrom);
   }
@@ -122,8 +138,11 @@ function renderBreadcrumb() {
 
 function renderGrid() {
   clearThumbTimers();
+  clearRatingTimers();
   resetThumbObserver();
+  resetRatingObserver();
   grid.innerHTML = "";
+  grid.className = `grid thumb-${state.thumbMode}`;
   emptyState.hidden = state.entries.length > 0;
 
   state.entries.forEach((entry) => {
@@ -170,13 +189,128 @@ function renderGrid() {
       const detail = document.createElement("div");
       detail.className = "detail";
       detail.textContent = formatDate(entry.mtime);
+      const ratingWrap = createRating(entry, false);
       meta.append(detail);
-      meta.append(createRating(entry, false));
+      meta.append(ratingWrap);
+      observeRating(entry, ratingWrap);
     }
 
     tile.append(button, meta);
     grid.append(tile);
   });
+}
+
+function observeRating(entry, ratingWrap) {
+  if (!entry.ratingPending) {
+    return;
+  }
+  if (!state.ratingObserver) {
+    state.ratingObserver = new IntersectionObserver(
+      (items) => {
+        items.forEach((item) => {
+          if (!item.isIntersecting) {
+            return;
+          }
+          state.ratingObserver.unobserve(item.target);
+          const payload = item.target.__ratingPayload;
+          if (payload) {
+            queueEmbeddedRating(payload.entry, payload.ratingWrap);
+          }
+        });
+      },
+      { rootMargin: "180px 0px" },
+    );
+  }
+  ratingWrap.__ratingPayload = { entry, ratingWrap };
+  state.ratingObserver.observe(ratingWrap);
+}
+
+function queueEmbeddedRating(entry, ratingWrap, attempt = 0) {
+  if (!entry.ratingPending) {
+    return;
+  }
+  if (!ratingWrap.isConnected) {
+    return;
+  }
+  const key = entry.path;
+  if (state.ratingQueued.has(key)) {
+    return;
+  }
+  state.ratingQueued.add(key);
+  state.ratingQueue.unshift({ entry, ratingWrap, attempt, key });
+  trimRatingQueue();
+  runRatingQueue();
+}
+
+function trimRatingQueue() {
+  while (state.ratingQueue.length > RATING_QUEUE_LIMIT) {
+    const dropped = state.ratingQueue.pop();
+    if (dropped) {
+      state.ratingQueued.delete(dropped.key);
+    }
+  }
+}
+
+function runRatingQueue() {
+  while (state.ratingActive < RATING_STATUS_CONCURRENCY && state.ratingQueue.length > 0) {
+    const payload = state.ratingQueue.shift();
+    state.ratingQueued.delete(payload.key);
+    if (!payload.entry.ratingPending || !payload.ratingWrap.isConnected) {
+      continue;
+    }
+    state.ratingActive += 1;
+    loadEmbeddedRating(payload.entry, payload.ratingWrap, payload.attempt)
+      .catch(() => null)
+      .finally(() => {
+        state.ratingActive = Math.max(0, state.ratingActive - 1);
+        runRatingQueue();
+      });
+  }
+}
+
+async function loadEmbeddedRating(entry, ratingWrap, attempt = 0) {
+  if (!entry.ratingPending || !ratingWrap.isConnected) {
+    return;
+  }
+  try {
+    const response = await fetch(`/api/rating-status/${encodePath(entry.path)}`, { cache: "no-store" });
+    const data = await response.json();
+    if (response.status === 200) {
+      if (!ratingWrap.isConnected) {
+        return;
+      }
+      entry.rating = data.rating;
+      entry.ratingPending = false;
+      ratingWrap.replaceWith(createRating(entry, false));
+      if (state.currentPhoto?.path === entry.path) {
+        state.currentPhoto.rating = data.rating;
+        state.currentPhoto.ratingPending = false;
+        renderViewerRating();
+      }
+      return;
+    }
+    if (response.status !== 202) {
+      entry.ratingPending = false;
+      return;
+    }
+  } catch {
+    scheduleRatingRetry(entry, ratingWrap, attempt);
+    return;
+  }
+
+  scheduleRatingRetry(entry, ratingWrap, attempt);
+}
+
+function scheduleRatingRetry(entry, ratingWrap, attempt) {
+  if (!entry.ratingPending || !ratingWrap.isConnected || attempt >= 12) {
+    return;
+  }
+  const delay = Math.min(3000, 350 + attempt * 220);
+  const timer = window.setTimeout(() => {
+    state.ratingTimers.delete(entry.path);
+    queueEmbeddedRating(entry, ratingWrap, attempt + 1);
+  }, delay);
+  state.ratingTimers.set(entry.path, timer);
 }
 
 function openFolderContextMenu(event, entry) {
@@ -218,10 +352,13 @@ async function detectBracketsInContextFolder() {
 function renderBracketDetection(result) {
   bracketResults.innerHTML = "";
   if (!result.groups.length) {
-    bracketStatus.textContent = "没有发现明显的包围曝光组。";
+    const pendingText = result.queued ? ` ${result.queued} 张照片还没有缩略图，先打开或滚动浏览该目录后再检测会更完整。` : "";
+    bracketStatus.textContent = `没有发现明显的包围曝光组。${pendingText}`;
     return;
   }
-  bracketStatus.textContent = `发现 ${result.groups.length} 组疑似包围曝光。`;
+  const truncatedText = result.truncated ? ` 已扫描前 ${result.scanned} 张，目录过大，结果可能不完整。` : "";
+  const pendingText = result.queued ? ` ${result.queued} 张照片没有缩略图，尚未纳入本次检测。` : "";
+  bracketStatus.textContent = `发现 ${result.groups.length} 组疑似包围曝光。${truncatedText}${pendingText}`;
 
   result.groups.forEach((group) => {
     const section = document.createElement("section");
@@ -242,7 +379,10 @@ function renderBracketDetection(result) {
       item.title = photo.path;
       const img = document.createElement("img");
       img.alt = photo.name;
-      img.src = `${photo.thumbUrl}?v=${photo.mtime}`;
+      img.src = withVersion(photo.thumbUrl, photo.mtime);
+      img.onerror = () => {
+        img.src = `/api/image/${encodePath(photo.path)}`;
+      };
       const name = document.createElement("span");
       name.className = "bracket-photo-name";
       name.textContent = photo.name;
@@ -287,10 +427,22 @@ function photoToEntry(photo) {
   };
 }
 
-async function loadThumbnail(entry, img, spinner, attempt = 0) {
+async function loadThumbnail(entry, img, spinner, attempt = 0, mode = state.thumbMode) {
+  if (!img.isConnected || mode !== state.thumbMode) {
+    return;
+  }
+  const requestKey = `${entry.path}:${mode}:${attempt}:${Date.now()}`;
+  const controller = new AbortController();
+  state.thumbControllers.set(requestKey, controller);
   try {
-    const response = await fetch(`/api/thumb-status/${encodePath(entry.path)}`, { cache: "no-store" });
+    const response = await fetch(`/api/thumb-status/${encodePath(entry.path)}?mode=${mode}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
     const data = await response.json();
+    if (!img.isConnected || mode !== state.thumbMode) {
+      return;
+    }
     if (response.status === 200) {
       img.loading = "eager";
       img.onload = () => {
@@ -301,7 +453,7 @@ async function loadThumbnail(entry, img, spinner, attempt = 0) {
       img.onerror = () => {
         showThumbnailFallback(entry, img, spinner);
       };
-      img.src = `${data.url}?v=${entry.mtime}`;
+      img.src = withVersion(data.url, entry.mtime);
       if (img.complete && img.naturalWidth > 0) {
         img.classList.add("loaded");
         spinner.hidden = true;
@@ -314,10 +466,21 @@ async function loadThumbnail(entry, img, spinner, attempt = 0) {
       return;
     }
   } catch {
-    showThumbnailFallback(entry, img, spinner);
+    if (!controller.signal.aborted) {
+      scheduleThumbnailRetry(entry, img, spinner, attempt, mode);
+    }
     return;
+  } finally {
+    state.thumbControllers.delete(requestKey);
   }
 
+  scheduleThumbnailRetry(entry, img, spinner, attempt, mode);
+}
+
+function scheduleThumbnailRetry(entry, img, spinner, attempt, mode) {
+  if (!img.isConnected || mode !== state.thumbMode) {
+    return;
+  }
   if (attempt >= 8) {
     showThumbnailFallback(entry, img, spinner);
     return;
@@ -325,7 +488,7 @@ async function loadThumbnail(entry, img, spinner, attempt = 0) {
   const delay = Math.min(3000, 450 + attempt * 250);
   const timer = window.setTimeout(() => {
     state.thumbTimers.delete(entry.path);
-    loadThumbnail(entry, img, spinner, attempt + 1);
+    queueThumbnail(entry, img, spinner, attempt + 1);
   }, delay);
   state.thumbTimers.set(entry.path, timer);
 }
@@ -348,6 +511,25 @@ function showThumbnailFallback(entry, img, spinner) {
   }
 }
 
+function getStoredThumbMode() {
+  const value = window.localStorage.getItem("thumbMode");
+  return ["small", "medium", "large"].includes(value) ? value : "medium";
+}
+
+function setThumbMode(mode) {
+  if (!["small", "medium", "large"].includes(mode) || mode === state.thumbMode) {
+    return;
+  }
+  state.thumbMode = mode;
+  window.localStorage.setItem("thumbMode", mode);
+  renderGrid();
+}
+
+function withVersion(url, mtime) {
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}v=${mtime}`;
+}
+
 function observeThumbnail(entry, img, spinner) {
   if (!state.thumbObserver) {
     state.thumbObserver = new IntersectionObserver(
@@ -359,15 +541,55 @@ function observeThumbnail(entry, img, spinner) {
           state.thumbObserver.unobserve(item.target);
           const payload = item.target.__thumbPayload;
           if (payload) {
-            loadThumbnail(payload.entry, payload.img, payload.spinner);
+            queueThumbnail(payload.entry, payload.img, payload.spinner);
           }
         });
       },
-      { rootMargin: "900px 0px" },
+      { rootMargin: "360px 0px" },
     );
   }
   img.parentElement.__thumbPayload = { entry, img, spinner };
   state.thumbObserver.observe(img.parentElement);
+}
+
+function queueThumbnail(entry, img, spinner, attempt = 0) {
+  if (!img.isConnected || img.classList.contains("loaded")) {
+    return;
+  }
+  const key = `${entry.path}:${state.thumbMode}`;
+  if (state.thumbQueued.has(key)) {
+    return;
+  }
+  state.thumbQueued.add(key);
+  state.thumbQueue.unshift({ entry, img, spinner, attempt, mode: state.thumbMode, key });
+  trimThumbQueue();
+  runThumbQueue();
+}
+
+function trimThumbQueue() {
+  while (state.thumbQueue.length > THUMB_QUEUE_LIMIT) {
+    const dropped = state.thumbQueue.pop();
+    if (dropped) {
+      state.thumbQueued.delete(dropped.key);
+    }
+  }
+}
+
+function runThumbQueue() {
+  while (state.thumbActive < THUMB_LOAD_CONCURRENCY && state.thumbQueue.length > 0) {
+    const payload = state.thumbQueue.shift();
+    state.thumbQueued.delete(payload.key);
+    if (!payload.img.isConnected || payload.img.classList.contains("loaded") || payload.mode !== state.thumbMode) {
+      continue;
+    }
+    state.thumbActive += 1;
+    loadThumbnail(payload.entry, payload.img, payload.spinner, payload.attempt, payload.mode)
+      .catch(() => null)
+      .finally(() => {
+        state.thumbActive = Math.max(0, state.thumbActive - 1);
+        runThumbQueue();
+      });
+  }
 }
 
 function resetThumbObserver() {
@@ -382,13 +604,50 @@ function clearThumbTimers() {
     window.clearTimeout(timer);
   }
   state.thumbTimers.clear();
+  state.thumbQueue = [];
+  state.thumbQueued.clear();
+  for (const controller of state.thumbControllers.values()) {
+    controller.abort();
+  }
+  state.thumbControllers.clear();
+}
+
+function clearRatingTimers() {
+  for (const timer of state.ratingTimers.values()) {
+    window.clearTimeout(timer);
+  }
+  state.ratingTimers.clear();
+  state.ratingQueue = [];
+  state.ratingQueued.clear();
+}
+
+function resetRatingObserver() {
+  if (state.ratingObserver) {
+    state.ratingObserver.disconnect();
+    state.ratingObserver = null;
+  }
 }
 
 function applyFilters() {
-  state.filters.minRating = ratingFilter.value;
+  state.filters.ratings = getSelectedRatings();
   state.filters.dateFrom = dateFromFilter.value;
   state.filters.dateTo = dateToFilter.value;
+  updateRatingFilterLabel();
   loadFolder(state.folder);
+}
+
+function getSelectedRatings() {
+  return ratingFilterInputs.filter((input) => input.checked).map((input) => input.value);
+}
+
+function updateRatingFilterLabel() {
+  const labels = state.filters.ratings.map((rating) => (rating === "0" ? "未评分" : `${rating} 星`));
+  ratingFilterBtn.textContent = labels.length ? labels.join("、") : "全部";
+}
+
+function setRatingMenuOpen(open) {
+  ratingFilterMenu.hidden = !open;
+  ratingFilterBtn.setAttribute("aria-expanded", String(open));
 }
 
 function createRating(entry, large) {
@@ -443,25 +702,45 @@ function showPhoto(entry) {
   state.activeTouches.clear();
   state.pinchDistance = 0;
   state.swipeStart = null;
-  entry.originalReady = Boolean(getOriginalCache(entry.path));
   viewerTitle.textContent = entry.path;
   viewerImage.alt = entry.name;
-  viewerImage.classList.remove("ready");
-  viewerImage.classList.add("loading");
-  if (entry.thumbUrl) {
+
+  const cachedOriginal = getOriginalCache(entry.path);
+  entry.originalReady = Boolean(cachedOriginal);
+  if (cachedOriginal) {
+    showOriginalUrl(entry, cachedOriginal.url);
+  } else if (state.originalFetches.has(entry.path)) {
+    viewerImage.classList.add("loading");
+    loadOriginalImage(entry, true);
+  } else if (entry.thumbUrl) {
+    viewerImage.classList.remove("ready");
+    viewerImage.classList.add("loading");
     viewerImage.src = entry.thumbUrl;
     viewerImage.classList.add("ready");
+    loadOriginalImage(entry);
+    loadPreviewImage(entry);
   } else {
+    viewerImage.classList.remove("ready");
+    viewerImage.classList.add("loading");
     viewerImage.removeAttribute("src");
-  }
-  loadOriginalImage(entry);
-  if (!entry.originalReady) {
+    loadOriginalImage(entry);
     loadPreviewImage(entry);
   }
   renderViewerRating();
   updatePageButtons();
   updateZoom();
+  updateDownloadButton();
   preloadAdjacentPreviews();
+}
+
+function updateDownloadButton() {
+  if (isAppleMobileBrowser) {
+    downloadBtn.textContent = "保存到相册";
+    downloadBtn.title = "优先调起系统分享，失败时请长按图片存储到相册";
+    return;
+  }
+  downloadBtn.textContent = "下载";
+  downloadBtn.title = "下载原图";
 }
 
 async function loadPreviewImage(entry, attempt = 0) {
@@ -777,11 +1056,57 @@ function requestDeleteCurrentPhoto() {
   deleteDialog.showModal();
 }
 
-function downloadCurrentPhoto() {
+async function downloadCurrentPhoto() {
   if (!state.currentPhoto) {
     return;
   }
+  if (isAppleMobileBrowser) {
+    await saveCurrentPhotoForAppleMobile();
+    return;
+  }
   window.location.href = `/api/download/${encodePath(state.currentPhoto.path)}`;
+}
+
+async function saveCurrentPhotoForAppleMobile() {
+  const entry = state.currentPhoto;
+  if (!entry) {
+    return;
+  }
+
+  try {
+    const blob = await fetchPhotoBlob(entry);
+    const file = new File([blob], entry.name, {
+      type: blob.type || "image/jpeg",
+      lastModified: Date.now(),
+    });
+
+    if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+      await navigator.share({
+        files: [file],
+        title: entry.name,
+        text: "保存原图",
+      });
+      return;
+    }
+  } catch {
+    // Fall through to the long-press guidance below.
+  }
+
+  window.alert("请长按当前图片，然后点“存储到照片”或“存储图像”。");
+}
+
+async function fetchPhotoBlob(entry) {
+  const cached = getOriginalCache(entry.path);
+  if (cached) {
+    const response = await fetch(cached.url);
+    return response.blob();
+  }
+
+  const response = await fetch(`/api/image/${encodePath(entry.path)}`);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  return response.blob();
 }
 
 async function fetchJson(url, options) {
@@ -811,12 +1136,24 @@ backBtn.addEventListener("click", () => {
   }
 });
 refreshBtn.addEventListener("click", () => loadFolder(state.folder));
-ratingFilter.addEventListener("change", applyFilters);
+ratingFilterBtn.addEventListener("click", (event) => {
+  event.stopPropagation();
+  setRatingMenuOpen(ratingFilterMenu.hidden);
+});
+ratingFilterMenu.addEventListener("click", (event) => event.stopPropagation());
+ratingFilterInputs.forEach((input) => {
+  input.addEventListener("change", applyFilters);
+});
 dateFromFilter.addEventListener("change", applyFilters);
 dateToFilter.addEventListener("change", applyFilters);
+thumbModeSelect.value = state.thumbMode;
+thumbModeSelect.addEventListener("change", () => setThumbMode(thumbModeSelect.value));
 detectBracketsBtn.addEventListener("click", detectBracketsInContextFolder);
 closeBracketDialogBtn.addEventListener("click", () => bracketDialog.close());
 document.addEventListener("click", (event) => {
+  if (!ratingFilterMenu.hidden && !ratingFilterMenu.contains(event.target) && event.target !== ratingFilterBtn) {
+    setRatingMenuOpen(false);
+  }
   if (!folderContextMenu.hidden && !folderContextMenu.contains(event.target)) {
     closeFolderContextMenu();
   }
@@ -827,7 +1164,9 @@ document.addEventListener("contextmenu", (event) => {
   }
 });
 clearFiltersBtn.addEventListener("click", () => {
-  ratingFilter.value = "";
+  ratingFilterInputs.forEach((input) => {
+    input.checked = false;
+  });
   dateFromFilter.value = "";
   dateToFilter.value = "";
   applyFilters();

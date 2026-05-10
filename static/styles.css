@@ -106,8 +106,17 @@ main {
   font-size: 13px;
 }
 
+.filter-field {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .filters select,
-.filters input {
+.filters input,
+.filter-select {
   min-height: 44px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -115,6 +124,40 @@ main {
   background: #fff;
   color: var(--text);
   font: inherit;
+}
+
+.filter-select {
+  min-width: 122px;
+  text-align: left;
+}
+
+.rating-filter-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 150px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+}
+
+.rating-filter-menu label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.rating-filter-menu input {
+  min-height: auto;
+  width: 18px;
+  height: 18px;
+  padding: 0;
 }
 
 .breadcrumb {
@@ -136,6 +179,18 @@ main {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 16px;
+}
+
+.grid.thumb-small {
+  grid-template-columns: repeat(auto-fill, minmax(142px, 1fr));
+}
+
+.grid.thumb-medium {
+  grid-template-columns: repeat(auto-fill, minmax(188px, 1fr));
+}
+
+.grid.thumb-large {
+  grid-template-columns: repeat(auto-fill, minmax(286px, 1fr));
 }
 
 .tile {
@@ -233,6 +288,8 @@ main {
   align-items: center;
   gap: 3px;
   margin-top: 8px;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .rating-off {
@@ -254,14 +311,31 @@ main {
   color: var(--accent);
 }
 
+.meta .rating {
+  gap: 1px;
+}
+
+.meta .rating-off {
+  min-height: 26px;
+  padding: 0 7px;
+  font-size: 11px;
+}
+
+.meta .star {
+  min-height: 28px;
+  font-size: 20px;
+  padding: 0 2px;
+}
+
 .star {
+  flex: 0 1 auto;
   min-width: 0;
-  min-height: 36px;
+  min-height: 34px;
   border: 0;
-  padding: 0 4px;
+  padding: 0 clamp(1px, 0.8vw, 4px);
   background: transparent;
   color: #b8c0c9;
-  font-size: 22px;
+  font-size: clamp(18px, 5vw, 22px);
   line-height: 1;
   touch-action: manipulation;
 }
@@ -506,6 +580,48 @@ main {
   background: linear-gradient(rgba(128, 32, 28, 0.78), rgba(72, 16, 14, 0.66));
 }
 
+#closeBtn {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  z-index: 8;
+  min-width: 44px;
+  width: 44px;
+  min-height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.24);
+  color: transparent;
+  box-shadow: none;
+  backdrop-filter: blur(10px);
+}
+
+#closeBtn::before,
+#closeBtn::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+#closeBtn::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+#closeBtn::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+#closeBtn:hover,
+#closeBtn:focus-visible {
+  background: rgba(0, 0, 0, 0.42);
+}
+
 .viewer-rating {
   position: absolute;
   left: 50%;
@@ -514,7 +630,8 @@ main {
   display: flex;
   justify-content: center;
   transform: translateX(-50%);
-  padding: 6px 10px;
+  max-width: calc(100vw - 24px);
+  padding: 6px clamp(6px, 2vw, 10px);
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.42);
   backdrop-filter: blur(10px);
@@ -522,13 +639,16 @@ main {
 
 .viewer-rating .rating {
   margin-top: 0;
+  gap: clamp(1px, 1vw, 4px);
+  max-width: 100%;
 }
 
 .viewer-rating .rating-off {
-  min-height: 38px;
-  padding: 0 12px;
+  min-height: clamp(30px, 8vw, 38px);
+  padding: 0 clamp(7px, 2.8vw, 12px);
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.62);
+  font-size: clamp(10px, 3vw, 12px);
 }
 
 .viewer-rating .rating-off.active,
@@ -676,6 +796,18 @@ main {
   .grid {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   }
+
+  .grid.thumb-small {
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  }
+
+  .grid.thumb-medium {
+    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  }
+
+  .grid.thumb-large {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
 }
 
 @media (pointer: coarse) {
@@ -696,20 +828,38 @@ main {
     gap: 14px;
   }
 
-  .filters label {
+  .filters label,
+  .filter-field {
     flex: 1 1 180px;
   }
 
   .filters select,
-  .filters input {
+  .filters input,
+  .filter-select {
     width: 100%;
     min-height: 48px;
     font-size: 16px;
   }
 
+  .rating-filter-menu {
+    min-width: 100%;
+  }
+
   .grid {
     grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
     gap: 18px;
+  }
+
+  .grid.thumb-small {
+    grid-template-columns: repeat(auto-fill, minmax(142px, 1fr));
+  }
+
+  .grid.thumb-medium {
+    grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+  }
+
+  .grid.thumb-large {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   }
 
   .meta {
@@ -721,9 +871,9 @@ main {
   }
 
   .star {
-    min-width: 36px;
-    min-height: 42px;
-    font-size: 28px;
+    min-width: auto;
+    min-height: clamp(32px, 9vw, 42px);
+    font-size: clamp(20px, 7vw, 28px);
   }
 
   .viewer-toolbar {
@@ -744,6 +894,14 @@ main {
     font-size: 14px;
   }
 
+  #closeBtn {
+    top: max(10px, env(safe-area-inset-top));
+    right: max(10px, env(safe-area-inset-right));
+    min-width: 48px;
+    width: 48px;
+    min-height: 48px;
+  }
+
   .viewer-title {
     max-width: 100%;
     font-size: 13px;
@@ -760,8 +918,32 @@ main {
   }
 
   .viewer-rating .star {
-    min-width: 40px;
-    min-height: 42px;
-    font-size: 30px;
+    min-width: auto;
+    min-height: clamp(30px, 9vw, 42px);
+    font-size: clamp(21px, 7.6vw, 30px);
+    padding: 0 clamp(1px, 1vw, 4px);
+  }
+}
+
+@media (max-width: 380px) {
+  .viewer-rating {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    padding: 4px 6px;
+  }
+
+  .viewer-rating .rating {
+    gap: 0;
+  }
+
+  .viewer-rating .rating-off {
+    min-height: 28px;
+    padding: 0 6px;
+    font-size: 10px;
+  }
+
+  .viewer-rating .star {
+    min-height: 30px;
+    font-size: 22px;
+    padding: 0 1px;
   }
 }

@@ -20,18 +20,18 @@
 
     <main>
       <section class="filters" aria-label="筛选">
-        <label>
-          星级
-          <select id="ratingFilter">
-            <option value="">全部</option>
-            <option value="0">未评分</option>
-            <option value="1">1 星</option>
-            <option value="2">2 星</option>
-            <option value="3">3 星</option>
-            <option value="4">4 星</option>
-            <option value="5">5 星</option>
-          </select>
-        </label>
+        <div class="filter-field rating-filter-field">
+          <span>星级</span>
+          <button id="ratingFilterBtn" class="filter-select" type="button" aria-expanded="false">全部</button>
+          <div id="ratingFilterMenu" class="rating-filter-menu" hidden>
+            <label><input type="checkbox" value="0" /> 未评分</label>
+            <label><input type="checkbox" value="1" /> 1 星</label>
+            <label><input type="checkbox" value="2" /> 2 星</label>
+            <label><input type="checkbox" value="3" /> 3 星</label>
+            <label><input type="checkbox" value="4" /> 4 星</label>
+            <label><input type="checkbox" value="5" /> 5 星</label>
+          </div>
+        </div>
         <label>
           开始日期
           <input id="dateFromFilter" type="date" />
@@ -39,6 +39,14 @@
         <label>
           结束日期
           <input id="dateToFilter" type="date" />
+        </label>
+        <label>
+          预览大小
+          <select id="thumbModeSelect">
+            <option value="small">小</option>
+            <option value="medium">中</option>
+            <option value="large">大</option>
+          </select>
         </label>
         <button id="clearFiltersBtn" class="ghost" type="button">清除筛选</button>
       </section>

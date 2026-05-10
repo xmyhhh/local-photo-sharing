@@ -14,8 +14,9 @@
 - 支持按钮缩放、鼠标滚轮缩放、放大后鼠标/触摸拖动、触摸双指缩放
 - 平板支持更大的触摸按钮和双指缩放预览
 - 支持读取 JPG 已有的 EXIF/XMP 星级作为默认评分
-- 支持 1 到 5 星打分，再点同一星级可清除评分
+- 支持 OFF 和 1 到 5 星打分，再点同一星级可清除评分
 - 支持按星级和照片修改日期筛选
+- 支持小 / 中 / 大三档列表预览大小，对应不同缩略图清晰度
 - 支持下载原图
 - 支持删除图片
 - 无登录、无密码，适合可信局域网使用
@@ -42,10 +43,10 @@ D:\codex_prj\photo\.venv\Scripts\python.exe app.py
   "photo_folder": "D:/your/photo/folder",
   "host": "0.0.0.0",
   "port": 8000,
-  "thumbnail_size": 320,
-  "thumbnail_quality": 68,
-  "preview_size": 1800,
-  "preview_quality": 82
+  "thumbnail_size": 360,
+  "thumbnail_quality": 74,
+  "preview_size": 2560,
+  "preview_quality": 88
 }
 ```
 
