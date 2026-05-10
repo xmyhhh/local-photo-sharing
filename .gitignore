@@ -1,6 +1,9 @@
 .venv/
 __pycache__/
 *.py[cod]
+config.json
+.photo_share_cache/
 .photo_share_ratings.json
 .photo_share_thumbs/
+tmp*/
 .idea

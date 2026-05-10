@@ -4,6 +4,12 @@ const state = {
   entries: [],
   currentPhoto: null,
   zoom: 1,
+  thumbTimers: new Map(),
+  filters: {
+    minRating: "",
+    dateFrom: "",
+    dateTo: "",
+  },
 };
 
 const grid = document.querySelector("#grid");
@@ -12,6 +18,10 @@ const breadcrumb = document.querySelector("#breadcrumb");
 const rootPath = document.querySelector("#rootPath");
 const backBtn = document.querySelector("#backBtn");
 const refreshBtn = document.querySelector("#refreshBtn");
+const ratingFilter = document.querySelector("#ratingFilter");
+const dateFromFilter = document.querySelector("#dateFromFilter");
+const dateToFilter = document.querySelector("#dateToFilter");
+const clearFiltersBtn = document.querySelector("#clearFiltersBtn");
 const viewer = document.querySelector("#viewer");
 const viewerTitle = document.querySelector("#viewerTitle");
 const viewerImage = document.querySelector("#viewerImage");
@@ -20,6 +30,7 @@ const imageStage = document.querySelector("#imageStage");
 const zoomOutBtn = document.querySelector("#zoomOutBtn");
 const zoomResetBtn = document.querySelector("#zoomResetBtn");
 const zoomInBtn = document.querySelector("#zoomInBtn");
+const downloadBtn = document.querySelector("#downloadBtn");
 const deleteBtn = document.querySelector("#deleteBtn");
 const closeBtn = document.querySelector("#closeBtn");
 
@@ -29,7 +40,18 @@ async function loadConfig() {
 }
 
 async function loadFolder(folder = state.folder) {
-  const data = await fetchJson(`/api/photos?folder=${encodeURIComponent(folder)}`);
+  const params = new URLSearchParams();
+  params.set("folder", folder);
+  if (state.filters.minRating) {
+    params.set("rating", state.filters.minRating);
+  }
+  if (state.filters.dateFrom) {
+    params.set("date_from", state.filters.dateFrom);
+  }
+  if (state.filters.dateTo) {
+    params.set("date_to", state.filters.dateTo);
+  }
+  const data = await fetchJson(`/api/photos?${params.toString()}`);
   state.folder = data.folder;
   state.parent = data.parent;
   state.entries = data.entries;
@@ -64,6 +86,7 @@ function renderBreadcrumb() {
 }
 
 function renderGrid() {
+  clearThumbTimers();
   grid.innerHTML = "";
   emptyState.hidden = state.entries.length > 0;
 
@@ -83,12 +106,18 @@ function renderGrid() {
       button.append(icon);
       button.addEventListener("click", () => loadFolder(entry.path));
     } else {
+      const holder = document.createElement("div");
+      holder.className = "thumb-holder";
+      const spinner = document.createElement("div");
+      spinner.className = "spinner";
+      spinner.setAttribute("aria-label", "正在生成预览");
       const img = document.createElement("img");
       img.className = "thumb";
       img.loading = "lazy";
       img.alt = entry.name;
-      img.src = `/api/thumb/${encodePath(entry.path)}`;
-      button.append(img);
+      holder.append(spinner, img);
+      button.append(holder);
+      loadThumbnail(entry, img, spinner);
       button.addEventListener("click", () => openViewer(entry));
     }
 
@@ -100,12 +129,58 @@ function renderGrid() {
     meta.append(name);
 
     if (entry.type === "photo") {
+      const detail = document.createElement("div");
+      detail.className = "detail";
+      detail.textContent = formatDate(entry.mtime);
+      meta.append(detail);
       meta.append(createRating(entry, false));
     }
 
     tile.append(button, meta);
     grid.append(tile);
   });
+}
+
+async function loadThumbnail(entry, img, spinner, attempt = 0) {
+  try {
+    const response = await fetch(`/api/thumb/${encodePath(entry.path)}`, { cache: "no-store" });
+    if (response.status === 200) {
+      img.onload = () => {
+        img.classList.add("loaded");
+        spinner.hidden = true;
+      };
+      img.src = `/api/thumb/${encodePath(entry.path)}?v=${entry.mtime}`;
+      return;
+    }
+    if (response.status !== 202) {
+      spinner.classList.add("failed");
+      return;
+    }
+  } catch {
+    spinner.classList.add("failed");
+    return;
+  }
+
+  const delay = Math.min(3000, 450 + attempt * 250);
+  const timer = window.setTimeout(() => {
+    state.thumbTimers.delete(entry.path);
+    loadThumbnail(entry, img, spinner, attempt + 1);
+  }, delay);
+  state.thumbTimers.set(entry.path, timer);
+}
+
+function clearThumbTimers() {
+  for (const timer of state.thumbTimers.values()) {
+    window.clearTimeout(timer);
+  }
+  state.thumbTimers.clear();
+}
+
+function applyFilters() {
+  state.filters.minRating = ratingFilter.value;
+  state.filters.dateFrom = dateFromFilter.value;
+  state.filters.dateTo = dateToFilter.value;
+  loadFolder(state.folder);
 }
 
 function createRating(entry, large) {
@@ -181,6 +256,13 @@ async function deleteCurrentPhoto() {
   await loadFolder(state.folder);
 }
 
+function downloadCurrentPhoto() {
+  if (!state.currentPhoto) {
+    return;
+  }
+  window.location.href = `/api/download/${encodePath(state.currentPhoto.path)}`;
+}
+
 async function fetchJson(url, options) {
   const response = await fetch(url, options);
   if (!response.ok) {
@@ -194,13 +276,31 @@ function encodePath(path) {
   return path.split("/").map(encodeURIComponent).join("/");
 }
 
+function formatDate(timestamp) {
+  const date = new Date(timestamp * 1000);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 backBtn.addEventListener("click", () => {
   if (state.folder) {
     loadFolder(state.parent);
   }
 });
 refreshBtn.addEventListener("click", () => loadFolder(state.folder));
+ratingFilter.addEventListener("change", applyFilters);
+dateFromFilter.addEventListener("change", applyFilters);
+dateToFilter.addEventListener("change", applyFilters);
+clearFiltersBtn.addEventListener("click", () => {
+  ratingFilter.value = "";
+  dateFromFilter.value = "";
+  dateToFilter.value = "";
+  applyFilters();
+});
 closeBtn.addEventListener("click", () => viewer.close());
+downloadBtn.addEventListener("click", downloadCurrentPhoto);
 deleteBtn.addEventListener("click", deleteCurrentPhoto);
 zoomInBtn.addEventListener("click", () => {
   state.zoom = Math.min(5, state.zoom + 0.25);
