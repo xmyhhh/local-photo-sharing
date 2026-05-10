@@ -10,6 +10,9 @@ const state = {
   dragStart: null,
   thumbTimers: new Map(),
   previewTimer: null,
+  originalCache: new Map(),
+  originalCacheBytes: 0,
+  originalFetches: new Map(),
   thumbObserver: null,
   activeTouches: new Map(),
   pinchDistance: 0,
@@ -23,6 +26,8 @@ const state = {
     dateTo: "",
   },
 };
+
+const ORIGINAL_CACHE_LIMIT = 1024 * 1024 * 1024;
 
 const grid = document.querySelector("#grid");
 const emptyState = document.querySelector("#emptyState");
@@ -93,10 +98,11 @@ function renderBreadcrumb() {
     breadcrumb.append(sep);
 
     current = current ? `${current}/${part}` : part;
+    const pathAtLevel = current;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.textContent = part;
-    btn.addEventListener("click", () => loadFolder(current));
+    btn.addEventListener("click", () => loadFolder(pathAtLevel));
     breadcrumb.append(btn);
   });
 
@@ -267,7 +273,19 @@ function applyFilters() {
 
 function createRating(entry, large) {
   const wrap = document.createElement("div");
-  wrap.className = "rating";
+  wrap.className = `rating ${large ? "rating-large" : ""}`;
+
+  const off = document.createElement("button");
+  off.type = "button";
+  off.className = `rating-off ${entry.rating === 0 ? "active" : ""}`;
+  off.textContent = "OFF";
+  off.title = "取消评分";
+  off.addEventListener("click", async (event) => {
+    event.stopPropagation();
+    await setRating(entry, 0);
+  });
+  wrap.append(off);
+
   for (let i = 1; i <= 5; i += 1) {
     const star = document.createElement("button");
     star.type = "button";
@@ -305,6 +323,7 @@ function showPhoto(entry) {
   state.activeTouches.clear();
   state.pinchDistance = 0;
   state.swipeStart = null;
+  entry.originalReady = Boolean(getOriginalCache(entry.path));
   viewerTitle.textContent = entry.path;
   viewerImage.alt = entry.name;
   viewerImage.classList.remove("ready");
@@ -315,7 +334,10 @@ function showPhoto(entry) {
   } else {
     viewerImage.removeAttribute("src");
   }
-  loadPreviewImage(entry);
+  loadOriginalImage(entry);
+  if (!entry.originalReady) {
+    loadPreviewImage(entry);
+  }
   renderViewerRating();
   updatePageButtons();
   updateZoom();
@@ -334,10 +356,14 @@ async function loadPreviewImage(entry, attempt = 0) {
       if (state.currentPhoto?.path !== entry.path) {
         return;
       }
+      if (entry.originalReady || getOriginalCache(entry.path)) {
+        return;
+      }
       viewerImage.classList.remove("ready");
       viewerImage.classList.remove("loading");
       viewerImage.onload = () => viewerImage.classList.add("ready");
       viewerImage.src = `${data.url}?v=${entry.mtime}`;
+      entry.previewUrl = viewerImage.src;
       return;
     }
     if (response.status !== 202) {
@@ -360,13 +386,7 @@ async function loadPreviewImage(entry, attempt = 0) {
 }
 
 function showOriginalImageFallback(entry) {
-  if (state.currentPhoto?.path !== entry.path) {
-    return;
-  }
-  viewerImage.classList.remove("ready");
-  viewerImage.classList.remove("loading");
-  viewerImage.onload = () => viewerImage.classList.add("ready");
-  viewerImage.src = `/api/image/${encodePath(entry.path)}`;
+  loadOriginalImage(entry, true);
 }
 
 function renderViewerRating() {
@@ -433,8 +453,103 @@ function preloadAdjacentPhotos() {
       return;
     }
     fetch(`/api/preview-status/${encodePath(entry.path)}`, { cache: "no-store" }).catch(() => {});
+    loadOriginalImage(entry);
   });
 }
+
+async function loadOriginalImage(entry, forceDisplay = false) {
+  const cached = getOriginalCache(entry.path);
+  if (cached) {
+    if (forceDisplay || state.currentPhoto?.path === entry.path) {
+      showOriginalUrl(entry, cached.url);
+    }
+    return cached.url;
+  }
+  if (state.originalFetches.has(entry.path)) {
+    const url = await state.originalFetches.get(entry.path);
+    if ((forceDisplay || state.currentPhoto?.path === entry.path) && url) {
+      showOriginalUrl(entry, url);
+    }
+    return url;
+  }
+
+  const promise = fetch(`/api/image/${encodePath(entry.path)}`)
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return response.blob();
+    })
+    .then((blob) => {
+      const url = URL.createObjectURL(blob);
+      putOriginalCache(entry.path, url, blob.size);
+      return url;
+    })
+    .catch(() => null)
+    .finally(() => {
+      state.originalFetches.delete(entry.path);
+    });
+  state.originalFetches.set(entry.path, promise);
+  const url = await promise;
+  if ((forceDisplay || state.currentPhoto?.path === entry.path) && url) {
+    showOriginalUrl(entry, url);
+  }
+  return url;
+}
+
+function showOriginalUrl(entry, url) {
+  if (state.currentPhoto?.path !== entry.path) {
+    return;
+  }
+  entry.originalReady = true;
+  viewerImage.classList.remove("ready");
+  viewerImage.classList.remove("loading");
+  viewerImage.onload = () => viewerImage.classList.add("ready");
+  viewerImage.src = url;
+  if (viewerImage.complete && viewerImage.naturalWidth > 0) {
+    viewerImage.classList.add("ready");
+  }
+}
+
+function getOriginalCache(path) {
+  const item = state.originalCache.get(path);
+  if (!item) {
+    return null;
+  }
+  item.lastUsed = Date.now();
+  state.originalCache.delete(path);
+  state.originalCache.set(path, item);
+  return item;
+}
+
+function putOriginalCache(path, url, bytes) {
+  const existing = state.originalCache.get(path);
+  if (existing) {
+    state.originalCacheBytes -= existing.bytes;
+    URL.revokeObjectURL(existing.url);
+    state.originalCache.delete(path);
+  }
+  state.originalCache.set(path, { url, bytes, lastUsed: Date.now() });
+  state.originalCacheBytes += bytes;
+  trimOriginalCache();
+}
+
+function trimOriginalCache() {
+  while (state.originalCacheBytes > ORIGINAL_CACHE_LIMIT && state.originalCache.size > 0) {
+    const [path, item] = state.originalCache.entries().next().value;
+    URL.revokeObjectURL(item.url);
+    state.originalCacheBytes -= item.bytes;
+    state.originalCache.delete(path);
+  }
+}
+
+window.addEventListener("beforeunload", () => {
+  for (const item of state.originalCache.values()) {
+    URL.revokeObjectURL(item.url);
+  }
+  state.originalCache.clear();
+  state.originalCacheBytes = 0;
+});
 
 function distanceBetweenTouches() {
   const touches = Array.from(state.activeTouches.values());

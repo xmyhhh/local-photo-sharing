@@ -230,8 +230,28 @@ main {
 
 .rating {
   display: flex;
-  gap: 2px;
+  align-items: center;
+  gap: 3px;
   margin-top: 8px;
+}
+
+.rating-off {
+  min-height: 30px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 9px;
+  background: rgba(100, 113, 128, 0.12);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  touch-action: manipulation;
+}
+
+.rating-off:hover,
+.rating-off.active {
+  background: rgba(23, 107, 135, 0.14);
+  color: var(--accent);
 }
 
 .star {
@@ -355,6 +375,23 @@ main {
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.42);
   backdrop-filter: blur(10px);
+}
+
+.viewer-rating .rating {
+  margin-top: 0;
+}
+
+.viewer-rating .rating-off {
+  min-height: 38px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.viewer-rating .rating-off.active,
+.viewer-rating .rating-off:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
 }
 
 .image-stage {
