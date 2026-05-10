@@ -10,7 +10,7 @@ from .stores import MetadataStore, RatingStore
 
 
 @dataclass
-class AppServices:
+class RootServices:
     root: Path
     ratings: RatingStore
     metadata: MetadataStore
@@ -18,4 +18,12 @@ class AppServices:
     thumbnails: dict[str, ImageCacheStore]
     default_thumbnails: ImageCacheStore
     previews: ImageCacheStore
+
+
+@dataclass
+class AppServices:
+    roots: dict[str, Path]
+    root_services: dict[str, RootServices]
+    default_root_id: str
     bracket_tasks: dict[str, dict[str, Any]]
+    bracket_cache: dict[str, dict[str, Any]]

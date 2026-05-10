@@ -285,6 +285,12 @@ main {
   font-size: 14px;
 }
 
+.folder-count {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .rating {
   display: flex;
   align-items: center;
@@ -434,6 +440,49 @@ main {
   font-size: 14px;
 }
 
+.bracket-cache-actions,
+.bracket-merge-panel,
+.bracket-merge-output {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.bracket-cache-actions[hidden],
+.bracket-merge-panel[hidden],
+.bracket-merge-output[hidden] {
+  display: none;
+}
+
+.bracket-merge-panel label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bracket-merge-panel input[type="number"] {
+  width: 72px;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 8px;
+}
+
+.bracket-merge-output {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.bracket-merge-output a {
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .bracket-results {
   overflow: auto;
   padding: 0 18px 18px;
@@ -447,11 +496,19 @@ main {
 }
 
 .bracket-group-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--line);
   color: var(--text);
   font-size: 14px;
   font-weight: 700;
+}
+
+.bracket-group-title input {
+  width: 18px;
+  height: 18px;
 }
 
 .bracket-strip {

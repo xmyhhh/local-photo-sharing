@@ -9,6 +9,7 @@ JPG_EXTENSIONS = {".jpg", ".jpeg"}
 RATINGS_FILE = ".photo_share_ratings.json"
 THUMBNAIL_DIR = ".photo_share_thumbs"
 CACHE_DIR = APP_DIR / ".photo_share_cache"
+BRACKET_OUTPUT_DIR = APP_DIR / ".photo_share_bracket_results"
 CPU_COUNT = os.cpu_count() or 1
 THUMBNAIL_WORKERS = min(8, max(2, CPU_COUNT))
 METADATA_WORKERS = min(4, max(2, CPU_COUNT // 2))
@@ -30,7 +31,7 @@ DEFAULT_THUMBNAIL_MODE = "medium"
 BRACKET_SCAN_LIMIT = 500
 DEFAULT_CONFIG_FILE = APP_DIR / "config.json"
 DEFAULT_CONFIG = {
-    "photo_folder": "D:/your/photo/folder",
+    "photo_folders": ["D:/your/photo/folder"],
     "host": "0.0.0.0",
     "port": 8000,
     "thumbnail_size": DEFAULT_THUMBNAIL_SIZE,

@@ -40,11 +40,21 @@ def get_config_path(value: str | None) -> Path:
     return Path(value).expanduser().resolve()
 
 
-def get_photo_folder(config: dict[str, Any]) -> Path:
-    value = config.get("photo_folder")
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError("Config field photo_folder must be a non-empty string.")
-    return Path(value).expanduser()
+def get_photo_folders(config: dict[str, Any]) -> list[Path]:
+    value = config.get("photo_folders")
+    if value is None:
+        legacy = config.get("photo_folder")
+        if isinstance(legacy, str) and legacy.strip():
+            return [Path(legacy).expanduser()]
+        raise ValueError("Config field photo_folders must be a non-empty array of strings.")
+    if not isinstance(value, list) or not value:
+        raise ValueError("Config field photo_folders must be a non-empty array of strings.")
+    folders: list[Path] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError("Config field photo_folders must contain only non-empty strings.")
+        folders.append(Path(item).expanduser())
+    return folders
 
 
 def get_host(config: dict[str, Any]) -> str:

@@ -92,8 +92,19 @@ def detect_exposure_brackets(
         )
         processed += processed_delta
         analyzed += analyzed_delta
-        groups.extend(find_bracket_groups_in_features(features))
-        report_progress(progress_callback, processed, total, len(groups))
+        matched_groups = find_bracket_groups_in_features(
+            features,
+            groups_count_base=len(groups),
+            progress_callback=progress_callback,
+        )
+        groups.extend(matched_groups)
+        report_progress(
+            progress_callback,
+            stage="stage2",
+            processed=len(features),
+            total=len(features),
+            groups_count=len(groups),
+        )
         if truncated:
             break
 
@@ -108,11 +119,33 @@ def detect_exposure_brackets(
         "processed": processed,
         "total": total,
         "progress": 1.0 if total <= 0 else round(processed / total, 6),
+        "stage": "done",
+        "stage1": {
+            "processed": processed,
+            "total": total,
+            "progress": 1.0 if total <= 0 else round(processed / total, 6),
+        },
+        "stage2": {
+            "processed": analyzed,
+            "total": analyzed,
+            "progress": 1.0 if analyzed <= 0 else 1.0,
+        },
     }
 
 
-def report_progress(progress_callback: Any | None, processed: int, total: int, groups_count: int) -> None:
+def report_progress(
+    progress_callback: Any | None,
+    *,
+    stage: str,
+    processed: int,
+    total: int,
+    groups_count: int,
+) -> None:
     if progress_callback is None:
+        return
+    try:
+        progress_callback(stage, processed, total, groups_count)
+    except Exception:
         return
 
 
@@ -146,13 +179,15 @@ def read_bracket_features_parallel(
             if feature is not None:
                 analyzed += 1
                 indexed_features.append((index, feature))
-            report_progress(progress_callback, processed_base + processed, total, groups_count)
+            report_progress(
+                progress_callback,
+                stage="stage1",
+                processed=processed_base + processed,
+                total=total,
+                groups_count=groups_count,
+            )
     indexed_features.sort(key=lambda item: item[0])
     return ([feature for _, feature in indexed_features], processed, analyzed)
-    try:
-        progress_callback(processed, total, groups_count)
-    except Exception:
-        return
 
 
 def count_photo_files(folder_path: Path, scan_limit: int | None) -> int:
@@ -187,7 +222,11 @@ def iter_photo_dirs(folder_path: Path) -> list[Path]:
     return photo_dirs
 
 
-def find_bracket_groups_in_features(features: list[BracketFeature]) -> list[list[BracketFeature]]:
+def find_bracket_groups_in_features(
+    features: list[BracketFeature],
+    groups_count_base: int = 0,
+    progress_callback: Any | None = None,
+) -> list[list[BracketFeature]]:
     groups: list[list[BracketFeature]] = []
     index = 0
     while index < len(features):
@@ -200,6 +239,13 @@ def find_bracket_groups_in_features(features: list[BracketFeature]) -> list[list
                 break
         if is_exposure_bracket_group(current):
             groups.append(current)
+        report_progress(
+            progress_callback,
+            stage="stage2",
+            processed=index,
+            total=len(features),
+            groups_count=groups_count_base + len(groups),
+        )
     return groups
 
 

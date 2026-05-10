@@ -3,7 +3,7 @@ from __future__ import annotations
 from photo_share.config import (
     get_config_path,
     get_host,
-    get_photo_folder,
+    get_photo_folders,
     get_port,
     get_preview_quality,
     get_preview_size,
@@ -22,18 +22,20 @@ def main() -> None:
     if config is None:
         raise SystemExit(0)
 
-    folder = get_photo_folder(config)
+    folders = get_photo_folders(config)
     host = get_host(config)
     port = get_port(config)
     app = create_app(
-        folder,
+        folders,
         thumbnail_size=get_thumbnail_size(config),
         thumbnail_quality=get_thumbnail_quality(config),
         preview_size=get_preview_size(config),
         preview_quality=get_preview_quality(config),
     )
     print(f"Config: {config_path}")
-    print(f"Sharing: {folder.resolve()}")
+    print("Sharing:")
+    for folder in folders:
+        print(f"  - {folder.resolve()}")
     print(f"Open on this computer: http://127.0.0.1:{port}")
     print("Open on LAN devices: http://<this-computer-LAN-IP>:%s" % port)
     app.run(host=host, port=port, debug=False)

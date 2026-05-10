@@ -1,6 +1,6 @@
 ﻿backBtn.addEventListener("click", () => {
   if (state.folder) {
-    loadFolder(state.parent);
+    navigateFolder(state.parent);
   }
 });
 refreshBtn.addEventListener("click", () => loadFolder(state.folder));
@@ -20,6 +20,17 @@ thumbModeSelect.value = state.thumbMode;
 thumbModeSelect.addEventListener("change", () => setThumbMode(thumbModeSelect.value));
 detectBracketsBtn.addEventListener("click", detectBracketsInContextFolder);
 closeBracketDialogBtn.addEventListener("click", () => bracketDialog.close());
+useBracketCacheBtn.addEventListener("click", () => {
+  bracketCacheActions.hidden = true;
+  renderBracketDetection(state.currentBracketResult);
+});
+rescanBracketsBtn.addEventListener("click", () => {
+  resetBracketDialog();
+  bracketStatus.textContent = "正在重新扫描...";
+  startBracketDetection(true);
+});
+selectAllBracketGroups.addEventListener("change", () => setAllBracketGroups(selectAllBracketGroups.checked));
+mergeBracketsBtn.addEventListener("click", mergeSelectedBracketGroups);
 document.addEventListener("click", (event) => {
   if (!ratingFilterMenu.hidden && !ratingFilterMenu.contains(event.target) && event.target !== ratingFilterBtn) {
     setRatingMenuOpen(false);

@@ -13,6 +13,8 @@ const THUMB_QUEUE_LIMITS = {
 
 const state = {
   folder: "",
+  rootId: "root1",
+  roots: [],
   parent: "",
   entries: [],
   nextCursor: null,
@@ -55,6 +57,9 @@ const state = {
   wheelZoomDelta: 0,
   wheelZoomCenter: null,
   contextFolder: null,
+  currentBracketResult: null,
+  currentBracketFolder: null,
+  currentBracketRoot: null,
   filters: {
     ratings: [],
     dateFrom: "",
@@ -106,4 +111,16 @@ const bracketDialogPath = document.querySelector("#bracketDialogPath");
 const bracketStatus = document.querySelector("#bracketStatus");
 const bracketResults = document.querySelector("#bracketResults");
 const closeBracketDialogBtn = document.querySelector("#closeBracketDialogBtn");
+const bracketCacheActions = document.querySelector("#bracketCacheActions");
+const useBracketCacheBtn = document.querySelector("#useBracketCacheBtn");
+const rescanBracketsBtn = document.querySelector("#rescanBracketsBtn");
+const bracketMergePanel = document.querySelector("#bracketMergePanel");
+const selectAllBracketGroups = document.querySelector("#selectAllBracketGroups");
+const mergeExposure = document.querySelector("#mergeExposure");
+const mergeContrast = document.querySelector("#mergeContrast");
+const mergeSaturation = document.querySelector("#mergeSaturation");
+const mergeSharpen = document.querySelector("#mergeSharpen");
+const mergeQuality = document.querySelector("#mergeQuality");
+const mergeBracketsBtn = document.querySelector("#mergeBracketsBtn");
+const bracketMergeOutput = document.querySelector("#bracketMergeOutput");
 const isAppleMobileBrowser = /iPhone|iPad|iPod/i.test(navigator.userAgent);

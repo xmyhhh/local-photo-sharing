@@ -11,6 +11,7 @@
       <div>
         <h1>照片共享</h1>
         <div id="rootPath" class="subtle"></div>
+        <div id="rootSelector" class="root-selector"></div>
       </div>
       <div class="actions">
         <button id="backBtn" class="ghost" type="button">返回上级</button>
@@ -69,7 +70,22 @@
           </div>
           <button id="closeBracketDialogBtn" class="ghost" type="button">关闭</button>
         </div>
+        <div id="bracketCacheActions" class="bracket-cache-actions" hidden>
+          <span>已有这个文件夹的扫描结果。</span>
+          <button id="useBracketCacheBtn" type="button">使用结果</button>
+          <button id="rescanBracketsBtn" class="ghost" type="button">重新扫描</button>
+        </div>
         <div id="bracketStatus" class="bracket-status"></div>
+        <div id="bracketMergePanel" class="bracket-merge-panel" hidden>
+          <label><input id="selectAllBracketGroups" type="checkbox" /> 全选</label>
+          <label>曝光 <input id="mergeExposure" type="number" step="0.1" min="-2" max="2" value="0" /></label>
+          <label>对比度 <input id="mergeContrast" type="number" step="0.05" min="0.5" max="2" value="1" /></label>
+          <label>饱和度 <input id="mergeSaturation" type="number" step="0.05" min="0" max="2" value="1" /></label>
+          <label>锐化 <input id="mergeSharpen" type="number" step="0.1" min="0" max="2" value="0.2" /></label>
+          <label>质量 <input id="mergeQuality" type="number" step="1" min="70" max="98" value="92" /></label>
+          <button id="mergeBracketsBtn" type="button">合成选中组</button>
+        </div>
+        <div id="bracketMergeOutput" class="bracket-merge-output" hidden></div>
         <div id="bracketResults" class="bracket-results"></div>
       </div>
     </dialog>

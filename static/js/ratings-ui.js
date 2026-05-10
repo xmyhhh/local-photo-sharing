@@ -127,6 +127,40 @@ function applyFilters() {
   loadFolder(state.folder);
 }
 
+function resetFiltersForFolderNavigation() {
+  state.filterGeneration += 1;
+  clearFilterRefreshTimer();
+  state.filters.ratings = [];
+  state.filters.dateFrom = "";
+  state.filters.dateTo = "";
+  state.indexing = false;
+  state.nextCursor = null;
+  ratingFilterInputs.forEach((input) => {
+    input.checked = false;
+  });
+  dateFromFilter.value = "";
+  dateToFilter.value = "";
+  updateRatingFilterLabel();
+  setRatingMenuOpen(false);
+}
+
+function scheduleFilterRefresh(generation) {
+  clearFilterRefreshTimer();
+  state.filterRefreshTimer = window.setTimeout(() => {
+    state.filterRefreshTimer = null;
+    if (generation === state.filterGeneration) {
+      loadFolder(state.folder);
+    }
+  }, 800);
+}
+
+function clearFilterRefreshTimer() {
+  if (state.filterRefreshTimer) {
+    window.clearTimeout(state.filterRefreshTimer);
+    state.filterRefreshTimer = null;
+  }
+}
+
 function getSelectedRatings() {
   return ratingFilterInputs.filter((input) => input.checked).map((input) => input.value);
 }

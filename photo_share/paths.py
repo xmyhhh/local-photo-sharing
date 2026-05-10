@@ -56,6 +56,22 @@ def send_cached_file(path: Path, **kwargs: Any) -> Any:
     return response
 
 
+def parse_rooted_path(value: str) -> tuple[str, str]:
+    normalized = normalize_rel_path(value)
+    if not normalized:
+        abort(403)
+    parts = normalized.split("/", 1)
+    root_id = parts[0]
+    rel_path = parts[1] if len(parts) > 1 else ""
+    return root_id, rel_path
+
+
+def join_rooted_path(root_id: str, rel_path: str = "") -> str:
+    if not rel_path:
+        return root_id
+    return f"{root_id}/{normalize_rel_path(rel_path)}"
+
+
 def thumb_url(photo_path: str, mode: str = DEFAULT_THUMBNAIL_MODE) -> str:
     safe_mode = get_thumbnail_mode(mode)
     return f"/api/thumb/{quote_path(normalize_rel_path(photo_path))}?mode={safe_mode}"
