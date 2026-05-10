@@ -1,14 +1,18 @@
-﻿function getStoredThumbMode() {
+function getStoredThumbMode() {
   const value = window.localStorage.getItem("thumbMode");
   return THUMB_MODES.includes(value) ? value : "medium";
+}
+
+function getStoredCompactMode() {
+  return window.localStorage.getItem("compactMode") === "1";
 }
 
 const THUMB_MODES = ["small", "medium", "large", "xlarge"];
 const THUMB_QUEUE_LIMITS = {
   small: 100,
-  medium: 50,
-  large: 30,
-  xlarge: 15,
+  medium: 70,
+  large: 40,
+  xlarge: 30,
 };
 
 const state = {
@@ -46,6 +50,7 @@ const state = {
   originalPrefetchActive: 0,
   thumbObserver: null,
   thumbMode: getStoredThumbMode(),
+  compactMode: getStoredCompactMode(),
   activeTouches: new Map(),
   pinchDistance: 0,
   pinchZoom: 1,
@@ -79,16 +84,18 @@ const RATING_QUEUE_LIMIT = 50;
 const grid = document.querySelector("#grid");
 const emptyState = document.querySelector("#emptyState");
 const breadcrumb = document.querySelector("#breadcrumb");
-const rootPath = document.querySelector("#rootPath");
 const openBracketProjectBtn = document.querySelector("#openBracketProjectBtn");
 const backBtn = document.querySelector("#backBtn");
 const refreshBtn = document.querySelector("#refreshBtn");
+const filterPanel = document.querySelector("#filterPanel");
+const filterPanelToggleBtn = document.querySelector("#filterPanelToggleBtn");
 const ratingFilterBtn = document.querySelector("#ratingFilterBtn");
 const ratingFilterMenu = document.querySelector("#ratingFilterMenu");
 const ratingFilterInputs = Array.from(document.querySelectorAll("#ratingFilterMenu input"));
 const dateFromFilter = document.querySelector("#dateFromFilter");
 const dateToFilter = document.querySelector("#dateToFilter");
 const thumbModeSelect = document.querySelector("#thumbModeSelect");
+const compactToggleBtn = document.querySelector("#compactToggleBtn");
 const clearFiltersBtn = document.querySelector("#clearFiltersBtn");
 const scrollTopBtn = document.querySelector("#scrollTopBtn");
 const viewer = document.querySelector("#viewer");

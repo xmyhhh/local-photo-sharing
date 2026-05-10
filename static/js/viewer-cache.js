@@ -67,9 +67,10 @@ async function loadOriginalImage(entry, forceDisplay = false) {
       }
       return response.blob();
     })
-    .then((blob) => {
+    .then(async (blob) => {
       const url = URL.createObjectURL(blob);
-      putOriginalCache(entry.path, url, blob.size);
+      const decoded = await decodeImageUrl(url);
+      putOriginalCache(entry.path, url, blob.size, decoded);
       return url;
     })
     .catch(() => null)
@@ -88,9 +89,13 @@ function showOriginalUrl(entry, url) {
   if (entry.type !== "photo" || state.currentPhoto?.path !== entry.path) {
     return;
   }
+  const cached = getOriginalCache(entry.path);
+  const decoded = cached?.url === url && cached.decoded;
   entry.originalReady = true;
-  viewerImage.classList.remove("ready");
   viewerImage.classList.remove("loading");
+  if (!decoded) {
+    viewerImage.classList.remove("ready");
+  }
   viewerImage.onload = () => viewerImage.classList.add("ready");
   viewerImage.src = url;
   if (viewerImage.complete && viewerImage.naturalWidth > 0) {
@@ -110,14 +115,33 @@ function getOriginalCache(path) {
   return item;
 }
 
-function putOriginalCache(path, url, bytes) {
+async function decodeImageUrl(url) {
+  const image = new Image();
+  image.decoding = "async";
+  image.src = url;
+  try {
+    if (image.decode) {
+      await image.decode();
+    } else if (!image.complete) {
+      await new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = reject;
+      });
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function putOriginalCache(path, url, bytes, decoded = false) {
   const existing = state.originalCache.get(path);
   if (existing) {
     state.originalCacheBytes -= existing.bytes;
     URL.revokeObjectURL(existing.url);
     state.originalCache.delete(path);
   }
-  state.originalCache.set(path, { url, bytes, lastUsed: Date.now() });
+  state.originalCache.set(path, { url, bytes, decoded, lastUsed: Date.now() });
   state.originalCacheBytes += bytes;
   trimOriginalCache();
 }

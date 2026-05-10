@@ -1,6 +1,13 @@
-﻿function openViewer(entry) {
+const VIEWER_TRANSITION_MS = 260;
+
+function openViewer(entry, originElement = null) {
   showPhoto(entry);
-  viewer.showModal();
+  if (!originElement || prefersReducedMotion()) {
+    viewer.showModal();
+    viewer.classList.remove("is-transitioning", "is-fading-out");
+    return;
+  }
+  startViewerEnterTransition(entry, originElement);
 }
 
 function showPhoto(entry) {
@@ -211,4 +218,154 @@ function preloadAdjacentPreviews() {
   });
 }
 
+function closeViewerAnimated() {
+  if (!viewer.open) {
+    return;
+  }
+  const entry = state.currentPhoto;
+  if (!entry || prefersReducedMotion()) {
+    viewer.close();
+    return;
+  }
+  const sourceRect = getViewerDisplayRect();
+  const targetElement = getGridMediaElement(entry.path);
+  const targetRect = targetElement ? targetElement.getBoundingClientRect() : null;
+  if (!sourceRect || !targetRect || !isRectVisible(targetRect)) {
+    viewer.close();
+    return;
+  }
 
+  const ghost = buildViewerTransitionGhost(entry, targetElement, true);
+  if (!ghost) {
+    viewer.close();
+    return;
+  }
+
+  viewer.classList.add("is-transitioning");
+  viewer.classList.remove("is-fading-out");
+  document.body.append(ghost);
+  setGhostRect(ghost, sourceRect);
+  requestAnimationFrame(() => {
+    ghost.classList.add("is-animating");
+    setGhostRect(ghost, targetRect);
+    viewer.classList.add("is-fading-out");
+  });
+
+  window.setTimeout(() => {
+    ghost.remove();
+    viewer.classList.remove("is-transitioning", "is-fading-out");
+    viewer.close();
+  }, VIEWER_TRANSITION_MS);
+}
+
+function startViewerEnterTransition(entry, originElement) {
+  const sourceRect = originElement.getBoundingClientRect();
+  const ghost = buildViewerTransitionGhost(entry, originElement, false);
+  if (!ghost) {
+    viewer.showModal();
+    return;
+  }
+  const targetRect = getViewerTargetRect(originElement);
+  viewer.classList.add("is-transitioning");
+  viewer.classList.remove("is-fading-out");
+  document.body.append(ghost);
+  setGhostRect(ghost, sourceRect);
+  viewer.showModal();
+  requestAnimationFrame(() => {
+    ghost.classList.add("is-animating");
+    setGhostRect(ghost, targetRect);
+  });
+  window.setTimeout(() => {
+    ghost.remove();
+    viewer.classList.remove("is-transitioning", "is-fading-out");
+  }, VIEWER_TRANSITION_MS);
+}
+
+function buildViewerTransitionGhost(entry, referenceElement, fromViewer) {
+  const ghost = document.createElement("div");
+  ghost.className = "viewer-transition-ghost";
+  if (entry.type === "video") {
+    const icon = document.createElement("div");
+    icon.className = "viewer-transition-video";
+    icon.textContent = "▶";
+    ghost.append(icon);
+    return ghost;
+  }
+
+  const image = document.createElement("img");
+  image.alt = "";
+  image.draggable = false;
+  image.src = fromViewer ? viewerImage.currentSrc || viewerImage.src : getTransitionImageSource(referenceElement, entry);
+  if (!image.src) {
+    return null;
+  }
+  ghost.append(image);
+  return ghost;
+}
+
+function getTransitionImageSource(referenceElement, entry) {
+  const image = referenceElement.querySelector("img");
+  if (image?.currentSrc || image?.src) {
+    return image.currentSrc || image.src;
+  }
+  return entry.previewUrl || entry.thumbUrl || entry.originalUrl || "";
+}
+
+function getViewerTargetRect(referenceElement) {
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const maxWidth = viewportWidth * 0.82;
+  const maxHeight = viewportHeight * 0.82;
+  const rect = referenceElement.getBoundingClientRect();
+  const aspectRatio = getReferenceAspectRatio(referenceElement);
+  let width = maxWidth;
+  let height = width / aspectRatio;
+  if (height > maxHeight) {
+    height = maxHeight;
+    width = height * aspectRatio;
+  }
+  return {
+    left: (viewportWidth - width) / 2,
+    top: (viewportHeight - height) / 2,
+    width,
+    height,
+  };
+}
+
+function getReferenceAspectRatio(referenceElement) {
+  const image = referenceElement.querySelector("img");
+  if (image?.naturalWidth && image?.naturalHeight) {
+    return image.naturalWidth / image.naturalHeight;
+  }
+  const rect = referenceElement.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0 ? rect.width / rect.height : 1;
+}
+
+function getGridMediaElement(path) {
+  return document.querySelector(`.tile[data-path="${CSS.escape(path)}"] .thumb-holder`);
+}
+
+function getViewerDisplayRect() {
+  if (state.currentPhoto?.type === "video" && !viewerVideo.hidden) {
+    return viewerVideo.getBoundingClientRect();
+  }
+  if (!viewerImage.hidden && (viewerImage.currentSrc || viewerImage.src)) {
+    return viewerImage.getBoundingClientRect();
+  }
+  return null;
+}
+
+function setGhostRect(element, rect) {
+  element.style.left = `${rect.left}px`;
+  element.style.top = `${rect.top}px`;
+  element.style.width = `${rect.width}px`;
+  element.style.height = `${rect.height}px`;
+}
+
+function isRectVisible(rect) {
+  return rect.bottom > 0 && rect.right > 0 && rect.top < window.innerHeight && rect.left < window.innerWidth;
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}

@@ -117,6 +117,7 @@ function applyFilters() {
   state.filters.dateFrom = dateFromFilter.value;
   state.filters.dateTo = dateToFilter.value;
   updateRatingFilterLabel();
+  updateFilterPanelLabel();
   state.entries = [];
   state.indexing = state.filters.ratings.length > 0;
   renderBreadcrumb();
@@ -138,6 +139,8 @@ function resetFiltersForFolderNavigation() {
   dateFromFilter.value = "";
   dateToFilter.value = "";
   updateRatingFilterLabel();
+  updateFilterPanelLabel();
+  setFilterPanelOpen(false);
   setRatingMenuOpen(false);
 }
 
@@ -165,6 +168,21 @@ function getSelectedRatings() {
 function updateRatingFilterLabel() {
   const labels = state.filters.ratings.map((rating) => (rating === "0" ? "未评分" : `${rating} 星`));
   ratingFilterBtn.textContent = labels.length ? labels.join("、") : "全部";
+}
+
+function hasActiveFilters() {
+  return Boolean(state.filters.ratings.length || state.filters.dateFrom || state.filters.dateTo);
+}
+
+function updateFilterPanelLabel() {
+  const active = hasActiveFilters();
+  filterPanelToggleBtn.textContent = active ? "已筛选" : "筛选";
+  filterPanelToggleBtn.classList.toggle("active", active);
+}
+
+function setFilterPanelOpen(open) {
+  filterPanel.hidden = !open;
+  filterPanelToggleBtn.setAttribute("aria-expanded", String(open));
 }
 
 function setRatingMenuOpen(open) {

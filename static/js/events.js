@@ -5,6 +5,9 @@
 });
 refreshBtn.addEventListener("click", () => loadFolder(state.folder));
 openBracketProjectBtn.addEventListener("click", () => openBracketProject());
+filterPanelToggleBtn.addEventListener("click", () => {
+  setFilterPanelOpen(filterPanel.hidden);
+});
 window.addEventListener("scroll", scheduleVisibleWorkScan, { passive: true });
 window.addEventListener("scroll", scheduleLoadMoreIfNeeded, { passive: true });
 window.addEventListener("scroll", updateScrollTopButton, { passive: true });
@@ -23,6 +26,12 @@ dateFromFilter.addEventListener("change", applyFilters);
 dateToFilter.addEventListener("change", applyFilters);
 thumbModeSelect.value = state.thumbMode;
 thumbModeSelect.addEventListener("change", () => setThumbMode(thumbModeSelect.value));
+compactToggleBtn.textContent = state.compactMode ? "展开" : "精简";
+compactToggleBtn.addEventListener("click", () => {
+  state.compactMode = !state.compactMode;
+  window.localStorage.setItem("compactMode", state.compactMode ? "1" : "0");
+  renderGrid();
+});
 detectBracketsBtn.addEventListener("click", detectBracketsInContextFolder);
 closeBracketDialogBtn.addEventListener("click", () => bracketDialog.close());
 useBracketCacheBtn.addEventListener("click", () => {
@@ -61,7 +70,7 @@ clearFiltersBtn.addEventListener("click", () => {
   dateToFilter.value = "";
   applyFilters();
 });
-closeBtn.addEventListener("click", () => viewer.close());
+closeBtn.addEventListener("click", () => closeViewerAnimated());
 prevBtn.addEventListener("click", () => showAdjacentPhoto(-1));
 nextBtn.addEventListener("click", () => showAdjacentPhoto(1));
 downloadBtn.addEventListener("click", downloadCurrentPhoto);
@@ -225,7 +234,7 @@ document.addEventListener("keydown", (event) => {
     showAdjacentPhoto(1);
   } else if (event.key === "Escape") {
     event.preventDefault();
-    viewer.close();
+    closeViewerAnimated();
   }
 });
 

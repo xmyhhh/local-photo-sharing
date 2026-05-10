@@ -54,6 +54,10 @@ function scheduleThumbnailRetry(entry, img, spinner, attempt, mode) {
     return;
   }
   if (attempt >= 8) {
+    if (isThumbnailStillNeeded(img)) {
+      scheduleThumbnailRequeue(entry, img, spinner, mode);
+      return;
+    }
     showThumbnailFallback(entry, img, spinner);
     return;
   }
@@ -74,6 +78,10 @@ function showThumbnailFallback(entry, img, spinner) {
     entry.thumbUrl = img.src;
   };
   img.onerror = () => {
+    if (isThumbnailStillNeeded(img)) {
+      scheduleThumbnailRequeue(entry, img, spinner, state.thumbMode);
+      return;
+    }
     spinner.classList.add("failed");
   };
   img.src = `/api/image/${encodePath(entry.path)}`;
@@ -82,6 +90,31 @@ function showThumbnailFallback(entry, img, spinner) {
     spinner.hidden = true;
     entry.thumbUrl = img.src;
   }
+}
+
+function isThumbnailStillNeeded(img) {
+  const holder = img.closest(".thumb-holder");
+  return Boolean(holder && img.isConnected && !img.classList.contains("loaded") && isNearViewport(holder, 420));
+}
+
+function scheduleThumbnailRequeue(entry, img, spinner, mode) {
+  if (!img.isConnected || mode !== state.thumbMode || img.classList.contains("loaded")) {
+    return;
+  }
+  spinner.hidden = false;
+  spinner.classList.remove("failed");
+  const key = `${entry.path}:requeue`;
+  if (state.thumbTimers.has(key)) {
+    return;
+  }
+  const timer = window.setTimeout(() => {
+    state.thumbTimers.delete(key);
+    if (isThumbnailStillNeeded(img) && mode === state.thumbMode) {
+      img.removeAttribute("src");
+      queueThumbnail(entry, img, spinner, 0);
+    }
+  }, 700);
+  state.thumbTimers.set(key, timer);
 }
 
 function getStoredThumbMode() {

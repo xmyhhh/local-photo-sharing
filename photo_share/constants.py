@@ -28,9 +28,9 @@ DEFAULT_PREVIEW_SIZE = 2560
 DEFAULT_PREVIEW_QUALITY = 88
 THUMBNAIL_MODES = {
     "small": {"size": 260, "quality": 68, "queue_limit": 100},
-    "medium": {"size": DEFAULT_THUMBNAIL_SIZE, "quality": DEFAULT_THUMBNAIL_QUALITY, "queue_limit": 50},
-    "large": {"size": 640, "quality": 84, "queue_limit": 30},
-    "xlarge": {"size": 1280, "quality": 92, "queue_limit": 15},
+    "medium": {"size": DEFAULT_THUMBNAIL_SIZE, "quality": DEFAULT_THUMBNAIL_QUALITY, "queue_limit": 70},
+    "large": {"size": 640, "quality": 84, "queue_limit": 40},
+    "xlarge": {"size": 1280, "quality": 92, "queue_limit": 30},
 }
 DEFAULT_THUMBNAIL_MODE = "medium"
 BRACKET_SCAN_LIMIT = 500

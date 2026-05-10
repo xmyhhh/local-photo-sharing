@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from threading import Lock, Thread
+from time import monotonic
 
 from PIL import Image, ImageOps
 
@@ -25,7 +26,7 @@ class ImageCacheStore:
         self.lock = Lock()
         self.queue: list[tuple[Path, str, str]] = []
         self.queued: set[str] = set()
-        self.inflight: set[str] = set()
+        self.inflight: dict[str, float] = {}
         self.errors: dict[str, str] = {}
         for index in range(THUMBNAIL_WORKERS):
             Thread(target=self._worker_loop, name=f"{thread_name}_{index}", daemon=True).start()
@@ -47,6 +48,7 @@ class ImageCacheStore:
         rel = to_relative(self.root, photo_path)
         task_key = self._task_key(photo_path)
         with self.lock:
+            self._expire_stale_inflight()
             if task_key in self.inflight or task_key in self.queued:
                 return False
             self.errors.pop(self._error_key(photo_path), None)
@@ -75,7 +77,7 @@ class ImageCacheStore:
                 self.queued.discard(task_key)
                 if task_key in self.inflight:
                     continue
-                self.inflight.add(task_key)
+                self.inflight[task_key] = monotonic()
                 return photo_path, rel, task_key
         return None
 
@@ -88,7 +90,7 @@ class ImageCacheStore:
                 self.errors[self._error_key(photo_path)] = str(exc)
         finally:
             with self.lock:
-                self.inflight.discard(task_key)
+                self.inflight.pop(task_key, None)
 
     def _generate(self, photo_path: Path, rel: str) -> None:
         if not photo_path.exists():
@@ -132,6 +134,12 @@ class ImageCacheStore:
 
     def _error_key(self, photo_path: Path) -> str:
         return to_relative(self.root, photo_path)
+
+    def _expire_stale_inflight(self) -> None:
+        now = monotonic()
+        stale = [task_key for task_key, started_at in self.inflight.items() if now - started_at > 90]
+        for task_key in stale:
+            self.inflight.pop(task_key, None)
 
 
 

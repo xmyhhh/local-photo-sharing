@@ -2,8 +2,6 @@ async function loadConfig() {
   const config = await fetchJson("/api/config");
   state.roots = config.roots || [];
   state.rootId = config.defaultRootId || state.roots[0]?.id || "root1";
-  renderRootSelector();
-  rootPath.textContent = state.roots.map((root) => `${root.id}: ${root.path}`).join(" | ");
 }
 
 async function loadFolder(folder = state.folder) {
@@ -68,27 +66,6 @@ function qualifyPath(path) {
     return path.slice(1);
   }
   return `${state.rootId}/${path}`;
-}
-
-function renderRootSelector() {
-  const host = document.querySelector("#rootSelector");
-  if (!host) {
-    return;
-  }
-  host.innerHTML = "";
-  state.roots.forEach((root) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = root.id === state.rootId ? "active" : "";
-    button.textContent = root.id;
-    button.addEventListener("click", () => {
-      state.rootId = root.id;
-      renderRootSelector();
-      window.scrollTo({ top: 0, behavior: "auto" });
-      loadFolder("");
-    });
-    host.append(button);
-  });
 }
 
 async function loadMoreEntries() {
@@ -167,6 +144,8 @@ function renderGrid() {
   resetRatingObserver();
   grid.innerHTML = "";
   grid.className = `grid thumb-${state.thumbMode}`;
+  grid.classList.toggle("compact-mode", state.compactMode);
+  compactToggleBtn.textContent = state.compactMode ? "展开" : "精简";
   updateEmptyState();
 
   state.entries.forEach((entry) => {
@@ -208,6 +187,10 @@ function updateEmptyState() {
 function createGridTile(entry) {
   const tile = document.createElement("article");
   tile.className = "tile";
+  if (entry.type !== "folder") {
+    tile.classList.add("media-tile");
+  }
+  tile.classList.add(`${entry.type}-tile`);
   tile.dataset.path = entry.path;
   let thumbPayload = null;
   let ratingPayload = null;

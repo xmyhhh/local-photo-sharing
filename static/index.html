@@ -10,8 +10,6 @@
     <header class="topbar">
       <div>
         <h1>照片共享</h1>
-        <div id="rootPath" class="subtle"></div>
-        <div id="rootSelector" class="root-selector"></div>
       </div>
       <div class="actions">
         <button id="openBracketProjectBtn" class="ghost" type="button">打开包围曝光项目</button>
@@ -21,7 +19,14 @@
     </header>
 
     <main>
-      <section class="filters" aria-label="筛选">
+      <section class="browse-bar" aria-label="浏览工具">
+        <nav id="breadcrumb" class="breadcrumb"></nav>
+        <div class="browse-actions">
+          <button id="filterPanelToggleBtn" class="ghost" type="button" aria-expanded="false" aria-controls="filterPanel">筛选</button>
+          <button id="compactToggleBtn" class="ghost" type="button">精简</button>
+        </div>
+      </section>
+      <section id="filterPanel" class="filters" aria-label="筛选" hidden>
         <div class="filter-field rating-filter-field">
           <span>星级</span>
           <button id="ratingFilterBtn" class="filter-select" type="button" aria-expanded="false">全部</button>
@@ -53,7 +58,6 @@
         </label>
         <button id="clearFiltersBtn" class="ghost" type="button">清除筛选</button>
       </section>
-      <nav id="breadcrumb" class="breadcrumb"></nav>
       <section id="grid" class="grid" aria-live="polite"></section>
       <div id="emptyState" class="empty" hidden>当前文件夹没有 JPG 图片或子文件夹。</div>
     </main>
@@ -114,14 +118,17 @@
       <div class="viewer-shell">
         <div class="viewer-toolbar">
           <div class="viewer-title" id="viewerTitle"></div>
+          <button id="closeBtn" type="button">关闭</button>
+        </div>
+        <div class="viewer-control-bar">
           <div class="viewer-actions">
             <button id="zoomOutBtn" type="button">-</button>
             <button id="zoomResetBtn" type="button">100%</button>
             <button id="zoomInBtn" type="button">+</button>
             <button id="downloadBtn" type="button">下载</button>
             <button id="deleteBtn" class="danger" type="button">删除</button>
-            <button id="closeBtn" type="button">关闭</button>
           </div>
+          <div class="viewer-rating" id="viewerRating"></div>
         </div>
         <div id="imageStage" class="image-stage">
           <img id="viewerImage" alt="" />
@@ -129,7 +136,6 @@
         </div>
         <button id="prevBtn" class="page-btn page-prev" type="button" aria-label="上一张">‹</button>
         <button id="nextBtn" class="page-btn page-next" type="button" aria-label="下一张">›</button>
-        <div class="viewer-rating" id="viewerRating"></div>
       </div>
     </dialog>
 
