@@ -4,6 +4,10 @@ const state = {
   entries: [],
   currentPhoto: null,
   zoom: 1,
+  panX: 0,
+  panY: 0,
+  isDragging: false,
+  dragStart: null,
   thumbTimers: new Map(),
   previewTimer: null,
   thumbObserver: null,
@@ -12,6 +16,7 @@ const state = {
   pinchZoom: 1,
   swipeStart: null,
   swipeMoved: false,
+  lastTapTime: 0,
   filters: {
     minRating: "",
     dateFrom: "",
@@ -127,7 +132,8 @@ function renderGrid() {
       spinner.setAttribute("aria-label", "正在生成预览");
       const img = document.createElement("img");
       img.className = "thumb";
-      img.loading = "lazy";
+      img.loading = "eager";
+      img.decoding = "async";
       img.alt = entry.name;
       holder.append(spinner, img);
       button.append(holder);
@@ -160,12 +166,21 @@ async function loadThumbnail(entry, img, spinner, attempt = 0) {
     const response = await fetch(`/api/thumb-status/${encodePath(entry.path)}`, { cache: "no-store" });
     const data = await response.json();
     if (response.status === 200) {
+      img.loading = "eager";
       img.onload = () => {
         img.classList.add("loaded");
         spinner.hidden = true;
         entry.thumbUrl = img.src;
       };
+      img.onerror = () => {
+        showThumbnailFallback(entry, img, spinner);
+      };
       img.src = `${data.url}?v=${entry.mtime}`;
+      if (img.complete && img.naturalWidth > 0) {
+        img.classList.add("loaded");
+        spinner.hidden = true;
+        entry.thumbUrl = img.src;
+      }
       return;
     }
     if (response.status !== 202) {
@@ -190,6 +205,7 @@ async function loadThumbnail(entry, img, spinner, attempt = 0) {
 }
 
 function showThumbnailFallback(entry, img, spinner) {
+  img.loading = "eager";
   img.onload = () => {
     img.classList.add("loaded");
     spinner.hidden = true;
@@ -199,6 +215,11 @@ function showThumbnailFallback(entry, img, spinner) {
     spinner.classList.add("failed");
   };
   img.src = `/api/image/${encodePath(entry.path)}`;
+  if (img.complete && img.naturalWidth > 0) {
+    img.classList.add("loaded");
+    spinner.hidden = true;
+    entry.thumbUrl = img.src;
+  }
 }
 
 function observeThumbnail(entry, img, spinner) {
@@ -277,6 +298,10 @@ function showPhoto(entry) {
   }
   state.currentPhoto = entry;
   state.zoom = 1;
+  state.panX = 0;
+  state.panY = 0;
+  state.isDragging = false;
+  state.dragStart = null;
   state.activeTouches.clear();
   state.pinchDistance = 0;
   state.swipeStart = null;
@@ -367,8 +392,9 @@ async function setRating(entry, rating) {
 }
 
 function updateZoom() {
-  viewerImage.style.transform = `scale(${state.zoom})`;
+  viewerImage.style.transform = `translate3d(${state.panX}px, ${state.panY}px, 0) scale(${state.zoom})`;
   zoomResetBtn.textContent = `${Math.round(state.zoom * 100)}%`;
+  imageStage.classList.toggle("is-zoomed", state.zoom > 1);
 }
 
 function currentPhotoIndex() {
@@ -417,6 +443,45 @@ function distanceBetweenTouches() {
   }
   const [first, second] = touches;
   return Math.hypot(first.x - second.x, first.y - second.y);
+}
+
+function midpointBetweenTouches() {
+  const touches = Array.from(state.activeTouches.values());
+  if (touches.length < 2) {
+    return { x: 0, y: 0 };
+  }
+  const [first, second] = touches;
+  return { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+}
+
+function clampPan() {
+  if (state.zoom <= 1) {
+    state.panX = 0;
+    state.panY = 0;
+    return;
+  }
+  const maxX = (imageStage.clientWidth * (state.zoom - 1)) / 2;
+  const maxY = (imageStage.clientHeight * (state.zoom - 1)) / 2;
+  state.panX = Math.max(-maxX, Math.min(maxX, state.panX));
+  state.panY = Math.max(-maxY, Math.min(maxY, state.panY));
+}
+
+function setZoom(nextZoom, centerX = imageStage.clientWidth / 2, centerY = imageStage.clientHeight / 2) {
+  const previousZoom = state.zoom;
+  state.zoom = Math.max(1, Math.min(6, nextZoom));
+  if (state.zoom === 1) {
+    state.panX = 0;
+    state.panY = 0;
+  } else if (previousZoom !== state.zoom) {
+    const rect = imageStage.getBoundingClientRect();
+    const dx = centerX - rect.left - rect.width / 2;
+    const dy = centerY - rect.top - rect.height / 2;
+    const scale = state.zoom / previousZoom;
+    state.panX = state.panX * scale - dx * (scale - 1);
+    state.panY = state.panY * scale - dy * (scale - 1);
+    clampPan();
+  }
+  updateZoom();
 }
 
 async function deleteCurrentPhoto() {
@@ -491,48 +556,89 @@ confirmDeleteBtn.addEventListener("click", async () => {
   await deleteCurrentPhoto();
 });
 zoomInBtn.addEventListener("click", () => {
-  state.zoom = Math.min(5, state.zoom + 0.25);
-  updateZoom();
+  setZoom(state.zoom + 0.25);
 });
 zoomOutBtn.addEventListener("click", () => {
-  state.zoom = Math.max(0.25, state.zoom - 0.25);
-  updateZoom();
+  setZoom(state.zoom - 0.25);
 });
 zoomResetBtn.addEventListener("click", () => {
-  state.zoom = 1;
-  updateZoom();
+  setZoom(1);
 });
 imageStage.addEventListener("wheel", (event) => {
-  if (!event.ctrlKey) {
+  event.preventDefault();
+  const factor = event.deltaY < 0 ? 1.12 : 0.88;
+  setZoom(state.zoom * factor, event.clientX, event.clientY);
+}, { passive: false });
+imageStage.addEventListener("pointerdown", (event) => {
+  if (event.pointerType !== "mouse" || state.zoom <= 1) {
     return;
   }
   event.preventDefault();
-  state.zoom = event.deltaY < 0 ? Math.min(5, state.zoom + 0.1) : Math.max(0.25, state.zoom - 0.1);
+  imageStage.setPointerCapture(event.pointerId);
+  state.isDragging = true;
+  state.dragStart = { x: event.clientX, y: event.clientY, panX: state.panX, panY: state.panY };
+});
+imageStage.addEventListener("pointermove", (event) => {
+  if (!state.isDragging || !state.dragStart) {
+    return;
+  }
+  event.preventDefault();
+  state.panX = state.dragStart.panX + event.clientX - state.dragStart.x;
+  state.panY = state.dragStart.panY + event.clientY - state.dragStart.y;
+  clampPan();
   updateZoom();
 });
+imageStage.addEventListener("pointerup", () => {
+  state.isDragging = false;
+  state.dragStart = null;
+});
+imageStage.addEventListener("pointercancel", () => {
+  state.isDragging = false;
+  state.dragStart = null;
+});
+imageStage.addEventListener("dblclick", (event) => {
+  event.preventDefault();
+  setZoom(state.zoom > 1 ? 1 : 2, event.clientX, event.clientY);
+});
 imageStage.addEventListener("touchstart", (event) => {
+  event.preventDefault();
   for (const touch of event.changedTouches) {
     state.activeTouches.set(touch.identifier, { x: touch.clientX, y: touch.clientY });
   }
   if (state.activeTouches.size >= 2) {
     state.pinchDistance = distanceBetweenTouches();
     state.pinchZoom = state.zoom;
+    const middle = midpointBetweenTouches();
+    state.dragStart = { x: middle.x, y: middle.y, panX: state.panX, panY: state.panY };
   } else if (event.changedTouches.length === 1) {
     const touch = event.changedTouches[0];
     state.swipeStart = { x: touch.clientX, y: touch.clientY, time: Date.now() };
+    state.dragStart = { x: touch.clientX, y: touch.clientY, panX: state.panX, panY: state.panY };
     state.swipeMoved = false;
   }
-});
+}, { passive: false });
 imageStage.addEventListener(
   "touchmove",
   (event) => {
+    event.preventDefault();
     for (const touch of event.changedTouches) {
       state.activeTouches.set(touch.identifier, { x: touch.clientX, y: touch.clientY });
     }
     if (state.activeTouches.size >= 2 && state.pinchDistance > 0) {
-      event.preventDefault();
       const nextDistance = distanceBetweenTouches();
-      state.zoom = Math.max(0.25, Math.min(5, state.pinchZoom * (nextDistance / state.pinchDistance)));
+      const middle = midpointBetweenTouches();
+      state.zoom = Math.max(1, Math.min(6, state.pinchZoom * (nextDistance / state.pinchDistance)));
+      if (state.dragStart) {
+        state.panX = state.dragStart.panX + middle.x - state.dragStart.x;
+        state.panY = state.dragStart.panY + middle.y - state.dragStart.y;
+        clampPan();
+      }
+      updateZoom();
+    } else if (state.zoom > 1 && state.dragStart && event.changedTouches.length === 1) {
+      const touch = event.changedTouches[0];
+      state.panX = state.dragStart.panX + touch.clientX - state.dragStart.x;
+      state.panY = state.dragStart.panY + touch.clientY - state.dragStart.y;
+      clampPan();
       updateZoom();
     } else if (state.swipeStart && state.zoom === 1 && event.changedTouches.length === 1) {
       const touch = event.changedTouches[0];
@@ -540,13 +646,13 @@ imageStage.addEventListener(
       const dy = touch.clientY - state.swipeStart.y;
       if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.4) {
         state.swipeMoved = true;
-        event.preventDefault();
       }
     }
   },
   { passive: false },
 );
 imageStage.addEventListener("touchend", (event) => {
+  const wasSingleTouch = state.activeTouches.size === 1 && event.changedTouches.length === 1;
   if (state.swipeStart && state.zoom === 1 && event.changedTouches.length === 1) {
     const touch = event.changedTouches[0];
     const dx = touch.clientX - state.swipeStart.x;
@@ -556,8 +662,19 @@ imageStage.addEventListener("touchend", (event) => {
       showAdjacentPhoto(dx < 0 ? 1 : -1);
     }
   }
+  if (wasSingleTouch && state.swipeStart && !state.swipeMoved) {
+    const now = Date.now();
+    const touch = event.changedTouches[0];
+    if (now - state.lastTapTime < 300) {
+      setZoom(state.zoom > 1 ? 1 : 2, touch.clientX, touch.clientY);
+      state.lastTapTime = 0;
+    } else {
+      state.lastTapTime = now;
+    }
+  }
   clearEndedTouches(event);
   state.swipeStart = null;
+  state.dragStart = null;
 });
 imageStage.addEventListener("touchcancel", clearEndedTouches);
 document.addEventListener("keydown", (event) => {
