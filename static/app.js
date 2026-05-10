@@ -18,6 +18,8 @@ const state = {
   ratingQueue: [],
   ratingQueued: new Set(),
   ratingActive: 0,
+  filterGeneration: 0,
+  filterRefreshTimer: null,
   previewTimer: null,
   originalCache: new Map(),
   originalCacheBytes: 0,
@@ -32,6 +34,7 @@ const state = {
   swipeStart: null,
   swipeMoved: false,
   lastTapTime: 0,
+  visibleScanTimer: null,
   contextFolder: null,
   filters: {
     ratings: [],
@@ -93,6 +96,7 @@ async function loadConfig() {
 }
 
 async function loadFolder(folder = state.folder) {
+  const generation = state.filterGeneration;
   const params = new URLSearchParams();
   params.set("folder", folder);
   state.filters.ratings.forEach((rating) => params.append("rating", rating));
@@ -103,11 +107,18 @@ async function loadFolder(folder = state.folder) {
     params.set("date_to", state.filters.dateTo);
   }
   const data = await fetchJson(`/api/photos?${params.toString()}`);
+  if (generation !== state.filterGeneration) {
+    return;
+  }
+  clearFilterRefreshTimer();
   state.folder = data.folder;
   state.parent = data.parent;
   state.entries = data.entries;
   renderBreadcrumb();
   renderGrid();
+  if (data.indexing && state.filters.ratings.length) {
+    scheduleFilterRefresh(generation);
+  }
 }
 
 function renderBreadcrumb() {
@@ -138,6 +149,7 @@ function renderBreadcrumb() {
 }
 
 function renderGrid() {
+  clearVisibleWorkScan();
   clearThumbTimers();
   clearRatingTimers();
   resetThumbObserver();
@@ -147,62 +159,92 @@ function renderGrid() {
   emptyState.hidden = state.entries.length > 0;
 
   state.entries.forEach((entry) => {
-    const tile = document.createElement("article");
-    tile.className = "tile";
-    let thumbPayload = null;
-    let ratingPayload = null;
-
-    const button = document.createElement("button");
-    button.className = "tile-button";
-    button.type = "button";
-    button.title = entry.name;
-
-    if (entry.type === "folder") {
-      const icon = document.createElement("div");
-      icon.className = "folder-icon";
-      icon.textContent = "DIR";
-      button.append(icon);
-      button.addEventListener("click", () => loadFolder(entry.path));
-      button.addEventListener("contextmenu", (event) => openFolderContextMenu(event, entry));
-    } else {
-      const holder = document.createElement("div");
-      holder.className = "thumb-holder";
-      const spinner = document.createElement("div");
-      spinner.className = "spinner";
-      spinner.setAttribute("aria-label", "正在生成预览");
-      const img = document.createElement("img");
-      img.className = "thumb";
-      img.loading = "lazy";
-      img.decoding = "async";
-      img.alt = entry.name;
-      holder.append(spinner, img);
-      button.append(holder);
-      thumbPayload = { entry, img, spinner };
-      button.addEventListener("click", () => openViewer(entry));
-    }
-
-    const meta = document.createElement("div");
-    meta.className = "meta";
-    const name = document.createElement("div");
-    name.className = "name";
-    name.textContent = entry.name;
-    meta.append(name);
-
-    if (entry.type === "photo") {
-      const ratingWrap = createRating(entry, false);
-      meta.append(ratingWrap);
-      ratingPayload = { entry, ratingWrap };
-    }
-
-    tile.append(button, meta);
-    grid.append(tile);
-    if (thumbPayload) {
-      observeThumbnail(thumbPayload.entry, thumbPayload.img, thumbPayload.spinner);
-    }
-    if (ratingPayload) {
-      observeRating(ratingPayload.entry, ratingPayload.ratingWrap);
-    }
+    appendGridEntry(entry);
   });
+  scheduleVisibleWorkScan();
+}
+
+function scheduleFilterRefresh(generation) {
+  clearFilterRefreshTimer();
+  state.filterRefreshTimer = window.setTimeout(() => {
+    state.filterRefreshTimer = null;
+    if (generation === state.filterGeneration) {
+      loadFolder(state.folder);
+    }
+  }, 800);
+}
+
+function clearFilterRefreshTimer() {
+  if (state.filterRefreshTimer) {
+    window.clearTimeout(state.filterRefreshTimer);
+    state.filterRefreshTimer = null;
+  }
+}
+
+function appendGridEntry(entry) {
+  const tile = createGridTile(entry);
+  grid.append(tile.element);
+  if (tile.thumbPayload) {
+    observeThumbnail(tile.thumbPayload.entry, tile.thumbPayload.img, tile.thumbPayload.spinner);
+  }
+  if (tile.ratingPayload) {
+    observeRating(tile.ratingPayload.entry, tile.ratingPayload.ratingWrap);
+  }
+  emptyState.hidden = state.entries.length > 0;
+  scheduleVisibleWorkScan();
+}
+
+function createGridTile(entry) {
+  const tile = document.createElement("article");
+  tile.className = "tile";
+  tile.dataset.path = entry.path;
+  let thumbPayload = null;
+  let ratingPayload = null;
+
+  const button = document.createElement("button");
+  button.className = "tile-button";
+  button.type = "button";
+  button.title = entry.name;
+
+  if (entry.type === "folder") {
+    const icon = document.createElement("div");
+    icon.className = "folder-icon";
+    icon.textContent = "DIR";
+    button.append(icon);
+    button.addEventListener("click", () => loadFolder(entry.path));
+    button.addEventListener("contextmenu", (event) => openFolderContextMenu(event, entry));
+  } else {
+    const holder = document.createElement("div");
+    holder.className = "thumb-holder";
+    const spinner = document.createElement("div");
+    spinner.className = "spinner";
+    spinner.setAttribute("aria-label", "正在生成预览");
+    const img = document.createElement("img");
+    img.className = "thumb";
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.alt = entry.name;
+    holder.append(spinner, img);
+    button.append(holder);
+    thumbPayload = { entry, img, spinner };
+    button.addEventListener("click", () => openViewer(entry));
+  }
+
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  const name = document.createElement("div");
+  name.className = "name";
+  name.textContent = entry.name;
+  meta.append(name);
+
+  if (entry.type === "photo") {
+    const ratingWrap = createRating(entry, false);
+    meta.append(ratingWrap);
+    ratingPayload = { entry, ratingWrap };
+  }
+
+  tile.append(button, meta);
+  return { element: tile, thumbPayload, ratingPayload };
 }
 
 function observeRating(entry, ratingWrap) {
@@ -216,7 +258,6 @@ function observeRating(entry, ratingWrap) {
           if (!item.isIntersecting) {
             return;
           }
-          state.ratingObserver.unobserve(item.target);
           const payload = item.target.__ratingPayload;
           if (payload) {
             queueEmbeddedRating(payload.entry, payload.ratingWrap);
@@ -242,7 +283,7 @@ function queueEmbeddedRating(entry, ratingWrap, attempt = 0) {
   }
   const key = entry.path;
   if (state.ratingQueued.has(key)) {
-    return;
+    state.ratingQueue = state.ratingQueue.filter((item) => item.key !== key);
   }
   state.ratingQueued.add(key);
   state.ratingQueue.unshift({ entry, ratingWrap, attempt, key });
@@ -548,7 +589,6 @@ function observeThumbnail(entry, img, spinner) {
           if (!item.isIntersecting) {
             return;
           }
-          state.thumbObserver.unobserve(item.target);
           const payload = item.target.__thumbPayload;
           if (payload) {
             queueThumbnail(payload.entry, payload.img, payload.spinner);
@@ -570,13 +610,36 @@ function isNearViewport(element, margin) {
   return rect.bottom >= -margin && rect.top <= window.innerHeight + margin;
 }
 
+function scanVisibleWork() {
+  state.visibleScanTimer = null;
+  document.querySelectorAll(".thumb-holder").forEach((holder) => {
+    const payload = holder.__thumbPayload;
+    if (payload && isNearViewport(holder, 420)) {
+      queueThumbnail(payload.entry, payload.img, payload.spinner);
+    }
+  });
+  document.querySelectorAll(".rating").forEach((ratingWrap) => {
+    const payload = ratingWrap.__ratingPayload;
+    if (payload && isNearViewport(ratingWrap, 220)) {
+      queueEmbeddedRating(payload.entry, payload.ratingWrap);
+    }
+  });
+}
+
+function scheduleVisibleWorkScan() {
+  if (state.visibleScanTimer) {
+    return;
+  }
+  state.visibleScanTimer = window.setTimeout(scanVisibleWork, 80);
+}
+
 function queueThumbnail(entry, img, spinner, attempt = 0) {
   if (!img.isConnected || img.classList.contains("loaded")) {
     return;
   }
   const key = `${entry.path}:${state.thumbMode}`;
   if (state.thumbQueued.has(key)) {
-    return;
+    state.thumbQueue = state.thumbQueue.filter((item) => item.key !== key);
   }
   state.thumbQueued.add(key);
   state.thumbQueue.unshift({ entry, img, spinner, attempt, mode: state.thumbMode, key });
@@ -639,6 +702,13 @@ function clearRatingTimers() {
   state.ratingQueued.clear();
 }
 
+function clearVisibleWorkScan() {
+  if (state.visibleScanTimer) {
+    window.clearTimeout(state.visibleScanTimer);
+    state.visibleScanTimer = null;
+  }
+}
+
 function resetRatingObserver() {
   if (state.ratingObserver) {
     state.ratingObserver.disconnect();
@@ -647,10 +717,15 @@ function resetRatingObserver() {
 }
 
 function applyFilters() {
+  state.filterGeneration += 1;
+  clearFilterRefreshTimer();
   state.filters.ratings = getSelectedRatings();
   state.filters.dateFrom = dateFromFilter.value;
   state.filters.dateTo = dateToFilter.value;
   updateRatingFilterLabel();
+  state.entries = [];
+  renderBreadcrumb();
+  renderGrid();
   loadFolder(state.folder);
 }
 
@@ -1157,6 +1232,7 @@ backBtn.addEventListener("click", () => {
   }
 });
 refreshBtn.addEventListener("click", () => loadFolder(state.folder));
+window.addEventListener("scroll", scheduleVisibleWorkScan, { passive: true });
 ratingFilterBtn.addEventListener("click", (event) => {
   event.stopPropagation();
   setRatingMenuOpen(ratingFilterMenu.hidden);

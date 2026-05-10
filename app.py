@@ -6,6 +6,7 @@ import json
 import mimetypes
 import os
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Lock, Thread
@@ -25,6 +26,7 @@ THUMBNAIL_WORKERS = min(8, max(2, CPU_COUNT))
 METADATA_WORKERS = min(4, max(2, CPU_COUNT // 2))
 THUMB_CACHE_QUEUE_LIMIT = 50
 PREVIEW_CACHE_QUEUE_LIMIT = 25
+FILTER_WAIT_SECONDS = 0.8
 DEFAULT_THUMBNAIL_SIZE = 360
 DEFAULT_THUMBNAIL_QUALITY = 74
 DEFAULT_PREVIEW_SIZE = 2560
@@ -63,6 +65,7 @@ def create_app(
     ratings = RatingStore(root / RATINGS_FILE)
     cache_root = CACHE_DIR / root_cache_key(root)
     metadata = MetadataStore(root)
+    rating_index = RatingIndex(root, ratings, metadata)
     thumbnail_modes = build_thumbnail_modes(thumbnail_size, thumbnail_quality)
     thumbnails = {
         mode: ImageCacheStore(
@@ -99,6 +102,12 @@ def create_app(
         folder_path = resolve_folder(root, folder)
         filters = PhotoFilters.from_request(request.args)
         entries: list[dict[str, Any]] = []
+        pending_entries: list[dict[str, Any]] = []
+
+        if filters.needs_rating:
+            rating_index.ensure_folder(folder_path)
+        else:
+            rating_index.ensure_folder_async(folder_path)
 
         for child in sorted(folder_path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower())):
             if child.name in {RATINGS_FILE, THUMBNAIL_DIR}:
@@ -112,33 +121,35 @@ def create_app(
                 if rating_override is None:
                     rating = metadata.get_rating_ready(child)
                     rating_pending = not metadata.is_ready(child)
-                    if filters.needs_rating and rating_pending:
-                        rating = read_embedded_rating(child)
-                        metadata.set_ready(child, rating)
-                        rating_pending = False
+                    if filters.needs_rating:
+                        indexed_rating = rating_index.get(to_relative(root, child))
+                        if indexed_rating is not None:
+                            rating = indexed_rating
+                            rating_pending = False
                 else:
                     rating = rating_override
                     rating_pending = False
+                entry = {
+                    "type": "photo",
+                    "name": child.name,
+                    "path": rel,
+                    "size": stat.st_size,
+                    "mtime": int(stat.st_mtime),
+                    "rating": rating,
+                    "ratingPending": rating_pending,
+                }
+                if filters.needs_rating and rating_pending:
+                    continue
                 if not filters.matches_photo(rating, int(stat.st_mtime)):
                     continue
-                entries.append(
-                    {
-                        "type": "photo",
-                        "name": child.name,
-                        "path": rel,
-                        "size": stat.st_size,
-                        "mtime": int(stat.st_mtime),
-                        "rating": rating,
-                        "ratingPending": rating_pending,
-                    }
-                )
+                entries.append(entry)
 
         parent = ""
         if folder:
             parent_path = Path(folder).parent
             parent = "" if str(parent_path) == "." else as_posix(parent_path)
 
-        return jsonify({"folder": folder, "parent": parent, "entries": entries})
+        return jsonify({"folder": folder, "parent": parent, "entries": entries, "pendingEntries": pending_entries})
 
     @app.get("/api/bracket-detection")
     def bracket_detection():
@@ -233,6 +244,8 @@ def create_app(
 
         rel = normalize_rel_path(photo_path)
         ratings.set(rel, value)
+        metadata.set_ready(resolve_photo(root, photo_path), value)
+        rating_index.set(rel, value)
         return jsonify({"path": rel, "rating": ratings.get(rel)})
 
     @app.delete("/api/photo/<path:photo_path>")
@@ -245,6 +258,7 @@ def create_app(
             thumb_store.delete(path)
         previews.delete(path)
         metadata.delete(path)
+        rating_index.delete(rel)
         return jsonify({"deleted": rel})
 
     return app
@@ -378,6 +392,107 @@ class MetadataStore:
         stat = photo_path.stat()
         rel = to_relative(self.root, photo_path)
         return f"{rel}:{int(stat.st_mtime)}:{stat.st_size}"
+
+
+class RatingIndex:
+    def __init__(self, root: Path, ratings: RatingStore, metadata: MetadataStore) -> None:
+        self.root = root
+        self.ratings = ratings
+        self.metadata = metadata
+        self.lock = Lock()
+        self.by_path: dict[str, dict[str, int]] = {}
+        self.by_rating: dict[int, set[str]] = {rating: set() for rating in range(0, 6)}
+        self.indexed_folders: dict[str, int] = {}
+        self.folder_inflight: set[str] = set()
+        self.executor = ThreadPoolExecutor(max_workers=METADATA_WORKERS, thread_name_prefix="rating-index")
+        self.folder_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="rating-index-folder")
+
+    def ensure_folder(self, folder_path: Path) -> None:
+        folder_key = to_relative(self.root, folder_path) if folder_path != self.root else ""
+        newest = self._folder_signature(folder_path)
+        with self.lock:
+            if self.indexed_folders.get(folder_key) == newest:
+                return
+
+        try:
+            photos = [child for child in folder_path.iterdir() if child.suffix.lower() in JPG_EXTENSIONS and child.is_file()]
+            list(self.executor.map(self.ensure_photo, photos))
+            with self.lock:
+                self.indexed_folders[folder_key] = newest
+        finally:
+            with self.lock:
+                self.folder_inflight.discard(folder_key)
+
+    def ensure_folder_async(self, folder_path: Path) -> bool:
+        folder_key = to_relative(self.root, folder_path) if folder_path != self.root else ""
+        newest = self._folder_signature(folder_path)
+        with self.lock:
+            if self.indexed_folders.get(folder_key) == newest or folder_key in self.folder_inflight:
+                return False
+            self.folder_inflight.add(folder_key)
+        self.folder_executor.submit(self.ensure_folder, folder_path)
+        return True
+
+    def is_folder_ready(self, folder_path: Path) -> bool:
+        folder_key = to_relative(self.root, folder_path) if folder_path != self.root else ""
+        newest = self._folder_signature(folder_path)
+        with self.lock:
+            return self.indexed_folders.get(folder_key) == newest
+
+    def wait_for_folder(self, folder_path: Path, timeout: float) -> bool:
+        deadline = time.perf_counter() + timeout
+        while time.perf_counter() < deadline:
+            if self.is_folder_ready(folder_path):
+                return True
+            time.sleep(0.03)
+        return self.is_folder_ready(folder_path)
+
+    def ensure_photo(self, photo_path: Path) -> int:
+        rel = to_relative(self.root, photo_path)
+        stat = photo_path.stat()
+        cached = self.by_path.get(rel)
+        if cached and cached.get("mtime") == int(stat.st_mtime) and cached.get("size") == stat.st_size:
+            return cached.get("rating", 0)
+
+        override = self.ratings.get_override(rel)
+        rating = override if override is not None else read_embedded_rating(photo_path)
+        self.set(rel, rating, photo_path)
+        self.metadata.set_ready(photo_path, rating)
+        return rating
+
+    def get(self, rel: str) -> int | None:
+        cached = self.by_path.get(rel)
+        if not cached:
+            return None
+        return cached.get("rating", 0)
+
+    def set(self, rel: str, rating: int, photo_path: Path | None = None) -> None:
+        if photo_path is None:
+            photo_path = self.root / rel
+        stat = photo_path.stat()
+        with self.lock:
+            old = self.by_path.get(rel)
+            if old:
+                self.by_rating.get(old.get("rating", 0), set()).discard(rel)
+            self.by_path[rel] = {
+                "mtime": int(stat.st_mtime),
+                "size": stat.st_size,
+                "rating": rating,
+            }
+            self.by_rating.setdefault(rating, set()).add(rel)
+
+    def delete(self, rel: str) -> None:
+        with self.lock:
+            old = self.by_path.pop(rel, None)
+            if old:
+                self.by_rating.get(old.get("rating", 0), set()).discard(rel)
+
+    def _folder_signature(self, folder_path: Path) -> int:
+        newest = 0
+        for child in folder_path.iterdir():
+            if child.suffix.lower() in JPG_EXTENSIONS and child.is_file():
+                newest = max(newest, int(child.stat().st_mtime))
+        return newest
 
 
 class ImageCacheStore:
@@ -524,6 +639,9 @@ class PhotoFilters:
     def matches_photo(self, photo_rating: int, mtime: int) -> bool:
         if self.ratings is not None and photo_rating not in self.ratings:
             return False
+        return self.matches_date(mtime)
+
+    def matches_date(self, mtime: int) -> bool:
         if self.date_from is not None and mtime < self.date_from:
             return False
         if self.date_to is not None and mtime > self.date_to:
@@ -873,6 +991,23 @@ def image_url(photo_path: str) -> str:
     return f"/api/image/{quote_path(normalize_rel_path(photo_path))}"
 
 
+def prewarm_folder_assets(
+    folder_path: Path,
+    thumbnails: ImageCacheStore,
+    previews: ImageCacheStore,
+    limit: int,
+) -> None:
+    count = 0
+    for child in sorted(folder_path.iterdir(), key=lambda p: p.name.lower()):
+        if not child.is_file() or child.suffix.lower() not in JPG_EXTENSIONS:
+            continue
+        thumbnails.ensure(child)
+        previews.ensure(child)
+        count += 1
+        if count >= limit:
+            break
+
+
 def quote_path(path: str) -> str:
     from urllib.parse import quote
 
@@ -951,10 +1086,10 @@ def parse_date_end(value: str | None) -> int | None:
 
 
 def read_embedded_rating(photo_path: Path) -> int:
-    rating = read_exif_rating(photo_path)
+    rating = read_xmp_rating(photo_path)
     if rating:
         return rating
-    return read_xmp_rating(photo_path)
+    return read_exif_rating(photo_path)
 
 
 def read_exif_rating(photo_path: Path) -> int:
@@ -980,18 +1115,24 @@ def read_xmp_rating(photo_path: Path) -> int:
     try:
         file_size = photo_path.stat().st_size
         with photo_path.open("rb") as file:
-            head = file.read(1024 * 1024)
-            if file_size > 1024 * 1024:
-                file.seek(max(0, file_size - 256 * 1024))
-                raw = head + file.read()
-            else:
-                raw = head
+            head = file.read(128 * 1024)
     except OSError:
-        raw = b""
+        head = b""
 
-    rating = parse_xmp_rating(raw)
+    rating = parse_xmp_rating(head)
     if rating:
         return rating
+
+    try:
+        if file_size > 128 * 1024:
+            with photo_path.open("rb") as file:
+                file.seek(max(0, file_size - 128 * 1024))
+                tail = file.read()
+            rating = parse_xmp_rating(tail)
+            if rating:
+                return rating
+    except OSError:
+        pass
 
     sidecar = photo_path.with_suffix(".xmp")
     if sidecar.exists():
