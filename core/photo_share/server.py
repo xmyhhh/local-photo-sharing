@@ -17,7 +17,7 @@ from .config import (
     load_config,
 )
 from .factory import create_app
-from .plugins import parse_plugin_specs
+from .plugins import discover_plugin_specs
 
 
 @dataclass(slots=True)
@@ -55,7 +55,9 @@ def create_server_runtime(config_path: Path) -> ServerRuntime:
         thumbnail_queue_limits=get_thumbnail_queue_limits(config),
         thumbnail_mode_settings=get_thumbnail_mode_settings(config),
         upload_password=get_upload_password(config),
-        plugin_specs=parse_plugin_specs(config),
+        plugin_specs=discover_plugin_specs(config),
+        config=config,
+        config_path=config_path,
     )
     server = make_server(host, port, app, threaded=True)
     return ServerRuntime(

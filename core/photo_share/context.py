@@ -24,6 +24,8 @@ class RootServices:
 
 @dataclass
 class AppServices:
+    config_path: Path | None
+    config: dict[str, Any]
     roots: dict[str, Path]
     root_services: dict[str, RootServices]
     default_root_id: str
@@ -37,3 +39,4 @@ class AppServices:
     enabled_plugins: set[str]
     plugin_assets: list[dict[str, Any]]
     plugin_components: list[dict[str, Any]]
+    available_plugins: list[dict[str, Any]]

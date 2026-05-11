@@ -3,29 +3,10 @@
 initBracketPluginUi();
 
 function initBracketPluginUi() {
-  topbarActions?.append(createOpenBracketProjectButton());
-  folderContextMenu?.append(createDetectBracketsButton());
   pluginDialogs?.append(createBracketDialog());
+  registerPluginAction("brackets.detect_folder", detectBracketsInContextFolder);
+  registerPluginAction("brackets.open_project", () => openBracketProject());
   bindBracketPluginEvents();
-}
-
-function createOpenBracketProjectButton() {
-  const button = document.createElement("button");
-  button.id = "openBracketProjectBtn";
-  button.className = "ghost";
-  button.type = "button";
-  button.textContent = "打开包围曝光项目";
-  bracketUi.openBracketProjectBtn = button;
-  return button;
-}
-
-function createDetectBracketsButton() {
-  const button = document.createElement("button");
-  button.id = "detectBracketsBtn";
-  button.type = "button";
-  button.textContent = "检测包围曝光";
-  bracketUi.detectBracketsBtn = button;
-  return button;
 }
 
 function createBracketDialog() {
@@ -103,8 +84,6 @@ function createBracketDialog() {
 }
 
 function bindBracketPluginEvents() {
-  bracketUi.openBracketProjectBtn.addEventListener("click", () => openBracketProject());
-  bracketUi.detectBracketsBtn.addEventListener("click", detectBracketsInContextFolder);
   bracketUi.closeBracketDialogBtn.addEventListener("click", () => bracketUi.bracketDialog.close());
   bracketUi.useBracketCacheBtn.addEventListener("click", () => {
     bracketUi.bracketCacheActions.hidden = true;

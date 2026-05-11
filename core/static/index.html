@@ -14,6 +14,7 @@
     <header class="topbar">
       <div id="topbarActions" class="actions">
         <button id="openUploadBtn" type="button">上传</button>
+        <button id="openSettingsBtn" class="ghost" type="button">设置</button>
       </div>
     </header>
 
@@ -65,6 +66,23 @@
 
     <div id="folderContextMenu" class="context-menu" hidden></div>
     <div id="pluginDialogs"></div>
+
+    <dialog id="settingsDialog" class="settings-dialog">
+      <form method="dialog" class="settings-panel">
+        <div class="settings-header">
+          <div>
+            <div class="settings-title">设置</div>
+            <div class="settings-subtitle">运行时启用或禁用组件</div>
+          </div>
+          <button id="closeSettingsBtn" class="ghost" type="button">关闭</button>
+        </div>
+        <div id="settingsStatus" class="settings-status"></div>
+        <section class="settings-section">
+          <h2>插件组件</h2>
+          <div id="pluginComponentList" class="component-list"></div>
+        </section>
+      </form>
+    </dialog>
 
     <dialog id="viewer" class="viewer">
       <div class="viewer-shell">
@@ -160,6 +178,7 @@
     <script src="/static/js/viewer-zoom.js"></script>
     <script src="/static/js/viewer-actions.js"></script>
     <script src="/static/js/uploads.js"></script>
+    <script src="/static/js/settings.js"></script>
     <script src="/static/js/pwa.js"></script>
     <script src="/static/js/events.js"></script>
     <script src="/static/app.js"></script>

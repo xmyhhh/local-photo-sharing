@@ -1,7 +1,8 @@
 function openFolderContextMenu(event, entry) {
   event.preventDefault();
   state.contextFolder = entry;
-  if (!folderContextMenu.childElementCount) {
+  updatePluginContextMenuVisibility("folder");
+  if (!Array.from(folderContextMenu.children).some((item) => !item.hidden)) {
     return;
   }
   folderContextMenu.hidden = false;
@@ -14,4 +15,10 @@ function openFolderContextMenu(event, entry) {
 
 function closeFolderContextMenu() {
   folderContextMenu.hidden = true;
+}
+
+function updatePluginContextMenuVisibility(target) {
+  folderContextMenu.querySelectorAll("[data-plugin-trigger='1']").forEach((item) => {
+    item.hidden = item.dataset.triggerTarget && item.dataset.triggerTarget !== target;
+  });
 }

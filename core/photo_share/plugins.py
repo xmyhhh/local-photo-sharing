@@ -65,18 +65,30 @@ def parse_plugin_specs(config: dict[str, Any]) -> list[PluginSpec]:
     return specs
 
 
+def discover_plugin_specs(config: dict[str, Any]) -> list[PluginSpec]:
+    configured = parse_plugin_specs(config)
+    specs: dict[str, PluginSpec] = {spec.name: spec for spec in configured}
+    plugins_dir = get_app_base_dir() / "plugins"
+    if plugins_dir.is_dir():
+        for plugin_file in sorted(plugins_dir.glob("*/plugin.py")):
+            name = plugin_file.parent.name
+            if name not in specs:
+                specs[name] = PluginSpec(name=name, path=plugin_file, enabled=False)
+    return list(specs.values())
+
+
 def register_plugins(app: "Flask", services: "AppServices", specs: list[PluginSpec]) -> None:
     for spec in specs:
-        if not spec.enabled:
-            continue
         module = _load_plugin_module(spec)
+        services.available_plugins.append(_plugin_summary(spec, module))
         register = getattr(module, "register", None)
         if not callable(register):
             raise PluginLoadError(f"Plugin {spec.name} does not expose register(app, services).")
         register(app, services)
-        services.enabled_plugins.add(spec.name)
         _register_plugin_assets(app, services, spec, module)
         _register_plugin_components(services, spec, module)
+        if spec.enabled:
+            services.enabled_plugins.add(spec.name)
 
 def _load_plugin_module(spec: PluginSpec) -> ModuleType:
     if spec.module:
@@ -128,6 +140,7 @@ def _register_plugin_assets(app: "Flask", services: "AppServices", spec: PluginS
     app.add_url_rule(f"{url_prefix}/<path:filename>", endpoint, plugin_static)
     services.plugin_assets.append({
         "name": spec.name,
+        "enabled": spec.enabled,
         "scripts": [_plugin_asset_url(url_prefix, static_dir, item) for item in manifest.get("scripts", []) if isinstance(item, str)],
         "styles": [_plugin_asset_url(url_prefix, static_dir, item) for item in manifest.get("styles", []) if isinstance(item, str)],
     })
@@ -158,4 +171,22 @@ def _register_plugin_components(services: "AppServices", spec: PluginSpec, modul
             **component,
             "id": component_id.strip(),
             "plugin": spec.name,
+            "enabled": spec.enabled,
         })
+
+
+def _plugin_summary(spec: PluginSpec, module: ModuleType) -> dict[str, Any]:
+    manifest = getattr(module, "PLUGIN", None)
+    title = spec.name
+    description = ""
+    if isinstance(manifest, dict):
+        title = manifest.get("title") if isinstance(manifest.get("title"), str) else title
+        description = manifest.get("description") if isinstance(manifest.get("description"), str) else ""
+    return {
+        "name": spec.name,
+        "title": title,
+        "description": description,
+        "enabled": spec.enabled,
+        "path": str(spec.path) if spec.path else None,
+        "module": spec.module,
+    }

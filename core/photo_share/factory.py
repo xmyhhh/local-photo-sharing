@@ -29,6 +29,8 @@ def create_app(
     thumbnail_mode_settings: dict[str, dict[str, int]] | None = None,
     upload_password: str = "",
     plugin_specs: list[PluginSpec] | None = None,
+    config: dict | None = None,
+    config_path: Path | None = None,
 ) -> Flask:
     register_image_formats()
     roots_input = [photo_roots] if isinstance(photo_roots, Path) else photo_roots
@@ -47,6 +49,8 @@ def create_app(
         thumbnail_queue_limits,
         thumbnail_mode_settings,
         upload_password,
+        config or {},
+        config_path,
     )
     for root_services in services.root_services.values():
         root_services.folder_counts.ensure_async()
@@ -62,6 +66,8 @@ def _create_services(
     thumbnail_queue_limits: dict[str, int] | None,
     thumbnail_mode_settings: dict[str, dict[str, int]] | None,
     upload_password: str,
+    config: dict,
+    config_path: Path | None,
 ) -> AppServices:
     root_map = {f"root{index + 1}": root for index, root in enumerate(roots)}
     root_services = {
@@ -75,6 +81,8 @@ def _create_services(
         for root_id, root in root_map.items()
     }
     return AppServices(
+        config_path=config_path,
+        config=config,
         roots=root_map,
         root_services=root_services,
         default_root_id="root1",
@@ -88,6 +96,7 @@ def _create_services(
         enabled_plugins=set(),
         plugin_assets=[],
         plugin_components=[],
+        available_plugins=[],
     )
 
 

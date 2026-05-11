@@ -4,18 +4,9 @@ let duplicateCheckerResult = null;
 initDuplicateCheckerPlugin();
 
 function initDuplicateCheckerPlugin() {
-  folderContextMenu?.append(createDuplicateCheckerButton());
   pluginDialogs?.append(createDuplicateCheckerDialog());
+  registerPluginAction("duplicate_checker.scan_folder", scanDuplicatesInContextFolder);
   bindDuplicateCheckerEvents();
-}
-
-function createDuplicateCheckerButton() {
-  const button = document.createElement("button");
-  button.id = "scanDuplicatesBtn";
-  button.type = "button";
-  button.textContent = "检查重复照片";
-  duplicateCheckerUi.scanButton = button;
-  return button;
 }
 
 function createDuplicateCheckerDialog() {
@@ -98,7 +89,6 @@ function createDuplicateCheckerDialog() {
 }
 
 function bindDuplicateCheckerEvents() {
-  duplicateCheckerUi.scanButton.addEventListener("click", scanDuplicatesInContextFolder);
   duplicateCheckerUi.closeButton.addEventListener("click", () => duplicateCheckerUi.dialog.close());
   duplicateCheckerUi.selectCopiesButton.addEventListener("click", selectDuplicateCopies);
   duplicateCheckerUi.generateStrategyButton.addEventListener("click", generateDuplicateDeleteStrategy);
