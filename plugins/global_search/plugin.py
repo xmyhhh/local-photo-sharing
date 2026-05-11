@@ -1,0 +1,286 @@
+from __future__ import annotations
+
+import threading
+import time
+from dataclasses import dataclass
+from os import scandir
+from pathlib import Path
+from typing import Any
+
+from flask import Flask, abort, jsonify, request
+
+from core.photo_share.constants import MEDIA_EXTENSIONS, RATINGS_FILE, THUMBNAIL_DIR
+from core.photo_share.context import AppServices
+from core.photo_share.paths import join_rooted_path, to_relative
+
+PLUGIN_NAME = "global_search"
+MAX_QUERY_RESULTS = 200
+SCAN_INTERVAL_SECONDS = 60
+MAX_INDEX_ITEMS = 300_000
+IGNORED_DIR_NAMES = {
+    ".git",
+    ".photo_share_cache",
+    ".photo_share_thumbs",
+    ".photo_share_trash",
+    "__pycache__",
+}
+
+
+PLUGIN = {
+    "title": "全局搜索",
+    "description": "为所有图库目录建立轻量文件索引，支持跨目录搜索文件夹、图片和视频。",
+    "static_dir": "static",
+    "scripts": ["global_search.js"],
+    "styles": ["global_search.css"],
+    "components": [
+        {
+            "id": "global_search.open",
+            "title": "全局搜索",
+            "description": "搜索所有已配置图库目录中的文件夹、图片和视频。",
+            "capabilities": [
+                {"type": "background_service", "operations": ["index", "refresh", "release"]},
+                {"type": "function", "operations": ["search"]},
+            ],
+            "triggers": [
+                {"type": "topbar_button", "label": "搜索", "action": "global_search.open"},
+            ],
+            "surfaces": [
+                {"type": "dialog", "id": "globalSearchDialog"},
+            ],
+        }
+    ],
+}
+
+
+@dataclass(frozen=True, slots=True)
+class SearchEntry:
+    root_id: str
+    rel: str
+    name: str
+    type: str
+    size: int
+    mtime: int
+
+
+class GlobalSearchIndex:
+    def __init__(self) -> None:
+        self._lock = threading.RLock()
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._services: AppServices | None = None
+        self._entries: list[SearchEntry] = []
+        self._indexed_at = 0.0
+        self._indexing = False
+        self._error = ""
+        self._generation = 0
+        self._wake = threading.Event()
+
+    def start(self, services: AppServices) -> None:
+        with self._lock:
+            self._services = services
+            self._stop.clear()
+            if self._thread and self._thread.is_alive():
+                self.request_refresh()
+                return
+            self._thread = threading.Thread(target=self._run, name="global-search-index", daemon=True)
+            self._thread.start()
+        self.request_refresh()
+
+    def stop(self) -> None:
+        with self._lock:
+            self._stop.set()
+            self._wake.set()
+            thread = self._thread
+        if thread and thread.is_alive():
+            thread.join(timeout=2)
+        with self._lock:
+            self._thread = None
+            self._services = None
+            self._entries = []
+            self._indexed_at = 0.0
+            self._indexing = False
+            self._error = ""
+
+    def request_refresh(self) -> None:
+        self._wake.set()
+
+    def status(self) -> dict[str, Any]:
+        with self._lock:
+            return {
+                "enabled": self._services is not None,
+                "indexing": self._indexing,
+                "count": len(self._entries),
+                "indexedAt": int(self._indexed_at),
+                "error": self._error,
+                "generation": self._generation,
+            }
+
+    def search(self, query: str, limit: int = 80) -> list[dict[str, Any]]:
+        tokens = normalize_query(query)
+        if not tokens:
+            return []
+        limit = max(1, min(limit, MAX_QUERY_RESULTS))
+        scored: list[tuple[int, SearchEntry]] = []
+        with self._lock:
+            for entry in self._entries:
+                score = match_score(entry, tokens)
+                if score > 0:
+                    scored.append((score, entry))
+        scored.sort(key=lambda item: (-item[0], item[1].type != "folder", item[1].rel.lower()))
+        return [serialize_entry(entry) for _, entry in scored[:limit]]
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            self._wake.wait(SCAN_INTERVAL_SECONDS)
+            self._wake.clear()
+            if self._stop.is_set():
+                break
+            services = self._services
+            if services is None:
+                continue
+            self._scan(services)
+
+    def _scan(self, services: AppServices) -> None:
+        with self._lock:
+            self._indexing = True
+            self._error = ""
+        entries: list[SearchEntry] = []
+        try:
+            for root_id, root in services.roots.items():
+                if self._stop.is_set() or len(entries) >= MAX_INDEX_ITEMS:
+                    break
+                entries.extend(iter_root_entries(root_id, root, self._stop, MAX_INDEX_ITEMS - len(entries)))
+            with self._lock:
+                self._entries = entries
+                self._indexed_at = time.time()
+                self._generation += 1
+        except Exception as exc:  # noqa: BLE001 - plugin background task must not crash Flask.
+            with self._lock:
+                self._error = str(exc)
+        finally:
+            with self._lock:
+                self._indexing = False
+
+
+INDEX = GlobalSearchIndex()
+
+
+def register(app: Flask, services: AppServices) -> None:
+    @app.get("/api/global-search/status")
+    def global_search_status():
+        return jsonify(INDEX.status())
+
+    @app.post("/api/global-search/refresh")
+    def global_search_refresh():
+        INDEX.request_refresh()
+        return jsonify(INDEX.status())
+
+    @app.get("/api/global-search/search")
+    def global_search_query():
+        if PLUGIN_NAME not in services.enabled_plugins:
+            abort(404)
+        query = request.args.get("q", "")
+        limit = parse_limit(request.args.get("limit"))
+        return jsonify({
+            "query": query,
+            "results": INDEX.search(query, limit),
+            "status": INDEX.status(),
+        })
+
+
+def on_enable(services: AppServices) -> None:
+    INDEX.start(services)
+
+
+def on_disable(services: AppServices) -> None:
+    INDEX.stop()
+
+
+def parse_limit(value: str | None) -> int:
+    try:
+        return int(value or "80")
+    except ValueError:
+        return 80
+
+
+def iter_root_entries(root_id: str, root: Path, stop: threading.Event, budget: int):
+    if budget <= 0:
+        return
+    stack = [root]
+    emitted = 0
+    while stack and not stop.is_set() and emitted < budget:
+        folder = stack.pop()
+        try:
+            children = scandir(folder)
+        except OSError:
+            continue
+        with children:
+            for child in children:
+                if stop.is_set() or emitted >= budget:
+                    return
+                try:
+                    child_path = Path(child.path)
+                    if should_skip(child_path):
+                        continue
+                    if child.is_dir():
+                        stack.append(child_path)
+                        yield build_entry(root_id, root, child_path, "folder")
+                        emitted += 1
+                    elif child.is_file() and child_path.suffix.lower() in MEDIA_EXTENSIONS:
+                        yield build_entry(root_id, root, child_path, "media")
+                        emitted += 1
+                except OSError:
+                    continue
+
+
+def should_skip(path: Path) -> bool:
+    return path.name in IGNORED_DIR_NAMES or path.name == RATINGS_FILE or path.name == THUMBNAIL_DIR
+
+
+def build_entry(root_id: str, root: Path, path: Path, item_type: str) -> SearchEntry:
+    stat = path.stat()
+    rel = to_relative(root, path)
+    return SearchEntry(
+        root_id=root_id,
+        rel=rel,
+        name=path.name,
+        type=item_type,
+        size=stat.st_size if item_type != "folder" else 0,
+        mtime=int(stat.st_mtime),
+    )
+
+
+def normalize_query(query: str) -> list[str]:
+    return [part.lower() for part in query.strip().split() if part.strip()]
+
+
+def match_score(entry: SearchEntry, tokens: list[str]) -> int:
+    score = 0
+    name = entry.name.lower()
+    search_text = f"{entry.name}\n{entry.rel}".lower()
+    for token in tokens:
+        if token not in search_text:
+            return 0
+        if name == token:
+            score += 120
+        elif name.startswith(token):
+            score += 80
+        elif token in name:
+            score += 45
+        else:
+            score += 15
+    return score
+
+
+def serialize_entry(entry: SearchEntry) -> dict[str, Any]:
+    path = join_rooted_path(entry.root_id, entry.rel)
+    return {
+        "root": entry.root_id,
+        "rel": entry.rel,
+        "name": entry.name,
+        "path": path,
+        "type": entry.type,
+        "size": entry.size,
+        "mtime": entry.mtime,
+        "folder": entry.rel if entry.type == "folder" else str(Path(entry.rel).parent).replace("\\", "/"),
+    }

@@ -1,0 +1,211 @@
+openSettingsBtn.addEventListener("click", openSettingsDialog);
+closeSettingsBtn.addEventListener("click", () => settingsDialog.close());
+settingsTabs.forEach((tab) => {
+  tab.addEventListener("click", () => setSettingsTab(tab.dataset.settingsTab));
+});
+memoryPrefetchEnabledInput.addEventListener("change", saveGeneralSettings);
+memoryPrefetchLimitInput.addEventListener("input", scheduleGeneralSettingsSave);
+memoryPrefetchLimitInput.addEventListener("change", saveGeneralSettings);
+memoryPrefetchLimitInput.addEventListener("blur", saveGeneralSettings);
+document.querySelectorAll(".settings-help").forEach((button) => {
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const head = button.closest(".settings-card-head");
+    const open = !head?.classList.contains("help-open");
+    closeSettingsHelp();
+    head?.classList.toggle("help-open", open);
+  });
+});
+settingsDialog.addEventListener("click", (event) => {
+  if (!event.target.closest(".settings-card-head")) {
+    closeSettingsHelp();
+  }
+});
+
+let generalSettingsSaveTimer = 0;
+let generalSettingsLoaded = false;
+
+async function openSettingsDialog() {
+  setSettingsTab("general");
+  settingsStatus.textContent = "正在读取设置...";
+  pluginComponentList.innerHTML = "";
+  settingsDialog.showModal();
+  try {
+    const [general, components] = await Promise.all([
+      fetchJson("/api/settings/general", { cache: "no-store" }),
+      fetchJson("/api/settings/components", { cache: "no-store" }),
+    ]);
+    renderGeneralSettings(general);
+    applyComponentSettings(components);
+    renderSettings(components);
+    settingsStatus.textContent = "";
+  } catch (error) {
+    settingsStatus.textContent = error.message;
+  }
+}
+
+function setSettingsTab(tabName) {
+  const name = tabName === "plugins" ? "plugins" : "general";
+  settingsTabs.forEach((tab) => {
+    const active = tab.dataset.settingsTab === name;
+    tab.classList.toggle("active", active);
+    if (active) {
+      tab.setAttribute("aria-current", "page");
+    } else {
+      tab.removeAttribute("aria-current");
+    }
+  });
+  generalSettingsPanel.hidden = name !== "general";
+  pluginsSettingsPanel.hidden = name !== "plugins";
+  settingsKicker.textContent = name === "general" ? "通用" : "扩展";
+  settingsPageTitle.textContent = name === "general" ? "通用设置" : "插件";
+  settingsPageDescription.textContent = name === "general"
+    ? "调整核心服务的运行策略。"
+    : "启用或禁用当前项目插件目录中的能力。";
+}
+
+function renderGeneralSettings(settings) {
+  const prefetch = settings.memoryPrefetch || {};
+  generalSettingsLoaded = false;
+  memoryPrefetchEnabledInput.checked = Boolean(prefetch.enabled);
+  memoryPrefetchLimitInput.value = String(prefetch.memoryLimitMb || 1024);
+  memoryPrefetchLimitInput.min = String(prefetch.minMb || 256);
+  memoryPrefetchLimitInput.max = String(prefetch.maxMb || 1024);
+  state.memoryPrefetchWindowBefore = Number.parseInt(prefetch.windowBefore, 10) || 5;
+  state.memoryPrefetchWindowAfter = Number.parseInt(prefetch.windowAfter, 10) || 35;
+  generalSettingsLoaded = true;
+}
+
+function scheduleGeneralSettingsSave() {
+  if (!generalSettingsLoaded) {
+    return;
+  }
+  window.clearTimeout(generalSettingsSaveTimer);
+  generalSettingsSaveTimer = window.setTimeout(saveGeneralSettings, 520);
+}
+
+function closeSettingsHelp() {
+  document.querySelectorAll(".settings-card-head.help-open").forEach((item) => {
+    item.classList.remove("help-open");
+  });
+}
+
+async function saveGeneralSettings() {
+  if (!generalSettingsLoaded) {
+    return;
+  }
+  window.clearTimeout(generalSettingsSaveTimer);
+  const memoryLimitMb = Number.parseInt(memoryPrefetchLimitInput.value, 10);
+  const minMb = Number.parseInt(memoryPrefetchLimitInput.min, 10) || 256;
+  const maxMb = Number.parseInt(memoryPrefetchLimitInput.max, 10) || 1024;
+  if (!Number.isFinite(memoryLimitMb) || memoryLimitMb < minMb || memoryLimitMb > maxMb) {
+    settingsStatus.textContent = `内存上限必须是 ${minMb} 到 ${maxMb} 之间的整数 MB。`;
+    return;
+  }
+  settingsStatus.textContent = "正在保存通用设置...";
+  try {
+    const settings = await fetchJson("/api/settings/general", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        memoryPrefetch: {
+          enabled: memoryPrefetchEnabledInput.checked,
+          memoryLimitMb,
+        },
+      }),
+    });
+    renderGeneralSettings(settings);
+    settingsStatus.textContent = "已自动保存。";
+  } catch (error) {
+    settingsStatus.textContent = error.message;
+  }
+}
+
+function renderSettings(settings) {
+  pluginComponentList.innerHTML = "";
+  (settings.plugins || []).forEach((plugin) => {
+    pluginComponentList.append(createComponentRow({
+      id: plugin.name,
+      title: plugin.title || plugin.name,
+      description: plugin.description || "",
+      path: plugin.path || plugin.module || "",
+      enabled: state.enabledPlugins.has(plugin.name),
+      kind: "plugin",
+    }));
+  });
+}
+
+function createComponentRow(item) {
+  const row = document.createElement("div");
+  row.className = "plugin-row";
+  row.classList.toggle("enabled", item.enabled);
+  const icon = document.createElement("div");
+  icon.className = "plugin-row-icon";
+  icon.textContent = pluginInitials(item.title || item.id);
+  const text = document.createElement("div");
+  text.className = "plugin-row-main";
+  const titleLine = document.createElement("div");
+  titleLine.className = "plugin-title-line";
+  const title = document.createElement("div");
+  title.className = "plugin-title";
+  title.textContent = item.title;
+  const status = document.createElement("span");
+  status.className = item.enabled ? "plugin-status enabled" : "plugin-status";
+  status.textContent = item.enabled ? "运行中" : "未启用";
+  titleLine.append(title, status);
+  const desc = document.createElement("div");
+  desc.className = "plugin-description";
+  desc.textContent = item.description || "这个插件还没有填写简介。";
+  const meta = document.createElement("div");
+  meta.className = "plugin-meta";
+  meta.textContent = item.path || item.id;
+  text.append(titleLine, desc, meta);
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = item.enabled ? "plugin-toggle enabled" : "plugin-toggle";
+  button.textContent = item.enabled ? "禁用" : "启用";
+  button.addEventListener("click", () => toggleComponent(item));
+  row.append(icon, text, button);
+  return row;
+}
+
+function pluginInitials(value) {
+  return String(value || "?").trim().slice(0, 2).toUpperCase();
+}
+
+async function toggleComponent(item) {
+  const plugins = {};
+  state.pluginComponents.forEach((component) => {
+    if (component.plugin && component.plugin !== "core") {
+      plugins[component.plugin] = state.enabledPlugins.has(component.plugin);
+    }
+  });
+  state.pluginAssets.forEach((asset) => {
+    plugins[asset.name] = state.enabledPlugins.has(asset.name);
+  });
+
+  plugins[item.id] = !state.enabledPlugins.has(item.id);
+
+  settingsStatus.textContent = "正在保存设置...";
+  try {
+    const settings = await fetchJson("/api/settings/components", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plugins }),
+    });
+    applyComponentSettings(settings);
+    await loadPluginAssets();
+    renderSettings(settings);
+    renderGrid();
+    settingsStatus.textContent = "设置已保存。";
+  } catch (error) {
+    settingsStatus.textContent = error.message;
+  }
+}
+
+function applyComponentSettings(settings) {
+  state.enabledPlugins = new Set(settings.enabledPlugins || []);
+  state.pluginAssets = settings.pluginAssets || state.pluginAssets;
+  state.pluginComponents = settings.pluginComponents || state.pluginComponents;
+}

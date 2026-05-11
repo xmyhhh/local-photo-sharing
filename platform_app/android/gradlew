@@ -1,0 +1,7 @@
+#!/bin/sh
+#
+# Placeholder wrapper script.
+# Android Studio can regenerate the Gradle wrapper for this project.
+
+echo "Use Android Studio to sync this project, or generate Gradle wrapper first."
+exit 1

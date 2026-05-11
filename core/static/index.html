@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>局域网照片共享</title>
+    <meta name="theme-color" content="#176b87" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="照片共享" />
+    <link rel="manifest" href="/static/manifest.webmanifest" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div id="topbarActions" class="actions">
+        <button id="openUploadBtn" type="button">上传</button>
+        <button id="openSettingsBtn" class="ghost" type="button">设置</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="browse-bar" aria-label="浏览工具">
+        <nav id="breadcrumb" class="breadcrumb"></nav>
+        <div class="browse-actions">
+          <button id="filterPanelToggleBtn" class="ghost" type="button" aria-expanded="false" aria-controls="filterPanel">筛选</button>
+          <button id="compactToggleBtn" class="ghost" type="button">精简</button>
+          <div id="selectionBar" class="selection-bar" hidden>
+            <span id="selectionCount">已选择 0 项</span>
+            <button id="copySelectedBtn" class="ghost" type="button">复制</button>
+            <button id="cutSelectedBtn" class="ghost" type="button">剪切</button>
+            <button id="downloadSelectedBtn" class="ghost" type="button">下载</button>
+            <button id="deleteSelectedBtn" class="danger" type="button">删除</button>
+            <button id="moveSelectedBtn" class="ghost" type="button">移动</button>
+            <button id="invertSelectionBtn" class="ghost" type="button">反选</button>
+            <button id="exitSelectionBtn" class="ghost" type="button">退出多选</button>
+          </div>
+        </div>
+      </section>
+      <section id="filterPanel" class="filters" aria-label="筛选" hidden>
+        <div class="filter-field rating-filter-field">
+          <span>星级</span>
+          <button id="ratingFilterBtn" class="filter-select" type="button" aria-expanded="false">全部</button>
+          <div id="ratingFilterMenu" class="rating-filter-menu" hidden>
+            <label><input type="checkbox" value="0" /> 未评分</label>
+            <label><input type="checkbox" value="1" /> 1 星</label>
+            <label><input type="checkbox" value="2" /> 2 星</label>
+            <label><input type="checkbox" value="3" /> 3 星</label>
+            <label><input type="checkbox" value="4" /> 4 星</label>
+            <label><input type="checkbox" value="5" /> 5 星</label>
+          </div>
+        </div>
+        <label>
+          开始日期
+          <input id="dateFromFilter" type="date" />
+        </label>
+        <label>
+          结束日期
+          <input id="dateToFilter" type="date" />
+        </label>
+        <label>
+          预览大小
+          <select id="thumbModeSelect">
+            <option value="small">小</option>
+            <option value="medium">中</option>
+            <option value="large">大</option>
+            <option value="xlarge">超大</option>
+          </select>
+        </label>
+        <button id="clearFiltersBtn" class="ghost" type="button">清除筛选</button>
+      </section>
+      <section id="grid" class="grid" aria-live="polite"></section>
+      <div id="emptyState" class="empty" hidden>当前文件夹没有媒体文件或子文件夹。</div>
+    </main>
+
+    <button id="scrollTopBtn" class="scroll-top-btn" type="button" aria-label="回到顶部" hidden>↑</button>
+
+    <div id="folderContextMenu" class="context-menu" hidden></div>
+    <div id="blankContextMenu" class="context-menu" hidden></div>
+    <div id="itemContextMenu" class="context-menu" hidden></div>
+    <div id="selectionBox" class="selection-box" hidden></div>
+    <div id="pluginDialogs"></div>
+
+    <dialog id="settingsDialog" class="settings-dialog">
+      <form method="dialog" class="settings-panel">
+        <aside class="settings-sidebar" aria-label="设置分类">
+          <div class="settings-brand">
+            <div class="settings-title">设置</div>
+            <div class="settings-subtitle">管理核心服务和扩展能力</div>
+          </div>
+          <button class="settings-tab active" type="button" data-settings-tab="general" aria-current="page">通用设置</button>
+          <button class="settings-tab" type="button" data-settings-tab="plugins">插件</button>
+        </aside>
+        <section class="settings-content">
+          <div class="settings-header">
+            <div>
+              <div id="settingsKicker" class="settings-kicker">通用</div>
+              <h2 id="settingsPageTitle">通用设置</h2>
+              <p id="settingsPageDescription">调整核心服务的运行策略。</p>
+            </div>
+            <button id="closeSettingsBtn" class="settings-close" type="button" aria-label="关闭设置">×</button>
+          </div>
+          <div id="settingsStatus" class="settings-status"></div>
+          <div id="generalSettingsPanel" class="settings-page">
+            <section class="settings-card">
+              <div class="settings-card-head">
+                <h3>启用内存预取</h3>
+                <button class="settings-help" type="button" aria-label="查看内存预取说明">?</button>
+                <div class="settings-help-popover" role="tooltip">
+                  打开文件夹并查看原图时，服务端会提前把当前图片前 5 张、后 35 张照片读入共享内存池，减少机械硬盘读取延迟。多用户共享同一个内存池，退出文件夹或关闭系统会释放对应预取内容。
+                </div>
+              </div>
+              <div class="settings-control-grid">
+                <label class="switch-row">
+                  <span>启用</span>
+                  <input id="memoryPrefetchEnabledInput" type="checkbox" />
+                </label>
+                <label class="settings-field">
+                  <span>内存上限 MB</span>
+                  <input id="memoryPrefetchLimitInput" type="number" min="256" step="128" />
+                </label>
+              </div>
+            </section>
+          </div>
+          <div id="pluginsSettingsPanel" class="settings-page" hidden>
+            <div id="pluginComponentList" class="plugin-list"></div>
+          </div>
+        </section>
+      </form>
+    </dialog>
+
+    <dialog id="viewer" class="viewer">
+      <div class="viewer-shell">
+        <div class="viewer-toolbar">
+          <div class="viewer-title" id="viewerTitle"></div>
+          <button id="closeBtn" type="button">关闭</button>
+        </div>
+        <div class="viewer-control-bar">
+          <div class="viewer-actions">
+            <button id="zoomResetBtn" type="button">100%</button>
+            <div class="viewer-rating-picker">
+              <button id="viewerRatingBtn" type="button" aria-expanded="false" aria-controls="viewerRatingMenu">☆</button>
+              <div id="viewerRatingMenu" class="viewer-rating-menu" hidden></div>
+            </div>
+            <button id="livePhotoBtn" type="button" hidden>播放实况</button>
+            <button id="rotateBtn" class="icon-button" type="button" aria-label="顺时针旋转" title="顺时针旋转">↻</button>
+            <button id="infoBtn" class="icon-button info-icon-button" type="button" aria-label="照片信息" title="照片信息">i</button>
+            <button id="downloadBtn" type="button">下载</button>
+            <button id="deleteBtn" class="danger" type="button">删除</button>
+          </div>
+        </div>
+        <div id="photoInfoPanel" class="photo-info-panel" hidden>
+          <div class="photo-info-header">
+            <div>照片信息</div>
+            <button id="closeInfoBtn" type="button" aria-label="关闭照片信息">×</button>
+          </div>
+          <div id="photoInfoBody" class="photo-info-body"></div>
+        </div>
+        <div id="imageStage" class="image-stage">
+          <img id="viewerImage" alt="" />
+          <video id="viewerVideo" controls playsinline hidden></video>
+        </div>
+        <button id="prevBtn" class="page-btn page-prev" type="button" aria-label="上一张">‹</button>
+        <button id="nextBtn" class="page-btn page-next" type="button" aria-label="下一张">›</button>
+      </div>
+    </dialog>
+
+    <dialog id="deleteDialog" class="confirm-dialog">
+      <form method="dialog" class="confirm-panel">
+        <div class="confirm-title">删除这张照片？</div>
+        <div id="deleteDialogPath" class="confirm-path"></div>
+        <div class="confirm-actions">
+          <button id="cancelDeleteBtn" class="ghost" value="cancel" type="button">取消</button>
+          <button id="confirmDeleteBtn" class="danger" value="confirm" type="button">确认删除</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="uploadDialog" class="upload-dialog">
+      <form id="uploadForm" class="upload-panel">
+        <div class="upload-header">
+          <div>
+            <div class="upload-title">上传照片</div>
+            <div id="uploadRootLabel" class="upload-target"></div>
+          </div>
+          <button id="closeUploadBtn" class="ghost" type="button">关闭</button>
+        </div>
+        <label>
+          文件夹
+          <input id="uploadFolderInput" name="folder" type="text" autocomplete="off" placeholder="例如 2026-05-10" />
+        </label>
+        <label id="uploadPasswordLabel" hidden>
+          上传密码
+          <input id="uploadPasswordInput" name="password" type="password" autocomplete="current-password" />
+        </label>
+        <label>
+          文件
+          <input
+            id="uploadFilesInput"
+            name="files"
+            type="file"
+            multiple
+            accept="image/*,video/*,.jpg,.jpeg,.heic,.heif,.mov,.m4v,.mp4"
+          />
+        </label>
+        <div id="uploadStatus" class="upload-status"></div>
+        <div class="upload-actions">
+          <button id="createUploadFolderBtn" class="ghost" type="button">新建文件夹</button>
+          <button id="submitUploadBtn" type="submit">开始上传</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="/static/js/state.js"></script>
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/ratings-ui.js"></script>
+    <script src="/static/js/thumbnails.js"></script>
+    <script src="/static/js/context-menu.js"></script>
+    <script src="/static/js/plugins.js"></script>
+    <script src="/static/js/gallery.js"></script>
+    <script src="/static/js/viewer-core.js"></script>
+    <script src="/static/js/viewer-cache.js"></script>
+    <script src="/static/js/viewer-zoom.js"></script>
+    <script src="/static/js/viewer-actions.js"></script>
+    <script src="/static/js/uploads.js"></script>
+    <script src="/static/js/settings.js"></script>
+    <script src="/static/js/pwa.js"></script>
+    <script src="/static/js/events.js"></script>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

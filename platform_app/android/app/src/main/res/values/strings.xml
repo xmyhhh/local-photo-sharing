@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Local Photo Android</string>
+    <string name="ready">Ready</string>
+    <string name="log_message">Log message</string>
+</resources>
