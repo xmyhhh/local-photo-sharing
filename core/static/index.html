@@ -102,19 +102,23 @@
           <div id="settingsStatus" class="settings-status"></div>
           <div id="generalSettingsPanel" class="settings-page">
             <section class="settings-card">
-              <div>
+              <div class="settings-card-head">
                 <h3>启用内存预取</h3>
-                <p>打开文件夹并查看原图时，服务端会提前把当前图片前后约 20 张照片读入共享内存池，减少机械硬盘读取延迟。</p>
+                <button class="settings-help" type="button" aria-label="查看内存预取说明">?</button>
+                <div class="settings-help-popover" role="tooltip">
+                  打开文件夹并查看原图时，服务端会提前把当前图片前 5 张、后 35 张照片读入共享内存池，减少机械硬盘读取延迟。多用户共享同一个内存池，退出文件夹或关闭系统会释放对应预取内容。
+                </div>
               </div>
-              <label class="switch-row">
-                <span>启用</span>
-                <input id="memoryPrefetchEnabledInput" type="checkbox" />
-              </label>
-              <label class="settings-field">
-                <span>内存上限 MB</span>
-                <input id="memoryPrefetchLimitInput" type="number" min="256" step="128" />
-              </label>
-              <button id="saveGeneralSettingsBtn" type="button">保存通用设置</button>
+              <div class="settings-control-grid">
+                <label class="switch-row">
+                  <span>启用</span>
+                  <input id="memoryPrefetchEnabledInput" type="checkbox" />
+                </label>
+                <label class="settings-field">
+                  <span>内存上限 MB</span>
+                  <input id="memoryPrefetchLimitInput" type="number" min="256" step="128" />
+                </label>
+              </div>
             </section>
           </div>
           <div id="pluginsSettingsPanel" class="settings-page" hidden>

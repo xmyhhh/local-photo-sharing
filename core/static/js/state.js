@@ -198,6 +198,5 @@ const generalSettingsPanel = document.querySelector("#generalSettingsPanel");
 const pluginsSettingsPanel = document.querySelector("#pluginsSettingsPanel");
 const memoryPrefetchEnabledInput = document.querySelector("#memoryPrefetchEnabledInput");
 const memoryPrefetchLimitInput = document.querySelector("#memoryPrefetchLimitInput");
-const saveGeneralSettingsBtn = document.querySelector("#saveGeneralSettingsBtn");
 const pluginComponentList = document.querySelector("#pluginComponentList");
 const isAppleMobileBrowser = /iPhone|iPad|iPod/i.test(navigator.userAgent);

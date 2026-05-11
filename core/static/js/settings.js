@@ -3,7 +3,27 @@ closeSettingsBtn.addEventListener("click", () => settingsDialog.close());
 settingsTabs.forEach((tab) => {
   tab.addEventListener("click", () => setSettingsTab(tab.dataset.settingsTab));
 });
-saveGeneralSettingsBtn.addEventListener("click", saveGeneralSettings);
+memoryPrefetchEnabledInput.addEventListener("change", saveGeneralSettings);
+memoryPrefetchLimitInput.addEventListener("input", scheduleGeneralSettingsSave);
+memoryPrefetchLimitInput.addEventListener("change", saveGeneralSettings);
+memoryPrefetchLimitInput.addEventListener("blur", saveGeneralSettings);
+document.querySelectorAll(".settings-help").forEach((button) => {
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    const head = button.closest(".settings-card-head");
+    const open = !head?.classList.contains("help-open");
+    closeSettingsHelp();
+    head?.classList.toggle("help-open", open);
+  });
+});
+settingsDialog.addEventListener("click", (event) => {
+  if (!event.target.closest(".settings-card-head")) {
+    closeSettingsHelp();
+  }
+});
+
+let generalSettingsSaveTimer = 0;
+let generalSettingsLoaded = false;
 
 async function openSettingsDialog() {
   setSettingsTab("general");
@@ -46,15 +66,35 @@ function setSettingsTab(tabName) {
 
 function renderGeneralSettings(settings) {
   const prefetch = settings.memoryPrefetch || {};
+  generalSettingsLoaded = false;
   memoryPrefetchEnabledInput.checked = Boolean(prefetch.enabled);
   memoryPrefetchLimitInput.value = String(prefetch.memoryLimitMb || 1024);
   memoryPrefetchLimitInput.min = String(prefetch.minMb || 256);
   memoryPrefetchLimitInput.max = String(prefetch.maxMb || 1024);
   state.memoryPrefetchWindowBefore = Number.parseInt(prefetch.windowBefore, 10) || 5;
   state.memoryPrefetchWindowAfter = Number.parseInt(prefetch.windowAfter, 10) || 35;
+  generalSettingsLoaded = true;
+}
+
+function scheduleGeneralSettingsSave() {
+  if (!generalSettingsLoaded) {
+    return;
+  }
+  window.clearTimeout(generalSettingsSaveTimer);
+  generalSettingsSaveTimer = window.setTimeout(saveGeneralSettings, 520);
+}
+
+function closeSettingsHelp() {
+  document.querySelectorAll(".settings-card-head.help-open").forEach((item) => {
+    item.classList.remove("help-open");
+  });
 }
 
 async function saveGeneralSettings() {
+  if (!generalSettingsLoaded) {
+    return;
+  }
+  window.clearTimeout(generalSettingsSaveTimer);
   const memoryLimitMb = Number.parseInt(memoryPrefetchLimitInput.value, 10);
   const minMb = Number.parseInt(memoryPrefetchLimitInput.min, 10) || 256;
   const maxMb = Number.parseInt(memoryPrefetchLimitInput.max, 10) || 1024;
@@ -75,7 +115,7 @@ async function saveGeneralSettings() {
       }),
     });
     renderGeneralSettings(settings);
-    settingsStatus.textContent = "通用设置已保存。";
+    settingsStatus.textContent = "已自动保存。";
   } catch (error) {
     settingsStatus.textContent = error.message;
   }
@@ -87,7 +127,8 @@ function renderSettings(settings) {
     pluginComponentList.append(createComponentRow({
       id: plugin.name,
       title: plugin.title || plugin.name,
-      description: plugin.description || plugin.path || "",
+      description: plugin.description || "",
+      path: plugin.path || plugin.module || "",
       enabled: state.enabledPlugins.has(plugin.name),
       kind: "plugin",
     }));
@@ -97,26 +138,40 @@ function renderSettings(settings) {
 function createComponentRow(item) {
   const row = document.createElement("div");
   row.className = "plugin-row";
+  row.classList.toggle("enabled", item.enabled);
+  const icon = document.createElement("div");
+  icon.className = "plugin-row-icon";
+  icon.textContent = pluginInitials(item.title || item.id);
   const text = document.createElement("div");
   text.className = "plugin-row-main";
+  const titleLine = document.createElement("div");
+  titleLine.className = "plugin-title-line";
   const title = document.createElement("div");
   title.className = "plugin-title";
   title.textContent = item.title;
+  const status = document.createElement("span");
+  status.className = item.enabled ? "plugin-status enabled" : "plugin-status";
+  status.textContent = item.enabled ? "运行中" : "未启用";
+  titleLine.append(title, status);
   const desc = document.createElement("div");
   desc.className = "plugin-description";
-  desc.textContent = item.description || item.id;
+  desc.textContent = item.description || "这个插件还没有填写简介。";
   const meta = document.createElement("div");
   meta.className = "plugin-meta";
-  meta.textContent = item.id;
-  text.append(title, desc, meta);
+  meta.textContent = item.path || item.id;
+  text.append(titleLine, desc, meta);
 
   const button = document.createElement("button");
   button.type = "button";
   button.className = item.enabled ? "plugin-toggle enabled" : "plugin-toggle";
-  button.textContent = item.enabled ? "已启用" : "启用";
+  button.textContent = item.enabled ? "禁用" : "启用";
   button.addEventListener("click", () => toggleComponent(item));
-  row.append(text, button);
+  row.append(icon, text, button);
   return row;
+}
+
+function pluginInitials(value) {
+  return String(value || "?").trim().slice(0, 2).toUpperCase();
 }
 
 async function toggleComponent(item) {
