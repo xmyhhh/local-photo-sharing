@@ -136,6 +136,8 @@ def resolve_existing_item(services: AppServices, value: str) -> tuple[RootServic
 
 def split_rooted(value: str) -> tuple[str, str]:
     normalized = normalize_rel_path(value)
+    if "/" not in normalized and normalized:
+        return normalized, ""
     parts = normalized.split("/", 1)
     if len(parts) != 2 or not parts[0] or not parts[1]:
         abort(400, "path must include root id and relative path.")

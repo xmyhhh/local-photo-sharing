@@ -139,7 +139,7 @@ async function createFolderInCurrentFolder() {
   if (!name) {
     return;
   }
-  const parent = state.rootId ? qualifyPath(state.folder || "") : "";
+  const parent = state.rootId ? currentRootedFolderPath() : "";
   await fetchJson("/api/files/folder", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -179,7 +179,7 @@ async function copyOrMoveSelected(move) {
   if (!paths.length) {
     return;
   }
-  const destination = window.prompt("目标文件夹路径，例如 root1/子目录。留空表示默认保存地址。", state.rootId ? qualifyPath(state.folder || "") : "");
+  const destination = window.prompt("目标文件夹路径，例如 root1/子目录。留空表示默认保存地址。", state.rootId ? currentRootedFolderPath() : "");
   if (destination === null) {
     return;
   }
@@ -190,6 +190,13 @@ async function copyOrMoveSelected(move) {
   });
   exitSelectionMode();
   loadFolder(state.folder);
+}
+
+function currentRootedFolderPath() {
+  if (!state.rootId) {
+    return "";
+  }
+  return state.folder ? qualifyPath(state.folder) : state.rootId;
 }
 
 async function cutSelectedEntries() {
