@@ -1,6 +1,7 @@
 (() => {
-  const PAGE_SIZE = 180;
+  const PAGE_SIZE = 420;
   const DAY_COLLAPSE_LIMIT = 100;
+  const RENDER_CHUNK_SIZE = 10;
   const TIMELINE_THUMB_MODES = ["small", "medium", "large", "xlarge"];
   const stateLocal = {
     featured: false,
@@ -20,8 +21,9 @@
     thumbQueue: [],
     thumbQueued: new Set(),
     thumbActive: 0,
+    renderToken: 0,
   };
-  const TIMELINE_THUMB_CONCURRENCY = 6;
+  const TIMELINE_THUMB_CONCURRENCY = 4;
 
   const dialog = document.createElement("dialog");
   dialog.id = "timelineDialog";
@@ -277,6 +279,8 @@
   }
 
   function renderTimeline() {
+    stateLocal.renderToken += 1;
+    const token = stateLocal.renderToken;
     groups.innerHTML = "";
     axisList.innerHTML = "";
     resetTimelineThumbnailQueue();
@@ -290,11 +294,26 @@
     applyTimelineThumbMode();
     const grouped = groupItems(stateLocal.items, stateLocal.scale);
     renderAxis(grouped);
-    const fragment = document.createDocumentFragment();
-    grouped.forEach((group) => {
-      fragment.append(createTimelineGroup(group));
-    });
-    groups.append(fragment);
+    renderTimelineGroupsChunked(grouped, token);
+  }
+
+  function renderTimelineGroupsChunked(grouped, token) {
+    let index = 0;
+    const renderChunk = () => {
+      if (token !== stateLocal.renderToken) {
+        return;
+      }
+      const fragment = document.createDocumentFragment();
+      const end = Math.min(grouped.length, index + RENDER_CHUNK_SIZE);
+      for (; index < end; index += 1) {
+        fragment.append(createTimelineGroup(grouped[index]));
+      }
+      groups.append(fragment);
+      if (index < grouped.length) {
+        window.requestAnimationFrame(renderChunk);
+      }
+    };
+    renderChunk();
   }
 
   function renderAxis(grouped) {
@@ -377,7 +396,9 @@
     button.type = "button";
     button.className = `timeline-card ${item.type === "video" ? "video" : ""}`;
     button.dataset.path = item.path;
-    button.style.setProperty("--span", String(cardSpan(item, index)));
+    const span = cardSpan(item, index);
+    button.style.setProperty("--span-x", String(span.x));
+    button.style.setProperty("--span-y", String(span.y));
     const rating = item.rating > 0 ? `<span class="timeline-rating">${"★".repeat(item.rating)}</span>` : "";
     button.innerHTML = `
       <span class="timeline-thumb">
@@ -403,6 +424,13 @@
     stateLocal.thumbQueued.clear();
     stateLocal.thumbActive = 0;
     stateLocal.thumbObserver?.disconnect();
+    stateLocal.thumbObserver = new IntersectionObserver((items) => {
+      items.forEach((item) => {
+        if (item.isIntersecting) {
+          queueTimelineThumbnail(item.target);
+        }
+      });
+    }, { root: content, rootMargin: "900px 0px" });
   }
 
   function queueTimelineThumbnail(card) {
@@ -593,9 +621,21 @@
 
   function cardSpan(item, index) {
     if (item.type === "video") {
-      return 2;
+      return { x: 2, y: 1 };
     }
-    return [2, 1, 1, 2, 1, 1, 1, 2][index % 8];
+    const width = Number(item.width || 0);
+    const height = Number(item.height || 0);
+    if (width > 0 && height > 0) {
+      const ratio = width / height;
+      if (ratio >= 1.42) {
+        return { x: 2, y: 1 };
+      }
+      if (ratio <= 0.72) {
+        return { x: 1, y: 2 };
+      }
+      return { x: 1, y: 1 };
+    }
+    return { x: 1, y: 1 };
   }
 
   function getStoredTimelineThumbMode() {

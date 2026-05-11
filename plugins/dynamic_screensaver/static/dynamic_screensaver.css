@@ -89,26 +89,6 @@
   backdrop-filter: blur(18px) saturate(0.9);
 }
 
-.dynamic-screensaver-close {
-  position: absolute;
-  top: max(18px, env(safe-area-inset-top));
-  right: max(18px, env(safe-area-inset-right));
-  display: grid;
-  width: 46px;
-  min-width: 46px;
-  height: 46px;
-  min-height: 46px;
-  place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 0;
-  background: rgba(0, 0, 0, 0.5);
-  color: #fff;
-  font-size: 30px;
-  line-height: 1;
-  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.34);
-  backdrop-filter: blur(16px);
-}
-
 .dynamic-screensaver-settings-card {
   display: grid;
   gap: 16px;

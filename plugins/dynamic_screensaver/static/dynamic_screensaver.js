@@ -50,15 +50,10 @@
       <div class="dynamic-screensaver-stage"></div>
       <div class="dynamic-screensaver-vignette"></div>
       <div class="dynamic-screensaver-caption"></div>
-      <button class="dynamic-screensaver-close" type="button" aria-label="退出屏保">×</button>
     `;
     document.body.append(overlay);
     stage = overlay.querySelector(".dynamic-screensaver-stage");
     caption = overlay.querySelector(".dynamic-screensaver-caption");
-    overlay.querySelector(".dynamic-screensaver-close").addEventListener("click", (event) => {
-      event.stopPropagation();
-      stopScreensaver();
-    });
     overlay.addEventListener("pointerdown", stopScreensaver);
     overlay.addEventListener("wheel", stopScreensaver, { passive: true });
 
@@ -184,7 +179,7 @@
       return;
     }
     window.__dynamicScreensaverActivityBound = true;
-    ["pointerdown", "keydown", "wheel", "touchstart", "scroll"].forEach((eventName) => {
+    ["pointerdown", "mousemove", "keydown", "wheel", "touchstart", "scroll"].forEach((eventName) => {
       window.addEventListener(eventName, handleActivity, { passive: true, capture: true });
     });
     document.addEventListener("fullscreenchange", () => {

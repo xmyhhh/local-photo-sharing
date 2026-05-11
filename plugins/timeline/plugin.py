@@ -5,7 +5,7 @@ import os
 import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 from os import scandir
 from pathlib import Path
@@ -13,19 +13,20 @@ from typing import Any
 
 import piexif
 from flask import Flask, abort, jsonify, request
+from PIL import Image
 
-from core.photo_share.constants import CACHE_DIR, MEDIA_EXTENSIONS, PHOTO_EXTENSIONS, RATINGS_FILE, THUMBNAIL_DIR, VIDEO_EXTENSIONS, CPU_COUNT
+from core.photo_share.constants import CACHE_DIR, MEDIA_EXTENSIONS, PHOTO_EXTENSIONS, RATINGS_FILE, THUMBNAIL_DIR, CPU_COUNT
 from core.photo_share.context import AppServices
-from core.photo_share.live_photos import find_case_insensitive_sibling, find_live_video
 from core.photo_share.paths import image_url, join_rooted_path, root_cache_key, thumb_url, to_relative
 
 PLUGIN_NAME = "timeline"
 MAX_TIMELINE_ITEMS = 300_000
-MAX_PAGE_SIZE = 600
-INDEX_CACHE_VERSION = 1
+MAX_PAGE_SIZE = 1000
+INDEX_CACHE_VERSION = 2
 INDEX_CACHE_FILE = "timeline_index_v1.json"
 INDEX_WORKERS = min(32, max(4, CPU_COUNT * 2))
 INDEX_INFLIGHT_LIMIT = INDEX_WORKERS * 16
+REFRESH_INTERVAL_SECONDS = 45
 IGNORED_DIR_NAMES = {
     ".git",
     ".photo_share_cache",
@@ -71,6 +72,8 @@ class TimelineEntry:
     mtime: int
     taken_ts: int
     rating: int
+    width: int
+    height: int
     browser_renderable: bool
     is_live: bool
     live_video_path: str | None
@@ -96,9 +99,11 @@ class TimelineIndex:
             self._stop.clear()
             self._load_cache(services)
             if self._thread and self._thread.is_alive():
+                self._wake.set()
                 return
             self._thread = threading.Thread(target=self._run, name="timeline-index", daemon=True)
             self._thread.start()
+            self._wake.set()
 
     def stop(self) -> None:
         with self._lock:
@@ -147,7 +152,7 @@ class TimelineIndex:
         limit = max(1, min(limit, MAX_PAGE_SIZE))
         cursor = max(0, cursor)
         with self._lock:
-            source = [entry for entry in self._entries if not featured or entry.rating > 0]
+            source = [entry for entry in self._entries if entry.rating > 0] if featured else self._entries
             items = source[cursor:cursor + limit]
             next_cursor = cursor + len(items) if cursor + len(items) < len(source) else None
             return {
@@ -158,7 +163,7 @@ class TimelineIndex:
 
     def _run(self) -> None:
         while not self._stop.is_set():
-            self._wake.wait()
+            self._wake.wait(timeout=REFRESH_INTERVAL_SECONDS)
             self._wake.clear()
             if self._stop.is_set():
                 break
@@ -178,7 +183,8 @@ class TimelineIndex:
                 if self._stop.is_set() or len(entries) >= MAX_TIMELINE_ITEMS:
                     break
                 budget = MAX_TIMELINE_ITEMS - len(entries)
-                for entry in iter_root_media(root_id, root_services, self._stop, budget):
+                cache = load_root_cache(root_id, root_services.root)
+                for entry in iter_root_media(root_id, root_services, self._stop, budget, cache):
                     entries.append(entry)
                     now = time.monotonic()
                     if should_publish_partial(len(entries)) or now - last_publish_at >= 0.6:
@@ -213,7 +219,7 @@ class TimelineIndex:
                 raw = json.loads(cache_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 continue
-            if raw.get("version") != INDEX_CACHE_VERSION:
+            if raw.get("version") not in {1, INDEX_CACHE_VERSION}:
                 continue
             for item in raw.get("entries", []):
                 entry = timeline_entry_from_cache(root_id, item)
@@ -328,11 +334,11 @@ def parse_int(value: str | None, fallback: int) -> int:
 
 
 def should_publish_partial(count: int) -> bool:
-    if count <= 40:
-        return count % 4 == 0
-    if count <= 400:
-        return count % 24 == 0
-    return count % 80 == 0
+    if count <= 60:
+        return count % 12 == 0
+    if count <= 600:
+        return count % 80 == 0
+    return count % 400 == 0
 
 
 def estimate_total_media(services: AppServices | None) -> int:
@@ -375,6 +381,8 @@ def timeline_entry_from_cache(root_id: str, data: Any) -> TimelineEntry | None:
             mtime=int(data.get("mtime") or 0),
             taken_ts=int(data.get("taken_ts") or data.get("takenAt") or data.get("mtime") or 0),
             rating=max(0, min(5, int(data.get("rating") or 0))),
+            width=max(0, int(data.get("width") or 0)),
+            height=max(0, int(data.get("height") or 0)),
             browser_renderable=bool(data.get("browser_renderable", data.get("browserRenderable", False))),
             is_live=bool(data.get("is_live", data.get("isLive", False))),
             live_video_path=data.get("live_video_path") or data.get("liveVideoPath"),
@@ -383,12 +391,28 @@ def timeline_entry_from_cache(root_id: str, data: Any) -> TimelineEntry | None:
         return None
 
 
-def iter_root_media(root_id: str, root_services, stop: threading.Event, budget: int):
+def load_root_cache(root_id: str, root: Path) -> dict[str, TimelineEntry]:
+    cache_path = timeline_cache_path(root)
+    try:
+        raw = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if raw.get("version") not in {1, INDEX_CACHE_VERSION}:
+        return {}
+    result: dict[str, TimelineEntry] = {}
+    for item in raw.get("entries", []):
+        entry = timeline_entry_from_cache(root_id, item)
+        if entry is not None:
+            result[entry.rel] = entry
+    return result
+
+
+def iter_root_media(root_id: str, root_services, stop: threading.Event, budget: int, cache: dict[str, TimelineEntry] | None = None):
     with ThreadPoolExecutor(max_workers=INDEX_WORKERS, thread_name_prefix=f"timeline-index-{root_id}") as executor:
-        yield from iter_root_media_parallel(root_id, root_services, stop, budget, executor)
+        yield from iter_root_media_parallel(root_id, root_services, stop, budget, executor, cache or {})
 
 
-def iter_root_media_parallel(root_id: str, root_services, stop: threading.Event, budget: int, executor: ThreadPoolExecutor):
+def iter_root_media_parallel(root_id: str, root_services, stop: threading.Event, budget: int, executor: ThreadPoolExecutor, cache: dict[str, TimelineEntry]):
     root = root_services.root
     stack = [root]
     emitted = 0
@@ -399,8 +423,7 @@ def iter_root_media_parallel(root_id: str, root_services, stop: threading.Event,
             children = scandir(folder)
         except OSError:
             continue
-        sibling_map: dict[tuple[str, str], Path] = {}
-        pending_files: list[Path] = []
+        pending_files: list[tuple[Path, os.stat_result]] = []
         with children:
             for child in children:
                 if stop.is_set():
@@ -412,16 +435,15 @@ def iter_root_media_parallel(root_id: str, root_services, stop: threading.Event,
                     if child.is_dir():
                         stack.append(path)
                     elif child.is_file() and path.suffix.lower() in MEDIA_EXTENSIONS:
-                        sibling_map[(path.stem.lower(), path.suffix.lower())] = path
-                        pending_files.append(path)
+                        pending_files.append((path, child.stat()))
                 except OSError:
                     continue
-        for path in pending_files:
+        for path, stat in pending_files:
             if stop.is_set() or emitted + len(futures) >= budget:
                 break
-            if path.suffix.lower() in VIDEO_EXTENSIONS and has_live_photo_still(path, sibling_map):
-                continue
-            futures.add(executor.submit(build_timeline_entry, root_id, root_services, path, sibling_map))
+            rel = to_relative(root, path)
+            cached = cache.get(rel)
+            futures.add(executor.submit(build_timeline_entry, root_id, root_services, path, stat, cached))
             if len(futures) >= INDEX_INFLIGHT_LIMIT:
                 for entry in drain_completed_entries(futures, stop, wait_for_one=True):
                     yield entry
@@ -451,6 +473,8 @@ def drain_completed_entries(
         else:
             done = {future for future in futures if future.done()}
         if not done:
+            if wait_for_all:
+                continue
             return
         futures.difference_update(done)
         for future in done:
@@ -468,23 +492,17 @@ def should_skip(path: Path) -> bool:
     return path.name in IGNORED_DIR_NAMES or path.name == RATINGS_FILE or path.name == THUMBNAIL_DIR
 
 
-def has_live_photo_still(video_path: Path, sibling_map: dict[tuple[str, str], Path]) -> bool:
-    stem = video_path.stem.lower()
-    return any((stem, suffix) in sibling_map for suffix in PHOTO_EXTENSIONS)
-
-
-def build_timeline_entry(root_id: str, root_services, path: Path, sibling_map: dict[tuple[str, str], Path]) -> TimelineEntry | None:
+def build_timeline_entry(root_id: str, root_services, path: Path, stat: os.stat_result, cached: TimelineEntry | None = None) -> TimelineEntry | None:
     suffix = path.suffix.lower()
     if suffix not in MEDIA_EXTENSIONS:
         return None
-    try:
-        stat = path.stat()
-    except OSError:
-        return None
     rel = to_relative(root_services.root, path)
     is_photo = suffix in PHOTO_EXTENSIONS
+    if cached and cached.mtime == int(stat.st_mtime) and cached.size == stat.st_size:
+        rating = photo_rating_cached(rel, root_services, cached.rating) if is_photo else 0
+        return replace(cached, root_id=root_id, rating=rating, is_live=False, live_video_path=None)
+    width, height = media_dimensions(path) if is_photo else (0, 0)
     rating = photo_rating(rel, path, root_services) if is_photo else 0
-    live_video = find_live_video_from_map(path, sibling_map) if is_photo else None
     return TimelineEntry(
         root_id=root_id,
         rel=rel,
@@ -494,10 +512,22 @@ def build_timeline_entry(root_id: str, root_services, path: Path, sibling_map: d
         mtime=int(stat.st_mtime),
         taken_ts=photo_taken_timestamp(path, stat) if is_photo else int(stat.st_mtime),
         rating=rating,
+        width=width,
+        height=height,
         browser_renderable=suffix in {".jpg", ".jpeg"},
-        is_live=live_video is not None,
-        live_video_path=join_rooted_path(root_id, to_relative(root_services.root, live_video)) if live_video else None,
+        is_live=False,
+        live_video_path=None,
     )
+
+
+def photo_rating_cached(rel: str, root_services, cached_rating: int) -> int:
+    override = root_services.ratings.get_override(rel)
+    if override is not None:
+        return override
+    indexed = root_services.rating_index.get(rel)
+    if indexed is not None:
+        return indexed
+    return cached_rating
 
 
 def photo_rating(rel: str, path: Path, root_services) -> int:
@@ -515,13 +545,13 @@ def photo_rating(rel: str, path: Path, root_services) -> int:
         return root_services.metadata.get_rating_ready(path)
 
 
-def find_live_video_from_map(photo_path: Path, sibling_map: dict[tuple[str, str], Path]) -> Path | None:
-    stem = photo_path.stem.lower()
-    for suffix in VIDEO_EXTENSIONS:
-        video = sibling_map.get((stem, suffix))
-        if video is not None:
-            return video
-    return find_case_insensitive_sibling(photo_path, VIDEO_EXTENSIONS)
+def media_dimensions(path: Path) -> tuple[int, int]:
+    try:
+        with Image.open(path) as image:
+            width, height = image.size
+            return int(width), int(height)
+    except Exception:
+        return 0, 0
 
 
 def photo_taken_timestamp(path: Path, stat: os.stat_result) -> int:
@@ -574,6 +604,8 @@ def serialize_entry(entry: TimelineEntry) -> dict[str, Any]:
         "takenAt": entry.taken_ts,
         "rating": entry.rating,
         "ratingPending": False,
+        "width": entry.width,
+        "height": entry.height,
         "browserRenderable": entry.browser_renderable,
         "isLive": entry.is_live,
         "liveVideoPath": entry.live_video_path,

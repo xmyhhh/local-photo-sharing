@@ -70,6 +70,11 @@ function renderBackendTasks(payload) {
   const keepVisible = Boolean(state.backendTasksVisibleUntil && now < state.backendTasksVisibleUntil);
   backendTasksBtn.hidden = tasks.length === 0 && !keepVisible;
   if (tasks.length === 0) {
+    backendTasksBtn.classList.remove("has-error");
+    if (backendTasksBadge) {
+      backendTasksBadge.hidden = true;
+      backendTasksBadge.textContent = "0";
+    }
     if (backendTasksDialog?.open) {
       renderBackendTasksDialog(payload);
     }

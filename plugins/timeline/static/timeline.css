@@ -338,14 +338,16 @@
 .timeline-mosaic {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(var(--timeline-tile-size), 1fr));
+  grid-auto-rows: var(--timeline-tile-size);
   grid-auto-flow: dense;
   gap: 8px;
 }
 
 .timeline-card {
   position: relative;
-  grid-row: span var(--span);
-  min-height: calc(var(--timeline-tile-size) * var(--span));
+  grid-column: span var(--span-x, 1);
+  grid-row: span var(--span-y, 1);
+  min-height: 0;
   border: 1px solid var(--glass-border);
   border-radius: 8px;
   padding: 0;
@@ -637,7 +639,7 @@
   }
 
   .timeline-card {
-    min-height: calc(var(--timeline-tile-size) * var(--span));
+    min-height: 0;
   }
 
   .timeline-shell[data-thumb-mode="small"] {
@@ -689,7 +691,7 @@
   }
 
   .timeline-card {
-    min-height: calc(var(--timeline-tile-size) * var(--span));
+    min-height: 0;
   }
 
   .timeline-shell[data-thumb-mode="small"] {
