@@ -1,7 +1,7 @@
 ﻿from __future__ import annotations
 
 from pathlib import Path
-from threading import Lock, Thread, get_ident
+from threading import Condition, Lock, Thread, get_ident
 from time import monotonic, monotonic_ns
 
 from PIL import Image, ImageOps
@@ -24,6 +24,7 @@ class ImageCacheStore:
         self.quality = quality
         self.queue_limit = queue_limit
         self.lock = Lock()
+        self.condition = Condition(self.lock)
         self.queue: list[tuple[Path, str, str]] = []
         self.queued: set[str] = set()
         self.inflight: dict[str, float] = {}
@@ -60,6 +61,7 @@ class ImageCacheStore:
             while len(self.queue) > self.queue_limit:
                 _, _, dropped_key = self.queue.pop()
                 self.queued.discard(dropped_key)
+            self.condition.notify()
         return True
 
     def warmup_one(self, photo_path: Path) -> bool:
@@ -109,26 +111,22 @@ class ImageCacheStore:
         return removed
 
     def _worker_loop(self) -> None:
-        import time
-
         while True:
             task = self._next_task()
-            if task is None:
-                time.sleep(0.03)
-                continue
             photo_path, rel, task_key = task
             self._generate_with_cleanup(photo_path, rel, task_key)
 
-    def _next_task(self) -> tuple[Path, str, str] | None:
-        with self.lock:
-            while self.queue:
-                photo_path, rel, task_key = self.queue.pop(0)
-                self.queued.discard(task_key)
-                if task_key in self.inflight:
-                    continue
-                self.inflight[task_key] = monotonic()
-                return photo_path, rel, task_key
-        return None
+    def _next_task(self) -> tuple[Path, str, str]:
+        with self.condition:
+            while True:
+                while self.queue:
+                    photo_path, rel, task_key = self.queue.pop(0)
+                    self.queued.discard(task_key)
+                    if task_key in self.inflight:
+                        continue
+                    self.inflight[task_key] = monotonic()
+                    return photo_path, rel, task_key
+                self.condition.wait()
 
     def _generate_with_cleanup(self, photo_path: Path, rel: str, task_key: str) -> None:
         try:

@@ -84,5 +84,10 @@ DEFAULT_CONFIG = {
             "path": "plugins/recycle_bin/plugin.py",
             "enabled": False,
         },
+        {
+            "name": "login_photo_wall",
+            "path": "plugins/login_photo_wall/plugin.py",
+            "enabled": False,
+        },
     ],
 }

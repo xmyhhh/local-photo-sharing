@@ -55,13 +55,14 @@
   async function openGlobalSearch() {
     dialog.showModal();
     input.focus();
-    await refreshStatus();
+    await refreshStatus({ prepare: true });
     await runSearch();
   }
 
-  async function refreshStatus() {
+  async function refreshStatus(options = {}) {
     try {
-      const data = await fetchJson("/api/global-search/status", { cache: "no-store" });
+      const url = options.prepare ? "/api/global-search/status?prepare=1" : "/api/global-search/status";
+      const data = await fetchJson(url, { cache: "no-store" });
       const indexedAt = data.indexedAt ? new Date(data.indexedAt * 1000).toLocaleTimeString() : "尚未完成";
       const suffix = data.error ? `，错误：${data.error}` : "";
       status.textContent = data.indexing

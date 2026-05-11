@@ -8,7 +8,9 @@ from flask import Flask, abort, jsonify, request, Response
 
 from ..auth import (
     auth_status_payload,
+    clear_login_background_cache,
     ensure_login_background_cache,
+    login_background_plugin_enabled,
     login_background_candidate_paths,
     login_background_gallery,
     login_admin,
@@ -74,6 +76,8 @@ def register_auth_routes(app: Flask, services: AppServices) -> None:
 
     @app.get("/api/auth/background-thumb/<path:photo_path>")
     def auth_background_thumb(photo_path: str):
+        if not login_background_plugin_enabled(services):
+            abort(404)
         normalized = normalize_rooted_path(photo_path)
         allowed = {normalize_rooted_path(item) for item in login_background_candidate_paths(services)}
         if normalized not in allowed:
@@ -94,10 +98,14 @@ def register_auth_routes(app: Flask, services: AppServices) -> None:
 
     @app.get("/api/auth/background-memory/<path:key>")
     def auth_background_memory(key: str):
-        data = services.login_background_cache.get(key)
-        if data is None:
-            ensure_login_background_cache(services)
+        if not login_background_plugin_enabled(services):
+            abort(404)
+        with services.login_background_lock:
             data = services.login_background_cache.get(key)
+        if data is None:
+            ensure_login_background_cache(services, async_rebuild=True)
+            with services.login_background_lock:
+                data = services.login_background_cache.get(key)
         if data is None:
             abort(404)
         return Response(data, mimetype="image/jpeg", headers={"Cache-Control": "no-store"})
@@ -153,6 +161,8 @@ def register_auth_routes(app: Flask, services: AppServices) -> None:
         write_config(services.config_path, services.config)
         if any(field in data for field in ("loginBackgrounds", "loginBackgroundMode", "loginBackgroundFolder", "publicAlbums")):
             ensure_login_background_cache(services, force=True, async_rebuild=True)
+            if not login_background_plugin_enabled(services):
+                clear_login_background_cache(services)
         if services.auth.enabled:
             login_admin()
         return jsonify(auth_status_payload(services))

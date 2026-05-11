@@ -136,7 +136,6 @@
 }
 
 .timeline-segment button,
-.timeline-refresh,
 .timeline-thumb-mode select {
   min-height: 38px;
   min-width: 44px;
@@ -149,8 +148,7 @@
   touch-action: manipulation;
 }
 
-.timeline-segment button.active,
-.timeline-refresh {
+.timeline-segment button.active {
   background: var(--panel-soft);
   color: var(--accent);
   box-shadow: 0 10px 24px rgba(31, 63, 77, 0.08);
@@ -300,10 +298,10 @@
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  margin: 0 0 2px;
+  margin: 0 -6px 2px;
   border: 1px solid rgba(255, 255, 255, 0.52);
   border-radius: 18px;
-  padding: 12px 16px;
+  padding: 12px 18px;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.74), rgba(238, 247, 249, 0.42)),
     rgba(255, 255, 255, 0.42);
@@ -623,10 +621,6 @@
     padding: 0 10px;
   }
 
-  .timeline-refresh {
-    flex: 1 1 100%;
-  }
-
   .timeline-thumb-mode {
     flex: 1 1 auto;
     justify-content: space-between;
@@ -669,6 +663,8 @@
 
   .timeline-group-head {
     top: 6px;
+    margin-right: -4px;
+    margin-left: -4px;
     border-radius: 15px;
     padding: 9px 11px;
   }

@@ -19,7 +19,6 @@ from .plugins import PluginSpec, register_plugins
 from .routes import register_routes
 from .services import FolderCountIndex, ImageCacheStore, MetadataStore, RatingIndex, RatingStore
 from .image_formats import register_image_formats
-from .auth import ensure_login_background_cache
 
 
 def create_app(
@@ -59,7 +58,6 @@ def create_app(
         default_save,
     )
     app.config["photo_share_services"] = services
-    ensure_login_background_cache(services, async_rebuild=True)
     register_routes(app, services)
     register_plugins(app, services, plugin_specs or [])
     return app
@@ -111,6 +109,7 @@ def _create_services(
         plugin_modules={},
         recycle_bin_recorder=None,
         warmup_status=None,
+        login_background_provider=None,
         login_background_cache={},
         login_background_items=[],
         login_background_cache_key="",

@@ -92,7 +92,6 @@ def register_plugins(app: "Flask", services: "AppServices", specs: list[PluginSp
             services.enabled_plugins.add(spec.name)
             call_plugin_lifecycle(module, "on_enable", services)
 
-
 def call_plugin_lifecycle(module: ModuleType, hook: str, services: "AppServices") -> None:
     callback = getattr(module, hook, None)
     if callable(callback):

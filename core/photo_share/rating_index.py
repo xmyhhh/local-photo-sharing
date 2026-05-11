@@ -1,9 +1,9 @@
 ﻿from __future__ import annotations
 
-import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from threading import Lock
+from threading import Condition, Lock
+from time import perf_counter
 
 from .constants import PHOTO_EXTENSIONS, METADATA_WORKERS
 from .paths import to_relative
@@ -15,6 +15,7 @@ class RatingIndex:
         self.ratings = ratings
         self.metadata = metadata
         self.lock = Lock()
+        self.condition = Condition(self.lock)
         self.by_path: dict[str, dict[str, int]] = {}
         self.by_rating: dict[int, set[str]] = {rating: set() for rating in range(0, 6)}
         self.indexed_folders: dict[str, int] = {}
@@ -35,8 +36,9 @@ class RatingIndex:
             with self.lock:
                 self.indexed_folders[folder_key] = newest
         finally:
-            with self.lock:
+            with self.condition:
                 self.folder_inflight.discard(folder_key)
+                self.condition.notify_all()
 
     def ensure_folder_async(self, folder_path: Path) -> bool:
         folder_key = to_relative(self.root, folder_path) if folder_path != self.root else ""
@@ -54,18 +56,19 @@ class RatingIndex:
         with self.lock:
             if self.indexed_folders.get(folder_key) == newest:
                 return
-        deadline = time.perf_counter() + budget
+        deadline = perf_counter() + budget
         complete = True
         for child in sorted(folder_path.iterdir(), key=lambda p: p.name.lower()):
             if child.suffix.lower() not in PHOTO_EXTENSIONS or not child.is_file():
                 continue
-            if time.perf_counter() >= deadline:
+            if perf_counter() >= deadline:
                 complete = False
                 break
             self.ensure_photo_quick(child)
         if complete:
-            with self.lock:
+            with self.condition:
                 self.indexed_folders[folder_key] = newest
+                self.condition.notify_all()
 
     def is_folder_ready(self, folder_path: Path) -> bool:
         folder_key = to_relative(self.root, folder_path) if folder_path != self.root else ""
@@ -76,13 +79,13 @@ class RatingIndex:
     def wait_for_folder(self, folder_path: Path, timeout: float) -> bool:
         folder_key = to_relative(self.root, folder_path) if folder_path != self.root else ""
         newest = self._folder_signature(folder_path)
-        deadline = time.perf_counter() + timeout
-        while time.perf_counter() < deadline:
-            with self.lock:
+        deadline = perf_counter() + timeout
+        with self.condition:
+            while perf_counter() < deadline:
                 if self.indexed_folders.get(folder_key) == newest:
                     return True
-            time.sleep(0.03)
-        with self.lock:
+                remaining = max(0.0, deadline - perf_counter())
+                self.condition.wait(timeout=remaining)
             return self.indexed_folders.get(folder_key) == newest
 
     def ensure_photo(self, photo_path: Path) -> int:

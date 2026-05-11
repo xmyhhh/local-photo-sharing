@@ -155,6 +155,7 @@ function showPhoto(entry) {
     viewerVideo.src = `/api/image/${encodePath(entry.path)}`;
     viewerVideo.load();
     renderViewerRating();
+    updateViewerModeControls();
     updatePageButtons();
     updateZoom();
     updateDownloadButton();
@@ -162,6 +163,7 @@ function showPhoto(entry) {
   }
 
   viewerImage.hidden = false;
+  updateViewerModeControls();
 
   if (entry.browserRenderable === false) {
     viewerImage.classList.remove("ready");
@@ -221,6 +223,9 @@ function showPhoto(entry) {
 }
 
 function togglePhotoInfoPanel() {
+  if (state.currentPhoto?.type !== "photo" || state.viewerLiveMode) {
+    return;
+  }
   if (photoInfoPanel.hidden) {
     openPhotoInfoPanel();
     return;
@@ -229,7 +234,7 @@ function togglePhotoInfoPanel() {
 }
 
 function openPhotoInfoPanel() {
-  if (!state.currentPhoto) {
+  if (!state.currentPhoto || state.currentPhoto.type !== "photo" || state.viewerLiveMode) {
     return;
   }
   photoInfoPanel.hidden = false;
@@ -371,6 +376,7 @@ function toggleLivePhotoPlayback() {
     viewerVideo.load();
     viewerImage.hidden = false;
     livePhotoBtn.textContent = "播放实况";
+    updateViewerModeControls();
     updateZoom();
     return;
   }
@@ -382,7 +388,18 @@ function toggleLivePhotoPlayback() {
   viewerVideo.load();
   viewerVideo.play().catch(() => null);
   livePhotoBtn.textContent = "显示照片";
+  updateViewerModeControls();
   updateZoom();
+}
+
+function updateViewerModeControls() {
+  const imageControlsVisible = Boolean(state.currentPhoto?.type === "photo" && !state.viewerLiveMode);
+  zoomResetBtn.hidden = !imageControlsVisible;
+  rotateBtn.hidden = !imageControlsVisible;
+  infoBtn.hidden = !imageControlsVisible;
+  if (!imageControlsVisible) {
+    closePhotoInfoPanel();
+  }
 }
 
 function updateDownloadButton() {

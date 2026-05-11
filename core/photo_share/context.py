@@ -60,6 +60,7 @@ class AppServices:
     plugin_modules: dict[str, Any]
     recycle_bin_recorder: Any | None
     warmup_status: Any | None
+    login_background_provider: Any | None
     login_background_cache: dict[str, bytes]
     login_background_items: list[dict[str, str]]
     login_background_cache_key: str

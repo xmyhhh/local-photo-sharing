@@ -31,7 +31,7 @@
 
 async function rotateCurrentPhoto() {
   const entry = state.currentPhoto;
-  if (!entry || entry.type !== "photo") {
+  if (!entry || entry.type !== "photo" || state.viewerLiveMode) {
     return;
   }
   rotateBtn.disabled = true;

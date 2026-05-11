@@ -99,7 +99,19 @@ def register(app: Flask, services: AppServices) -> None:
         limit = parse_limit(request.args.get("limit"))
         task = get_warmup_task(folder, min_rating, limit)
         if task is None:
-            task = ensure_warmup_task(services, folder, min_rating, limit)
+            return jsonify({
+                "state": "idle",
+                "folder": folder,
+                "minRating": min_rating,
+                "limit": limit,
+                "scanned": 0,
+                "matched": 0,
+                "prepared": 0,
+                "failed": 0,
+                "progress": 0,
+                "truncated": False,
+                "error": "",
+            })
         return jsonify(task_status_payload(task))
 
 
@@ -241,7 +253,6 @@ def run_warmup_task(services: AppServices, task: dict[str, Any]) -> None:
         scanned = 0
 
         for root_id, root_services, folder_path in roots:
-            root_services.rating_index.ensure_folder_async(folder_path)
             for path in iter_photo_files(folder_path):
                 scanned += 1
                 if scanned > MAX_SCAN_FILES:

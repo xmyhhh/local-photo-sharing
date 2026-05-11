@@ -129,7 +129,7 @@ class TimelineIndex:
     def status(self) -> dict[str, Any]:
         with self._lock:
             featured = sum(1 for entry in self._entries if entry.rating > 0)
-            estimated_total = estimate_total_media(self._services)
+            estimated_total = estimate_total_media(self._services) if self._indexing else 0
             return {
                 "enabled": self._services is not None,
                 "indexing": self._indexing,
@@ -268,6 +268,8 @@ INDEX = TimelineIndex()
 def register(app: Flask, services: AppServices) -> None:
     @app.get("/api/timeline/status")
     def timeline_status():
+        if request.args.get("prepare") in {"1", "true", "yes"}:
+            INDEX.request_refresh_if_empty()
         return jsonify(INDEX.status())
 
     @app.post("/api/timeline/refresh")

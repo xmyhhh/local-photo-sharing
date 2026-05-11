@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import time
 import unicodedata
 from dataclasses import dataclass, replace
 from os import scandir
@@ -176,6 +177,8 @@ INDEX = GlobalSearchIndex()
 def register(app: Flask, services: AppServices) -> None:
     @app.get("/api/global-search/status")
     def global_search_status():
+        if request.args.get("prepare") in {"1", "true", "yes"}:
+            INDEX.request_refresh_if_empty()
         return jsonify(INDEX.status())
 
     @app.post("/api/global-search/refresh")

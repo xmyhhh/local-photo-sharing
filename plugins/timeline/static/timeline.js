@@ -97,14 +97,6 @@
   registerPluginAction("timeline.open", () => openTimeline());
 
   dialog.querySelector(".timeline-close").addEventListener("click", () => dialog.close());
-  dialog.querySelector(".timeline-refresh").addEventListener("click", async () => {
-    status.textContent = "已请求刷新时间线索引...";
-    await fetchJson("/api/timeline/refresh", { method: "POST" });
-    if (typeof notifyBackendTaskStarted === "function") {
-      notifyBackendTaskStarted();
-    }
-    resetAndLoad();
-  });
   thumbModeSelect.value = stateLocal.thumbMode;
   thumbModeSelect.addEventListener("change", () => {
     const mode = thumbModeSelect.value;
@@ -160,12 +152,13 @@
     stateLocal.lastLoadedGeneration = -1;
     stateLocal.lastLoadedCount = -1;
     groups.innerHTML = `<div class="timeline-empty"><span class="spinner inline-spinner"></span><span>正在打开时间线...</span></div>`;
-    await Promise.all([refreshStatus(), loadNextPage()]);
+    await Promise.all([refreshStatus({ prepare: true }), loadNextPage()]);
   }
 
-  async function refreshStatus() {
+  async function refreshStatus(options = {}) {
     try {
-      const data = await fetchJson("/api/timeline/status", { cache: "no-store" });
+      const url = options.prepare ? "/api/timeline/status?prepare=1" : "/api/timeline/status";
+      const data = await fetchJson(url, { cache: "no-store" });
       renderStatus(data);
       maybeReloadForStatus(data);
       if (dialog.open && data.indexing) {
