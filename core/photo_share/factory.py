@@ -102,6 +102,7 @@ def _create_services(
         plugin_assets=[],
         plugin_components=[],
         available_plugins=[],
+        plugin_modules={},
     )
 
 

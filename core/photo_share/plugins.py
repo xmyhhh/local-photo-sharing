@@ -80,6 +80,7 @@ def discover_plugin_specs(config: dict[str, Any]) -> list[PluginSpec]:
 def register_plugins(app: "Flask", services: "AppServices", specs: list[PluginSpec]) -> None:
     for spec in specs:
         module = _load_plugin_module(spec)
+        services.plugin_modules[spec.name] = module
         services.available_plugins.append(_plugin_summary(spec, module))
         register = getattr(module, "register", None)
         if not callable(register):
@@ -89,6 +90,13 @@ def register_plugins(app: "Flask", services: "AppServices", specs: list[PluginSp
         _register_plugin_components(services, spec, module)
         if spec.enabled:
             services.enabled_plugins.add(spec.name)
+            call_plugin_lifecycle(module, "on_enable", services)
+
+
+def call_plugin_lifecycle(module: ModuleType, hook: str, services: "AppServices") -> None:
+    callback = getattr(module, hook, None)
+    if callable(callback):
+        callback(services)
 
 def _load_plugin_module(spec: PluginSpec) -> ModuleType:
     if spec.module:

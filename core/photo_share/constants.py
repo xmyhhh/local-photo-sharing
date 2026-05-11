@@ -59,5 +59,10 @@ DEFAULT_CONFIG = {
             "name": "duplicate_checker",
             "path": "plugins/duplicate_checker/plugin.py",
         },
+        {
+            "name": "global_search",
+            "path": "plugins/global_search/plugin.py",
+            "enabled": False,
+        },
     ],
 }

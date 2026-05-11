@@ -43,3 +43,4 @@ class AppServices:
     plugin_assets: list[dict[str, Any]]
     plugin_components: list[dict[str, Any]]
     available_plugins: list[dict[str, Any]]
+    plugin_modules: dict[str, Any]

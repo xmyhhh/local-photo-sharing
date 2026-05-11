@@ -8,6 +8,7 @@ from flask import Flask, abort, jsonify, request
 
 from ..context import AppServices
 from ..memory_prefetch import MemoryPrefetchSettings, system_prefetch_memory_limit_mb
+from ..plugins import call_plugin_lifecycle
 
 
 def register_settings_routes(app: Flask, services: AppServices) -> None:
@@ -111,6 +112,7 @@ def write_config(config_path: Path | None, config: dict[str, Any]) -> None:
 
 
 def apply_runtime_component_state(services: AppServices, enabled_plugins: set[str]) -> None:
+    previous = set(services.enabled_plugins)
     services.enabled_plugins.clear()
     services.enabled_plugins.update(enabled_plugins)
     for plugin in services.available_plugins:
@@ -119,3 +121,12 @@ def apply_runtime_component_state(services: AppServices, enabled_plugins: set[st
         asset["enabled"] = asset["name"] in enabled_plugins
     for component in services.plugin_components:
         component["enabled"] = component.get("plugin") in enabled_plugins
+
+    for name in sorted(enabled_plugins - previous):
+        module = services.plugin_modules.get(name)
+        if module is not None:
+            call_plugin_lifecycle(module, "on_enable", services)
+    for name in sorted(previous - enabled_plugins):
+        module = services.plugin_modules.get(name)
+        if module is not None:
+            call_plugin_lifecycle(module, "on_disable", services)
