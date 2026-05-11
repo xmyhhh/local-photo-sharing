@@ -10,10 +10,8 @@ from .config import (
     get_default_save_folder,
     get_photo_folders,
     get_port,
-    get_preview_quality,
-    get_preview_size,
+    get_memory_prefetch_settings,
     get_thumbnail_mode_settings,
-    get_thumbnail_queue_limits,
     get_upload_password,
     load_config,
 )
@@ -51,10 +49,8 @@ def create_server_runtime(config_path: Path) -> ServerRuntime:
     port = get_port(config)
     app = create_app(
         folders,
-        preview_size=get_preview_size(config),
-        preview_quality=get_preview_quality(config),
-        thumbnail_queue_limits=get_thumbnail_queue_limits(config),
         thumbnail_mode_settings=get_thumbnail_mode_settings(config),
+        memory_prefetch_settings=get_memory_prefetch_settings(config),
         upload_password=get_upload_password(config),
         plugin_specs=discover_plugin_specs(config),
         config=config,

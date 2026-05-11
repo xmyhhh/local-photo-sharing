@@ -8,10 +8,9 @@ from typing import Any
 from .constants import (
     DEFAULT_CONFIG,
     DEFAULT_CONFIG_FILE,
-    DEFAULT_PREVIEW_QUALITY,
-    DEFAULT_PREVIEW_SIZE,
     THUMBNAIL_MODES,
 )
+from .memory_prefetch import MemoryPrefetchSettings
 
 
 def create_default_config(config_path: Path) -> None:
@@ -86,6 +85,7 @@ def get_thumbnail_mode_settings(config: dict[str, Any]) -> dict[str, dict[str, i
         mode: {
             "size": int(spec["size"]),
             "quality": int(spec["quality"]),
+            "queue_limit": int(spec["queue_limit"]),
         }
         for mode, spec in THUMBNAIL_MODES.items()
     }
@@ -116,51 +116,14 @@ def get_thumbnail_mode_settings(config: dict[str, Any]) -> dict[str, dict[str, i
                 40,
                 92,
             )
+        if "queue_limit" in item:
+            settings[mode]["queue_limit"] = _parse_int_range(
+                item["queue_limit"],
+                f"thumbnail_modes.{mode}.queue_limit",
+                10,
+                1000,
+            )
     return settings
-
-
-def get_preview_size(config: dict[str, Any]) -> int:
-    value = config.get("preview_size", DEFAULT_PREVIEW_SIZE)
-    try:
-        size = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Config field preview_size must be an integer.") from exc
-    if size < 800 or size > 4000:
-        raise ValueError("Config field preview_size must be between 800 and 4000.")
-    return size
-
-
-def get_preview_quality(config: dict[str, Any]) -> int:
-    value = config.get("preview_quality", DEFAULT_PREVIEW_QUALITY)
-    try:
-        quality = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("Config field preview_quality must be an integer.") from exc
-    if quality < 50 or quality > 95:
-        raise ValueError("Config field preview_quality must be between 50 and 95.")
-    return quality
-
-
-def get_thumbnail_queue_limits(config: dict[str, Any]) -> dict[str, int]:
-    defaults = {
-        mode: int(spec["queue_limit"])
-        for mode, spec in THUMBNAIL_MODES.items()
-    }
-    value = config.get("thumbnail_queue_limits", {})
-    if value is None:
-        return defaults
-    if not isinstance(value, dict):
-        raise ValueError("Config field thumbnail_queue_limits must be an object.")
-    limits = defaults.copy()
-    for mode in defaults:
-        if mode not in value:
-            continue
-        try:
-            parsed = int(value[mode])
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"Config field thumbnail_queue_limits.{mode} must be an integer.") from exc
-        limits[mode] = max(10, parsed)
-    return limits
 
 
 def _parse_int_range(value: Any, field: str, minimum: int, maximum: int) -> int:
@@ -171,6 +134,16 @@ def _parse_int_range(value: Any, field: str, minimum: int, maximum: int) -> int:
     if parsed < minimum or parsed > maximum:
         raise ValueError(f"Config field {field} must be between {minimum} and {maximum}.")
     return parsed
+
+
+def get_memory_prefetch_settings(config: dict[str, Any]) -> MemoryPrefetchSettings:
+    value = config.get("memory_prefetch", DEFAULT_CONFIG["memory_prefetch"])
+    if not isinstance(value, dict):
+        raise ValueError("Config field memory_prefetch must be an object.")
+    return MemoryPrefetchSettings(
+        enabled=bool(value.get("enabled", False)),
+        memory_limit_gb=_parse_int_range(value.get("memory_limit_gb", 2), "memory_prefetch.memory_limit_gb", 1, 16),
+    )
 
 
 def get_upload_password(config: dict[str, Any]) -> str:

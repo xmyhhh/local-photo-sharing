@@ -167,13 +167,11 @@ D:\codex_prj\photo\.venv\Scripts\python.exe platform_app\shell\app.py
   "host": "0.0.0.0",
   "port": 8000,
   "thumbnail_modes": {
-    "small": { "size": 180, "quality": 58 },
-    "medium": { "size": 300, "quality": 66 },
-    "large": { "size": 520, "quality": 76 },
-    "xlarge": { "size": 1280, "quality": 92 }
+    "small": { "size": 180, "quality": 58, "queue_limit": 100 },
+    "medium": { "size": 300, "quality": 66, "queue_limit": 70 },
+    "large": { "size": 520, "quality": 76, "queue_limit": 40 },
+    "xlarge": { "size": 1280, "quality": 92, "queue_limit": 30 }
   },
-  "preview_size": 2560,
-  "preview_quality": 88,
   "upload_password": "",
   "plugins": [
     {

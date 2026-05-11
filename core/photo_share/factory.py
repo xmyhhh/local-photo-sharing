@@ -6,14 +6,12 @@ from flask import Flask
 
 from .constants import (
     CACHE_DIR,
-    DEFAULT_PREVIEW_QUALITY,
-    DEFAULT_PREVIEW_SIZE,
     DEFAULT_THUMBNAIL_MODE,
-    PREVIEW_CACHE_QUEUE_LIMIT,
     RATINGS_FILE,
     STATIC_DIR,
 )
 from .context import AppServices, RootServices
+from .memory_prefetch import MemoryPrefetchPool, MemoryPrefetchSettings
 from .paths import build_thumbnail_modes, root_cache_key
 from .plugins import PluginSpec, register_plugins
 from .routes import register_routes
@@ -23,10 +21,8 @@ from .image_formats import register_image_formats
 
 def create_app(
     photo_roots: list[Path] | Path,
-    preview_size: int = DEFAULT_PREVIEW_SIZE,
-    preview_quality: int = DEFAULT_PREVIEW_QUALITY,
-    thumbnail_queue_limits: dict[str, int] | None = None,
     thumbnail_mode_settings: dict[str, dict[str, int]] | None = None,
+    memory_prefetch_settings: MemoryPrefetchSettings | None = None,
     upload_password: str = "",
     plugin_specs: list[PluginSpec] | None = None,
     config: dict | None = None,
@@ -42,18 +38,17 @@ def create_app(
         if not root.exists() or not root.is_dir():
             raise ValueError(f"Photo root does not exist or is not a folder: {root}")
     default_save = (default_save_folder or roots[0]).resolve()
-    if not default_save.exists() or not default_save.is_dir():
-        raise ValueError(f"Default save folder does not exist or is not a folder: {default_save}")
+    default_save.mkdir(parents=True, exist_ok=True)
+    if not default_save.is_dir():
+        raise ValueError(f"Default save folder is not a folder: {default_save}")
     if not any(_is_relative_to(default_save, root) for root in roots):
-        raise ValueError("Default save folder must be inside one of photo_folders.")
+        roots.append(default_save)
 
     app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="/static")
     services = _create_services(
         roots,
-        preview_size,
-        preview_quality,
-        thumbnail_queue_limits,
         thumbnail_mode_settings,
+        memory_prefetch_settings or MemoryPrefetchSettings(),
         upload_password,
         config or {},
         config_path,
@@ -68,10 +63,8 @@ def create_app(
 
 def _create_services(
     roots: list[Path],
-    preview_size: int,
-    preview_quality: int,
-    thumbnail_queue_limits: dict[str, int] | None,
     thumbnail_mode_settings: dict[str, dict[str, int]] | None,
+    memory_prefetch_settings: MemoryPrefetchSettings,
     upload_password: str,
     config: dict,
     config_path: Path | None,
@@ -81,9 +74,6 @@ def _create_services(
     root_services = {
         root_id: _create_root_services(
             root,
-            preview_size,
-            preview_quality,
-            thumbnail_queue_limits,
             thumbnail_mode_settings,
         )
         for root_id, root in root_map.items()
@@ -105,9 +95,9 @@ def _create_services(
         bracket_cache={},
         bracket_cache_loaded=False,
         bracket_merge_tasks={},
-        thumbnail_queue_limits=thumbnail_queue_limits or {},
         thumbnail_mode_settings=thumbnail_mode_settings or {},
         upload_password=upload_password,
+        memory_prefetch=MemoryPrefetchPool(memory_prefetch_settings),
         enabled_plugins=set(),
         plugin_assets=[],
         plugin_components=[],
@@ -125,9 +115,6 @@ def _is_relative_to(path: Path, root: Path) -> bool:
 
 def _create_root_services(
     root: Path,
-    preview_size: int,
-    preview_quality: int,
-    thumbnail_queue_limits: dict[str, int] | None,
     thumbnail_mode_settings: dict[str, dict[str, int]] | None,
 ) -> RootServices:
     ratings = RatingStore(root / RATINGS_FILE)
@@ -135,7 +122,7 @@ def _create_root_services(
     metadata = MetadataStore(root)
     rating_index = RatingIndex(root, ratings, metadata)
     folder_counts = FolderCountIndex(root)
-    thumbnail_modes = build_thumbnail_modes(thumbnail_queue_limits, thumbnail_mode_settings)
+    thumbnail_modes = build_thumbnail_modes(thumbnail_mode_settings)
     thumbnails = {
         mode: ImageCacheStore(
             root,
@@ -147,14 +134,6 @@ def _create_root_services(
         )
         for mode, spec in thumbnail_modes.items()
     }
-    previews = ImageCacheStore(
-        root,
-        cache_root / f"previews_{preview_size}_{preview_quality}",
-        preview_size,
-        preview_quality,
-        "preview",
-        queue_limit=PREVIEW_CACHE_QUEUE_LIMIT,
-    )
     return RootServices(
         root=root,
         ratings=ratings,
@@ -163,5 +142,5 @@ def _create_root_services(
         folder_counts=folder_counts,
         thumbnails=thumbnails,
         default_thumbnails=thumbnails[DEFAULT_THUMBNAIL_MODE],
-        previews=previews,
+        previews=thumbnails[DEFAULT_THUMBNAIL_MODE],
     )

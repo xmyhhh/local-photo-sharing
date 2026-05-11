@@ -1,5 +1,9 @@
 function openFolderContextMenu(event, entry) {
   event.preventDefault();
+  if (state.selectionMode) {
+    closeAllContextMenus();
+    return;
+  }
   closeAllContextMenus();
   state.contextFolder = entry;
   state.contextEntry = entry;
@@ -8,7 +12,7 @@ function openFolderContextMenu(event, entry) {
     menuButton("下载", () => downloadEntry(entry)),
     menuButton("重命名", () => renameEntry(entry)),
     menuButton("删除", () => deleteEntries([entry.path])),
-    menuButton("进入多选模式", () => enterSelectionMode(entry.path)),
+    menuButton("多选", () => enterSelectionMode(entry.path)),
   );
   folderContextMenu.querySelectorAll("[data-core-file-action='1']").forEach((item) => {
     item.hidden = false;
@@ -23,6 +27,10 @@ function openFolderContextMenu(event, entry) {
 function openItemContextMenu(event, entry) {
   event.preventDefault();
   event.stopPropagation();
+  if (state.selectionMode) {
+    closeAllContextMenus();
+    return;
+  }
   closeAllContextMenus();
   state.contextEntry = entry;
   state.contextFolder = entry.type === "folder" ? entry : null;
@@ -31,12 +39,17 @@ function openItemContextMenu(event, entry) {
     menuButton("下载", () => downloadEntry(entry)),
     menuButton("重命名", () => renameEntry(entry)),
     menuButton("删除", () => deleteEntries([entry.path])),
-    menuButton("进入多选模式", () => enterSelectionMode(entry.path)),
+    menuButton("多选", () => enterSelectionMode(entry.path)),
   );
   openContextMenuAt(itemContextMenu, event.clientX, event.clientY);
 }
 
 function openBlankContextMenu(event) {
+  if (state.selectionMode) {
+    event.preventDefault();
+    closeAllContextMenus();
+    return;
+  }
   if (event.target.closest(".tile") || event.target.closest(".context-menu")) {
     return;
   }
@@ -45,7 +58,7 @@ function openBlankContextMenu(event) {
   blankContextMenu.innerHTML = "";
   blankContextMenu.append(
     menuButton("新建文件夹", createFolderInCurrentFolder),
-    menuButton("进入多选模式", () => enterSelectionMode()),
+    menuButton("多选", () => enterSelectionMode()),
   );
   openContextMenuAt(blankContextMenu, event.clientX, event.clientY);
 }
@@ -145,6 +158,10 @@ async function copyOrMoveSelected(move) {
   loadFolder(state.folder);
 }
 
+async function cutSelectedEntries() {
+  await copyOrMoveSelected(true);
+}
+
 async function downloadEntry(entry) {
   if (entry.type === "folder") {
     await downloadZip([entry.path], `${entry.name}.zip`);
@@ -203,7 +220,7 @@ function filenameFromDisposition(value) {
 }
 
 function scheduleEntryLongPress(event, entry) {
-  if (!isContextLongPressPointer(event) || event.target.closest(".tile-select") || event.target.closest(".rating")) {
+  if (state.selectionMode || !isContextLongPressPointer(event) || event.target.closest(".tile-select") || event.target.closest(".rating")) {
     return;
   }
   startLongPress(event, () => {
@@ -217,7 +234,7 @@ function scheduleEntryLongPress(event, entry) {
 }
 
 function scheduleBlankLongPress(event) {
-  if (!isContextLongPressPointer(event) || event.target.closest(".tile") || event.target.closest(".context-menu")) {
+  if (state.selectionMode || !isContextLongPressPointer(event) || event.target.closest(".tile") || event.target.closest(".context-menu")) {
     return;
   }
   startLongPress(event, () => openBlankContextMenu(longPressMenuEvent(event)));
@@ -279,6 +296,7 @@ function longPressMenuEvent(event) {
 
 function enterSelectionMode(initialPath = "") {
   state.selectionMode = true;
+  closeAllContextMenus();
   if (initialPath) {
     state.selectedPaths.add(initialPath);
   }
@@ -293,6 +311,19 @@ function exitSelectionMode() {
   renderGrid();
 }
 
+function invertSelection() {
+  const next = new Set();
+  state.entries.forEach((entry) => {
+    const path = qualifyPath(entry.path);
+    if (!state.selectedPaths.has(path)) {
+      next.add(path);
+    }
+  });
+  state.selectedPaths = next;
+  updateSelectionBar();
+  renderGrid();
+}
+
 function toggleSelectedPath(path) {
   if (state.selectedPaths.has(path)) {
     state.selectedPaths.delete(path);
@@ -300,7 +331,17 @@ function toggleSelectedPath(path) {
     state.selectedPaths.add(path);
   }
   updateSelectionBar();
-  document.querySelector(`.tile[data-path="${CSS.escape(path)}"]`)?.classList.toggle("selected", state.selectedPaths.has(path));
+  updateSelectionTile(path);
+}
+
+function updateSelectionTile(path) {
+  const selected = state.selectedPaths.has(path);
+  const tile = document.querySelector(`.tile[data-path="${CSS.escape(path)}"]`);
+  tile?.classList.toggle("selected", selected);
+  const checkbox = tile?.querySelector(".tile-select");
+  if (checkbox) {
+    checkbox.checked = selected;
+  }
 }
 
 function updateSelectionBar() {
@@ -309,4 +350,10 @@ function updateSelectionBar() {
   }
   selectionBar.hidden = !state.selectionMode;
   selectionCount.textContent = `已选择 ${state.selectedPaths.size} 项`;
+  const hasSelection = state.selectedPaths.size > 0;
+  [copySelectedBtn, cutSelectedBtn, downloadSelectedBtn, deleteSelectedBtn, moveSelectedBtn].forEach((button) => {
+    if (button) {
+      button.disabled = !hasSelection;
+    }
+  });
 }

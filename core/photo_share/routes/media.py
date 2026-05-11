@@ -3,11 +3,12 @@ from __future__ import annotations
 import mimetypes
 import os
 import shutil
+from io import BytesIO
 from datetime import datetime
 from pathlib import Path
 
 import piexif
-from flask import Flask, abort, jsonify, request
+from flask import Flask, abort, jsonify, request, send_file
 from PIL import Image, ImageOps
 
 from ..constants import PHOTO_EXTENSIONS, TRASH_DIR, VIDEO_EXTENSIONS
@@ -31,7 +32,48 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
         root_id, rel_path = _split_rooted(photo_path)
         root_services = _root_services(services, root_id)
         path = resolve_media(root_services.root, rel_path)
+        prefetched = services.memory_prefetch.get(path)
+        if prefetched is not None:
+            response = send_file(
+                BytesIO(prefetched.data),
+                mimetype=prefetched.mimetype,
+                conditional=False,
+                download_name=path.name,
+            )
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            response.headers["X-Memory-Prefetch"] = "hit"
+            return response
         return send_cached_file(path, mimetype=mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+
+    @app.post("/api/prefetch/originals")
+    def prefetch_originals():
+        data = request.get_json(silent=True) or {}
+        client_id = data.get("clientId", "")
+        paths = data.get("paths", [])
+        if not isinstance(client_id, str) or not client_id:
+            abort(400, "clientId must be a non-empty string.")
+        if not isinstance(paths, list):
+            abort(400, "paths must be an array.")
+        resolved: list[Path] = []
+        for item in paths:
+            if not isinstance(item, str):
+                continue
+            root_id, rel_path = _split_rooted(item)
+            root_services = _root_services(services, root_id)
+            try:
+                resolved.append(resolve_photo(root_services.root, rel_path))
+            except Exception:
+                continue
+        services.memory_prefetch.prefetch(client_id, resolved)
+        return jsonify({"accepted": len(resolved)})
+
+    @app.post("/api/prefetch/release")
+    def release_prefetch():
+        data = request.get_json(silent=True) or {}
+        client_id = data.get("clientId", "")
+        if isinstance(client_id, str) and client_id:
+            services.memory_prefetch.release(client_id)
+        return jsonify({"released": True})
 
     @app.get("/api/preview/<path:photo_path>")
     def preview(photo_path: str):

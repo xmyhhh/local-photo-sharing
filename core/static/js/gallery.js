@@ -9,18 +9,19 @@ async function loadConfig() {
   if (uploadPasswordLabel) {
     uploadPasswordLabel.hidden = !state.uploadPasswordRequired;
   }
-  applyThumbnailQueueLimits(config.thumbnailQueueLimits);
+  applyThumbnailQueueLimits(config.thumbnailModes);
 }
 
-function applyThumbnailQueueLimits(limits) {
-  if (!limits || typeof limits !== "object") {
+function applyThumbnailQueueLimits(modes) {
+  if (!modes || typeof modes !== "object") {
     return;
   }
   THUMB_MODES.forEach((mode) => {
-    if (limits[mode] === undefined) {
+    const spec = modes[mode];
+    if (!spec || spec.queue_limit === undefined) {
       return;
     }
-    const value = Number.parseInt(limits[mode], 10);
+    const value = Number.parseInt(spec.queue_limit, 10);
     if (Number.isFinite(value)) {
       THUMB_QUEUE_LIMITS[mode] = Math.max(10, value);
     }
@@ -28,6 +29,9 @@ function applyThumbnailQueueLimits(limits) {
 }
 
 async function loadFolder(folder = state.folder, options = {}) {
+  if (!options.silent && normalizeFolderPath(folder || "") !== state.folder) {
+    releaseServerMemoryPrefetch();
+  }
   const generation = state.filterGeneration;
   const targetFolder = normalizeFolderPath(folder || "");
   const silent = Boolean(options.silent);

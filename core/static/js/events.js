@@ -61,10 +61,12 @@ grid.addEventListener("pointerdown", scheduleBlankLongPress);
 grid.addEventListener("pointermove", cancelLongPressIfMoved);
 grid.addEventListener("pointerup", cancelLongPress);
 grid.addEventListener("pointercancel", cancelLongPress);
-downloadSelectedBtn.addEventListener("click", downloadSelectedEntries);
 copySelectedBtn.addEventListener("click", () => copyOrMoveSelected(false));
+cutSelectedBtn.addEventListener("click", cutSelectedEntries);
+downloadSelectedBtn.addEventListener("click", downloadSelectedEntries);
 moveSelectedBtn.addEventListener("click", () => copyOrMoveSelected(true));
 deleteSelectedBtn.addEventListener("click", () => deleteEntries(Array.from(state.selectedPaths)));
+invertSelectionBtn.addEventListener("click", invertSelection);
 exitSelectionBtn.addEventListener("click", exitSelectionMode);
 clearFiltersBtn.addEventListener("click", () => {
   ratingFilterInputs.forEach((input) => {
@@ -272,6 +274,11 @@ document.addEventListener("fullscreenchange", () => {
   }
 });
 document.addEventListener("keydown", (event) => {
+  if (state.selectionMode && event.key === "Escape" && !viewer.open) {
+    event.preventDefault();
+    exitSelectionMode();
+    return;
+  }
   if (!viewer.open) {
     return;
   }

@@ -58,6 +58,7 @@ function exitViewerFullscreen() {
 
 function finishViewerClose() {
   cancelViewerOriginalLoads();
+  releaseServerMemoryPrefetch();
   closePhotoInfoPanel();
   state.viewerHistoryArmed = false;
   state.closingViewerFromHistory = false;
@@ -126,6 +127,7 @@ function showPhoto(entry) {
   state.viewerLiveMode = false;
   cancelStaleOriginalLoads(entry.type === "photo" ? entry.path : null);
   state.currentPhoto = entry;
+  updateServerMemoryPrefetch();
   state.zoom = 1;
   state.panX = 0;
   state.panY = 0;

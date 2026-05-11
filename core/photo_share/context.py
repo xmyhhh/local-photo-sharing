@@ -6,6 +6,7 @@ from typing import Any
 
 from .folder_counts import FolderCountIndex
 from .image_cache import ImageCacheStore
+from .memory_prefetch import MemoryPrefetchPool
 from .rating_index import RatingIndex
 from .stores import MetadataStore, RatingStore
 
@@ -35,9 +36,9 @@ class AppServices:
     bracket_cache: dict[str, dict[str, Any]]
     bracket_cache_loaded: bool
     bracket_merge_tasks: dict[str, dict[str, Any]]
-    thumbnail_queue_limits: dict[str, int]
     thumbnail_mode_settings: dict[str, dict[str, int]]
     upload_password: str
+    memory_prefetch: MemoryPrefetchPool
     enabled_plugins: set[str]
     plugin_assets: list[dict[str, Any]]
     plugin_components: list[dict[str, Any]]

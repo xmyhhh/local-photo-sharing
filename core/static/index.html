@@ -58,15 +58,17 @@
         </label>
         <button id="clearFiltersBtn" class="ghost" type="button">清除筛选</button>
       </section>
-      <section id="grid" class="grid" aria-live="polite"></section>
       <div id="selectionBar" class="selection-bar" hidden>
         <span id="selectionCount">已选择 0 项</span>
-        <button id="downloadSelectedBtn" class="ghost" type="button">打包下载</button>
-        <button id="copySelectedBtn" class="ghost" type="button">复制到...</button>
-        <button id="moveSelectedBtn" class="ghost" type="button">移动到...</button>
+        <button id="copySelectedBtn" class="ghost" type="button">复制</button>
+        <button id="cutSelectedBtn" class="ghost" type="button">剪切</button>
+        <button id="downloadSelectedBtn" class="ghost" type="button">下载</button>
         <button id="deleteSelectedBtn" class="danger" type="button">删除</button>
+        <button id="moveSelectedBtn" class="ghost" type="button">移动</button>
+        <button id="invertSelectionBtn" class="ghost" type="button">反选</button>
         <button id="exitSelectionBtn" class="ghost" type="button">退出多选</button>
       </div>
+      <section id="grid" class="grid" aria-live="polite"></section>
       <div id="emptyState" class="empty" hidden>当前文件夹没有 JPG 图片或子文件夹。</div>
     </main>
 
@@ -79,17 +81,44 @@
 
     <dialog id="settingsDialog" class="settings-dialog">
       <form method="dialog" class="settings-panel">
-        <div class="settings-header">
-          <div>
+        <aside class="settings-sidebar" aria-label="设置分类">
+          <div class="settings-brand">
             <div class="settings-title">设置</div>
-            <div class="settings-subtitle">运行时启用或禁用组件</div>
+            <div class="settings-subtitle">管理核心服务和扩展能力</div>
           </div>
-          <button id="closeSettingsBtn" class="ghost" type="button">关闭</button>
-        </div>
-        <div id="settingsStatus" class="settings-status"></div>
-        <section class="settings-section">
-          <h2>插件组件</h2>
-          <div id="pluginComponentList" class="component-list"></div>
+          <button class="settings-tab active" type="button" data-settings-tab="general" aria-current="page">通用设置</button>
+          <button class="settings-tab" type="button" data-settings-tab="plugins">插件</button>
+        </aside>
+        <section class="settings-content">
+          <div class="settings-header">
+            <div>
+              <div id="settingsKicker" class="settings-kicker">通用</div>
+              <h2 id="settingsPageTitle">通用设置</h2>
+              <p id="settingsPageDescription">调整核心服务的运行策略。</p>
+            </div>
+            <button id="closeSettingsBtn" class="settings-close" type="button" aria-label="关闭设置">×</button>
+          </div>
+          <div id="settingsStatus" class="settings-status"></div>
+          <div id="generalSettingsPanel" class="settings-page">
+            <section class="settings-card">
+              <div>
+                <h3>启用内存预取</h3>
+                <p>打开文件夹并查看原图时，服务端会提前把当前图片前后约 20 张照片读入共享内存池，减少机械硬盘读取延迟。</p>
+              </div>
+              <label class="switch-row">
+                <span>启用</span>
+                <input id="memoryPrefetchEnabledInput" type="checkbox" />
+              </label>
+              <label class="settings-field">
+                <span>内存上限 GB</span>
+                <input id="memoryPrefetchLimitInput" type="number" min="1" max="16" step="1" />
+              </label>
+              <button id="saveGeneralSettingsBtn" type="button">保存通用设置</button>
+            </section>
+          </div>
+          <div id="pluginsSettingsPanel" class="settings-page" hidden>
+            <div id="pluginComponentList" class="plugin-list"></div>
+          </div>
         </section>
       </form>
     </dialog>

@@ -16,6 +16,51 @@
 
   candidates.forEach((entry) => queueOriginalPrefetch(entry));
   runOriginalPrefetchQueue();
+  updateServerMemoryPrefetch();
+}
+
+function getMemoryPrefetchClientId() {
+  if (!state.memoryPrefetchClientId) {
+    const random = window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    state.memoryPrefetchClientId = `client-${random}`;
+  }
+  return state.memoryPrefetchClientId;
+}
+
+function updateServerMemoryPrefetch() {
+  if (!state.currentPhoto || state.currentPhoto.type !== "photo") {
+    return;
+  }
+  const photos = photosOnly().filter((entry) => entry.type === "photo" && entry.browserRenderable !== false);
+  const index = photos.findIndex((entry) => entry.path === state.currentPhoto.path);
+  if (index < 0) {
+    return;
+  }
+  const start = Math.max(0, index - 20);
+  const end = Math.min(photos.length, index + 21);
+  const paths = photos.slice(start, end).map((entry) => entry.path);
+  fetch("/api/prefetch/originals", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clientId: getMemoryPrefetchClientId(), paths }),
+  }).catch(() => null);
+}
+
+function releaseServerMemoryPrefetch(useBeacon = false) {
+  if (!state.memoryPrefetchClientId) {
+    return;
+  }
+  const body = JSON.stringify({ clientId: state.memoryPrefetchClientId });
+  if (useBeacon && navigator.sendBeacon) {
+    navigator.sendBeacon("/api/prefetch/release", new Blob([body], { type: "application/json" }));
+    return;
+  }
+  fetch("/api/prefetch/release", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body,
+    keepalive: true,
+  }).catch(() => null);
 }
 
 function queueOriginalPrefetch(entry) {
@@ -213,6 +258,7 @@ function trimOriginalCache() {
 }
 
 window.addEventListener("beforeunload", () => {
+  releaseServerMemoryPrefetch(true);
   cancelStaleOriginalLoads();
   for (const item of state.originalCache.values()) {
     URL.revokeObjectURL(item.url);

@@ -1,15 +1,77 @@
 openSettingsBtn.addEventListener("click", openSettingsDialog);
 closeSettingsBtn.addEventListener("click", () => settingsDialog.close());
+settingsTabs.forEach((tab) => {
+  tab.addEventListener("click", () => setSettingsTab(tab.dataset.settingsTab));
+});
+saveGeneralSettingsBtn.addEventListener("click", saveGeneralSettings);
 
 async function openSettingsDialog() {
-  settingsStatus.textContent = "正在读取组件列表...";
+  setSettingsTab("general");
+  settingsStatus.textContent = "正在读取设置...";
   pluginComponentList.innerHTML = "";
   settingsDialog.showModal();
   try {
-    const settings = await fetchJson("/api/settings/components", { cache: "no-store" });
-    applyComponentSettings(settings);
-    renderSettings(settings);
+    const [general, components] = await Promise.all([
+      fetchJson("/api/settings/general", { cache: "no-store" }),
+      fetchJson("/api/settings/components", { cache: "no-store" }),
+    ]);
+    renderGeneralSettings(general);
+    applyComponentSettings(components);
+    renderSettings(components);
     settingsStatus.textContent = "";
+  } catch (error) {
+    settingsStatus.textContent = error.message;
+  }
+}
+
+function setSettingsTab(tabName) {
+  const name = tabName === "plugins" ? "plugins" : "general";
+  settingsTabs.forEach((tab) => {
+    const active = tab.dataset.settingsTab === name;
+    tab.classList.toggle("active", active);
+    if (active) {
+      tab.setAttribute("aria-current", "page");
+    } else {
+      tab.removeAttribute("aria-current");
+    }
+  });
+  generalSettingsPanel.hidden = name !== "general";
+  pluginsSettingsPanel.hidden = name !== "plugins";
+  settingsKicker.textContent = name === "general" ? "通用" : "扩展";
+  settingsPageTitle.textContent = name === "general" ? "通用设置" : "插件";
+  settingsPageDescription.textContent = name === "general"
+    ? "调整核心服务的运行策略。"
+    : "启用或禁用当前项目插件目录中的能力。";
+}
+
+function renderGeneralSettings(settings) {
+  const prefetch = settings.memoryPrefetch || {};
+  memoryPrefetchEnabledInput.checked = Boolean(prefetch.enabled);
+  memoryPrefetchLimitInput.value = String(prefetch.memoryLimitGb || 2);
+  memoryPrefetchLimitInput.min = String(prefetch.minGb || 1);
+  memoryPrefetchLimitInput.max = String(prefetch.maxGb || 16);
+}
+
+async function saveGeneralSettings() {
+  const memoryLimitGb = Number.parseInt(memoryPrefetchLimitInput.value, 10);
+  if (!Number.isFinite(memoryLimitGb) || memoryLimitGb < 1 || memoryLimitGb > 16) {
+    settingsStatus.textContent = "内存上限必须是 1 到 16 之间的整数 GB。";
+    return;
+  }
+  settingsStatus.textContent = "正在保存通用设置...";
+  try {
+    const settings = await fetchJson("/api/settings/general", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        memoryPrefetch: {
+          enabled: memoryPrefetchEnabledInput.checked,
+          memoryLimitGb,
+        },
+      }),
+    });
+    renderGeneralSettings(settings);
+    settingsStatus.textContent = "通用设置已保存。";
   } catch (error) {
     settingsStatus.textContent = error.message;
   }
@@ -30,19 +92,23 @@ function renderSettings(settings) {
 
 function createComponentRow(item) {
   const row = document.createElement("div");
-  row.className = "component-row";
+  row.className = "plugin-row";
   const text = document.createElement("div");
+  text.className = "plugin-row-main";
   const title = document.createElement("div");
-  title.className = "component-title";
+  title.className = "plugin-title";
   title.textContent = item.title;
   const desc = document.createElement("div");
-  desc.className = "component-description";
+  desc.className = "plugin-description";
   desc.textContent = item.description || item.id;
-  text.append(title, desc);
+  const meta = document.createElement("div");
+  meta.className = "plugin-meta";
+  meta.textContent = item.id;
+  text.append(title, desc, meta);
 
   const button = document.createElement("button");
   button.type = "button";
-  button.className = item.enabled ? "ghost component-enabled" : "ghost";
+  button.className = item.enabled ? "plugin-toggle enabled" : "plugin-toggle";
   button.textContent = item.enabled ? "已启用" : "启用";
   button.addEventListener("click", () => toggleComponent(item));
   row.append(text, button);

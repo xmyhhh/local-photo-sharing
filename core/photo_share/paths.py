@@ -125,10 +125,7 @@ def hash_text(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def build_thumbnail_modes(
-    queue_limits: dict[str, int] | None = None,
-    mode_settings: dict[str, dict[str, int]] | None = None,
-) -> dict[str, dict[str, int]]:
+def build_thumbnail_modes(mode_settings: dict[str, dict[str, int]] | None = None) -> dict[str, dict[str, int]]:
     modes = {mode: spec.copy() for mode, spec in THUMBNAIL_MODES.items()}
     for mode, settings in (mode_settings or {}).items():
         if mode in modes:
@@ -136,9 +133,8 @@ def build_thumbnail_modes(
                 modes[mode]["size"] = int(settings["size"])
             if "quality" in settings:
                 modes[mode]["quality"] = int(settings["quality"])
-    for mode, limit in (queue_limits or {}).items():
-        if mode in modes:
-            modes[mode]["queue_limit"] = max(10, int(limit))
+            if "queue_limit" in settings:
+                modes[mode]["queue_limit"] = max(10, int(settings["queue_limit"]))
     return modes
 
 

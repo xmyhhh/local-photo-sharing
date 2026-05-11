@@ -25,11 +25,8 @@ THUMBNAIL_WORKERS = min(16, max(2, CPU_COUNT))
 METADATA_WORKERS = min(4, max(2, CPU_COUNT // 2))
 BRACKET_FEATURE_WORKERS = min(16, max(2, CPU_COUNT))
 BRACKET_MERGE_WORKERS = min(4, max(1, CPU_COUNT // 2))
-PREVIEW_CACHE_QUEUE_LIMIT = 25
 FILTER_WAIT_SECONDS = 0.8
 DEFAULT_ENTRY_PLACEHOLDER_LIMIT = 2000
-DEFAULT_PREVIEW_SIZE = 2560
-DEFAULT_PREVIEW_QUALITY = 88
 THUMBNAIL_MODES = {
     "small": {"size": 180, "quality": 58, "queue_limit": 100},
     "medium": {"size": 300, "quality": 66, "queue_limit": 70},
@@ -48,17 +45,14 @@ DEFAULT_CONFIG = {
         mode: {
             "size": int(spec["size"]),
             "quality": int(spec["quality"]),
+            "queue_limit": int(spec["queue_limit"]),
         }
         for mode, spec in THUMBNAIL_MODES.items()
     },
-    "thumbnail_queue_limits": {
-        "small": 100,
-        "medium": 70,
-        "large": 40,
-        "xlarge": 30,
+    "memory_prefetch": {
+        "enabled": False,
+        "memory_limit_gb": 2,
     },
-    "preview_size": DEFAULT_PREVIEW_SIZE,
-    "preview_quality": DEFAULT_PREVIEW_QUALITY,
     "upload_password": "",
     "plugins": [
         {

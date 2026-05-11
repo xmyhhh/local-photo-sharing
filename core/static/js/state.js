@@ -56,6 +56,7 @@ const state = {
   originalControllers: new Map(),
   originalPrefetchQueue: [],
   originalPrefetchActive: 0,
+  memoryPrefetchClientId: "",
   originalLoadTimer: null,
   viewerGeneration: 0,
   photoInfoController: null,
@@ -175,12 +176,23 @@ const selectionBar = document.querySelector("#selectionBar");
 const selectionCount = document.querySelector("#selectionCount");
 const downloadSelectedBtn = document.querySelector("#downloadSelectedBtn");
 const copySelectedBtn = document.querySelector("#copySelectedBtn");
+const cutSelectedBtn = document.querySelector("#cutSelectedBtn");
 const moveSelectedBtn = document.querySelector("#moveSelectedBtn");
 const deleteSelectedBtn = document.querySelector("#deleteSelectedBtn");
+const invertSelectionBtn = document.querySelector("#invertSelectionBtn");
 const exitSelectionBtn = document.querySelector("#exitSelectionBtn");
 const pluginDialogs = document.querySelector("#pluginDialogs");
 const settingsDialog = document.querySelector("#settingsDialog");
 const closeSettingsBtn = document.querySelector("#closeSettingsBtn");
 const settingsStatus = document.querySelector("#settingsStatus");
+const settingsKicker = document.querySelector("#settingsKicker");
+const settingsPageTitle = document.querySelector("#settingsPageTitle");
+const settingsPageDescription = document.querySelector("#settingsPageDescription");
+const settingsTabs = Array.from(document.querySelectorAll("[data-settings-tab]"));
+const generalSettingsPanel = document.querySelector("#generalSettingsPanel");
+const pluginsSettingsPanel = document.querySelector("#pluginsSettingsPanel");
+const memoryPrefetchEnabledInput = document.querySelector("#memoryPrefetchEnabledInput");
+const memoryPrefetchLimitInput = document.querySelector("#memoryPrefetchLimitInput");
+const saveGeneralSettingsBtn = document.querySelector("#saveGeneralSettingsBtn");
 const pluginComponentList = document.querySelector("#pluginComponentList");
 const isAppleMobileBrowser = /iPhone|iPad|iPod/i.test(navigator.userAgent);

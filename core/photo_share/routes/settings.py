@@ -7,9 +7,32 @@ from typing import Any
 from flask import Flask, abort, jsonify, request
 
 from ..context import AppServices
+from ..memory_prefetch import MemoryPrefetchSettings
 
 
 def register_settings_routes(app: Flask, services: AppServices) -> None:
+    @app.get("/api/settings/general")
+    def general_settings():
+        return jsonify(build_general_settings(services))
+
+    @app.post("/api/settings/general")
+    def update_general_settings():
+        data = request.get_json(silent=True) or {}
+        prefetch = data.get("memoryPrefetch", {})
+        if not isinstance(prefetch, dict):
+            abort(400, "memoryPrefetch must be an object.")
+        settings = MemoryPrefetchSettings(
+            enabled=bool(prefetch.get("enabled", False)),
+            memory_limit_gb=parse_int_range(prefetch.get("memoryLimitGb", 2), 1, 16, "memoryLimitGb"),
+        )
+        services.config["memory_prefetch"] = {
+            "enabled": settings.enabled,
+            "memory_limit_gb": settings.memory_limit_gb,
+        }
+        services.memory_prefetch.configure(settings)
+        write_config(services.config_path, services.config)
+        return jsonify(build_general_settings(services))
+
     @app.get("/api/settings/components")
     def component_settings():
         return jsonify(build_component_settings(services))
@@ -34,6 +57,31 @@ def build_component_settings(services: AppServices) -> dict[str, Any]:
         "pluginAssets": services.plugin_assets,
         "pluginComponents": services.plugin_components,
     }
+
+
+def build_general_settings(services: AppServices) -> dict[str, Any]:
+    settings = services.memory_prefetch.settings
+    return {
+        "memoryPrefetch": {
+            "enabled": settings.enabled,
+            "memoryLimitGb": settings.memory_limit_gb,
+            "minGb": 1,
+            "maxGb": 16,
+            "windowBefore": settings.window_before,
+            "windowAfter": settings.window_after,
+        }
+    }
+
+
+def parse_int_range(value: Any, minimum: int, maximum: int, field: str) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        abort(400, f"{field} must be an integer.")
+        raise exc
+    if parsed < minimum or parsed > maximum:
+        abort(400, f"{field} must be between {minimum} and {maximum}.")
+    return parsed
 
 
 def update_config_components(services: AppServices, enabled_plugins: set[str]) -> None:
