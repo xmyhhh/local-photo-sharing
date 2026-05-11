@@ -2,6 +2,9 @@
   const response = await fetch(url, options);
   if (!response.ok) {
     const text = await response.text();
+    if (text.trim().startsWith("<!doctype html>") || text.trim().startsWith("<html")) {
+      throw new Error(`请求失败：HTTP ${response.status}。如果刚刚新增或更新了插件，请重启服务后再试。`);
+    }
     try {
       const data = JSON.parse(text);
       throw new Error(data.message || text || `HTTP ${response.status}`);

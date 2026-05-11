@@ -51,6 +51,8 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
             "thumbnailModes": services.thumbnail_mode_settings,
             "uploadPasswordRequired": bool(services.upload_password),
             "plugins": sorted(services.enabled_plugins),
+            "pluginAssets": services.plugin_assets,
+            "pluginComponents": services.plugin_components,
         })
 
     @app.get("/api/photos")

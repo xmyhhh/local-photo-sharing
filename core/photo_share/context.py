@@ -35,3 +35,5 @@ class AppServices:
     thumbnail_mode_settings: dict[str, dict[str, int]]
     upload_password: str
     enabled_plugins: set[str]
+    plugin_assets: list[dict[str, Any]]
+    plugin_components: list[dict[str, Any]]

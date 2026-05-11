@@ -59,5 +59,10 @@ DEFAULT_CONFIG = {
     "preview_size": DEFAULT_PREVIEW_SIZE,
     "preview_quality": DEFAULT_PREVIEW_QUALITY,
     "upload_password": "",
-    "plugins": [],
+    "plugins": [
+        {
+            "name": "duplicate_checker",
+            "path": "plugins/duplicate_checker/plugin.py",
+        },
+    ],
 }

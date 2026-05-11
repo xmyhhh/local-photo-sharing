@@ -86,6 +86,8 @@ def _create_services(
         thumbnail_mode_settings=thumbnail_mode_settings or {},
         upload_password=upload_password,
         enabled_plugins=set(),
+        plugin_assets=[],
+        plugin_components=[],
     )
 
 

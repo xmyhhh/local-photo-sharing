@@ -7,11 +7,6 @@
 });
 refreshBtn?.addEventListener("click", () => loadFolder(state.folder));
 openUploadBtn.addEventListener("click", openUploadDialog);
-openBracketProjectBtn?.addEventListener("click", () => {
-  if (state.enabledPlugins?.has("brackets")) {
-    openBracketProject();
-  }
-});
 filterPanelToggleBtn.addEventListener("click", () => {
   setFilterPanelOpen(filterPanel.hidden);
 });
@@ -38,27 +33,6 @@ compactToggleBtn.addEventListener("click", () => {
   state.compactMode = !state.compactMode;
   window.localStorage.setItem("compactMode", state.compactMode ? "1" : "0");
   renderGrid();
-});
-detectBracketsBtn?.addEventListener("click", () => {
-  if (state.enabledPlugins?.has("brackets")) {
-    detectBracketsInContextFolder();
-  }
-});
-closeBracketDialogBtn?.addEventListener("click", () => bracketDialog.close());
-useBracketCacheBtn?.addEventListener("click", () => {
-  bracketCacheActions.hidden = true;
-  renderBracketDetection(state.currentBracketResult);
-  saveCurrentBracketProject();
-});
-rescanBracketsBtn?.addEventListener("click", () => {
-  resetBracketDialog();
-  bracketStatus.textContent = "正在重新扫描...";
-  startBracketDetection(true);
-});
-selectAllBracketGroups?.addEventListener("change", () => setAllBracketGroups(selectAllBracketGroups.checked));
-mergeBracketsBtn?.addEventListener("click", mergeSelectedBracketGroups);
-[mergeAlgorithm, mergeAlignment, mergeExposure, mergeShadows, mergeHighlights, mergeContrast, mergeSaturation, mergeSharpen, mergeQuality].forEach((input) => {
-  input?.addEventListener("change", saveCurrentBracketProject);
 });
 document.addEventListener("click", (event) => {
   if (!ratingFilterMenu.hidden && !ratingFilterMenu.contains(event.target) && event.target !== ratingFilterBtn) {
@@ -376,10 +350,12 @@ function clearEndedTouches(event) {
 }
 
 function updateScrollTopButton() {
-  scrollTopBtn.hidden = window.scrollY < 700 || viewer.open || bracketDialog.open;
+  const pluginDialogOpen = Boolean(document.querySelector("#pluginDialogs dialog[open]"));
+  scrollTopBtn.hidden = window.scrollY < 700 || viewer.open || pluginDialogOpen;
 }
 
 loadConfig()
+  .then(loadPluginAssets)
   .then(() => loadFolder(""))
   .then(armGalleryHistory)
   .then(openInitialBracketProject)
@@ -392,8 +368,8 @@ loadConfig()
 function openInitialBracketProject() {
   const params = new URLSearchParams(window.location.search);
   const path = params.get("bracketProject");
-  if (path !== null) {
-    return openBracketProject(path || undefined);
+  if (path !== null && typeof window.openBracketProject === "function") {
+    return window.openBracketProject(path || undefined);
   }
   handleSharedLaunch();
   return null;

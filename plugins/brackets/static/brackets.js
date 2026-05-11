@@ -1,16 +1,135 @@
-function openFolderContextMenu(event, entry) {
-  event.preventDefault();
-  state.contextFolder = entry;
-  folderContextMenu.hidden = false;
-  const menuRect = folderContextMenu.getBoundingClientRect();
-  const left = Math.min(event.clientX, window.innerWidth - menuRect.width - 8);
-  const top = Math.min(event.clientY, window.innerHeight - menuRect.height - 8);
-  folderContextMenu.style.left = `${Math.max(8, left)}px`;
-  folderContextMenu.style.top = `${Math.max(8, top)}px`;
+﻿const bracketUi = {};
+
+initBracketPluginUi();
+
+function initBracketPluginUi() {
+  topbarActions?.append(createOpenBracketProjectButton());
+  folderContextMenu?.append(createDetectBracketsButton());
+  pluginDialogs?.append(createBracketDialog());
+  bindBracketPluginEvents();
 }
 
-function closeFolderContextMenu() {
-  folderContextMenu.hidden = true;
+function createOpenBracketProjectButton() {
+  const button = document.createElement("button");
+  button.id = "openBracketProjectBtn";
+  button.className = "ghost";
+  button.type = "button";
+  button.textContent = "打开包围曝光项目";
+  bracketUi.openBracketProjectBtn = button;
+  return button;
+}
+
+function createDetectBracketsButton() {
+  const button = document.createElement("button");
+  button.id = "detectBracketsBtn";
+  button.type = "button";
+  button.textContent = "检测包围曝光";
+  bracketUi.detectBracketsBtn = button;
+  return button;
+}
+
+function createBracketDialog() {
+  const template = document.createElement("template");
+  template.innerHTML = `
+    <dialog id="bracketDialog" class="bracket-dialog">
+      <div class="bracket-panel">
+        <div class="bracket-header">
+          <div>
+            <div class="bracket-title">包围曝光检测</div>
+            <div id="bracketDialogPath" class="bracket-path"></div>
+          </div>
+          <button id="closeBracketDialogBtn" class="ghost" type="button">关闭</button>
+        </div>
+        <div id="bracketCacheActions" class="bracket-cache-actions" hidden>
+          <span>已有这个文件夹的扫描结果。</span>
+          <button id="useBracketCacheBtn" type="button">使用结果</button>
+          <button id="rescanBracketsBtn" class="ghost" type="button">重新扫描</button>
+        </div>
+        <div id="bracketStatus" class="bracket-status"></div>
+        <div id="bracketMergePanel" class="bracket-merge-panel" hidden>
+          <label><input id="selectAllBracketGroups" type="checkbox" /> 全选</label>
+          <label>算法
+            <select id="mergeAlgorithm">
+              <option value="fusion">Fusion</option>
+              <option value="debevec">Debevec</option>
+              <option value="robertson">Robertson</option>
+            </select>
+          </label>
+          <label>对齐
+            <select id="mergeAlignment">
+              <option value="simple">简单</option>
+              <option value="people">人物/轻微移动</option>
+              <option value="off">关闭</option>
+              <option value="advanced">复杂</option>
+            </select>
+          </label>
+          <label>曝光 <input id="mergeExposure" type="number" step="0.1" min="-2" max="2" value="0" /></label>
+          <label>阴影 <input id="mergeShadows" type="number" step="0.05" min="0" max="1" value="0.25" /></label>
+          <label>高光 <input id="mergeHighlights" type="number" step="0.05" min="0" max="1" value="0.15" /></label>
+          <label>对比度 <input id="mergeContrast" type="number" step="0.05" min="0.5" max="2" value="1" /></label>
+          <label>饱和度 <input id="mergeSaturation" type="number" step="0.05" min="0" max="2" value="1" /></label>
+          <label>锐化 <input id="mergeSharpen" type="number" step="0.1" min="0" max="2" value="0.2" /></label>
+          <label>质量 <input id="mergeQuality" type="number" step="1" min="70" max="98" value="92" /></label>
+          <button id="mergeBracketsBtn" type="button">合成选中组</button>
+        </div>
+        <div id="bracketMergeOutput" class="bracket-merge-output" hidden></div>
+        <div id="bracketResults" class="bracket-results"></div>
+      </div>
+    </dialog>
+  `;
+  const dialog = template.content.firstElementChild;
+  bracketUi.bracketDialog = dialog;
+  bracketUi.bracketDialogPath = dialog.querySelector("#bracketDialogPath");
+  bracketUi.bracketStatus = dialog.querySelector("#bracketStatus");
+  bracketUi.bracketResults = dialog.querySelector("#bracketResults");
+  bracketUi.closeBracketDialogBtn = dialog.querySelector("#closeBracketDialogBtn");
+  bracketUi.bracketCacheActions = dialog.querySelector("#bracketCacheActions");
+  bracketUi.useBracketCacheBtn = dialog.querySelector("#useBracketCacheBtn");
+  bracketUi.rescanBracketsBtn = dialog.querySelector("#rescanBracketsBtn");
+  bracketUi.bracketMergePanel = dialog.querySelector("#bracketMergePanel");
+  bracketUi.selectAllBracketGroups = dialog.querySelector("#selectAllBracketGroups");
+  bracketUi.mergeAlgorithm = dialog.querySelector("#mergeAlgorithm");
+  bracketUi.mergeAlignment = dialog.querySelector("#mergeAlignment");
+  bracketUi.mergeExposure = dialog.querySelector("#mergeExposure");
+  bracketUi.mergeShadows = dialog.querySelector("#mergeShadows");
+  bracketUi.mergeHighlights = dialog.querySelector("#mergeHighlights");
+  bracketUi.mergeContrast = dialog.querySelector("#mergeContrast");
+  bracketUi.mergeSaturation = dialog.querySelector("#mergeSaturation");
+  bracketUi.mergeSharpen = dialog.querySelector("#mergeSharpen");
+  bracketUi.mergeQuality = dialog.querySelector("#mergeQuality");
+  bracketUi.mergeBracketsBtn = dialog.querySelector("#mergeBracketsBtn");
+  bracketUi.bracketMergeOutput = dialog.querySelector("#bracketMergeOutput");
+  return dialog;
+}
+
+function bindBracketPluginEvents() {
+  bracketUi.openBracketProjectBtn.addEventListener("click", () => openBracketProject());
+  bracketUi.detectBracketsBtn.addEventListener("click", detectBracketsInContextFolder);
+  bracketUi.closeBracketDialogBtn.addEventListener("click", () => bracketUi.bracketDialog.close());
+  bracketUi.useBracketCacheBtn.addEventListener("click", () => {
+    bracketUi.bracketCacheActions.hidden = true;
+    renderBracketDetection(state.currentBracketResult);
+    saveCurrentBracketProject();
+  });
+  bracketUi.rescanBracketsBtn.addEventListener("click", () => {
+    resetBracketDialog();
+    bracketUi.bracketStatus.textContent = "正在重新扫描...";
+    startBracketDetection(true);
+  });
+  bracketUi.selectAllBracketGroups.addEventListener("change", () => setAllBracketGroups(bracketUi.selectAllBracketGroups.checked));
+  bracketUi.mergeBracketsBtn.addEventListener("click", mergeSelectedBracketGroups);
+  [
+    bracketUi.mergeAlgorithm,
+    bracketUi.mergeAlignment,
+    bracketUi.mergeExposure,
+    bracketUi.mergeShadows,
+    bracketUi.mergeHighlights,
+    bracketUi.mergeContrast,
+    bracketUi.mergeSaturation,
+    bracketUi.mergeSharpen,
+    bracketUi.mergeQuality,
+  ].forEach((input) => input.addEventListener("change", saveCurrentBracketProject));
+  window.openBracketProject = openBracketProject;
 }
 
 async function detectBracketsInContextFolder() {
@@ -22,10 +141,10 @@ async function detectBracketsInContextFolder() {
   const { root, folderPath } = splitRootedFolder(folder.path);
   state.currentBracketRoot = root;
   state.currentBracketFolder = folderPath;
-  bracketDialogPath.textContent = folder.path || "根目录";
+  bracketUi.bracketDialogPath.textContent = folder.path || "根目录";
   resetBracketDialog();
-  bracketStatus.textContent = "正在检查缓存...";
-  bracketDialog.showModal();
+  bracketUi.bracketStatus.textContent = "正在检查缓存...";
+  bracketUi.bracketDialog.showModal();
   startBracketDetection(false);
 }
 
@@ -33,12 +152,12 @@ function resetBracketDialog() {
   state.currentBracketResult = null;
   state.currentBracketMergeResult = null;
   state.currentBracketProjectPath = null;
-  bracketCacheActions.hidden = true;
-  bracketMergePanel.hidden = true;
-  bracketMergeOutput.hidden = true;
-  bracketMergeOutput.innerHTML = "";
-  bracketResults.innerHTML = "";
-  selectAllBracketGroups.checked = false;
+  bracketUi.bracketCacheActions.hidden = true;
+  bracketUi.bracketMergePanel.hidden = true;
+  bracketUi.bracketMergeOutput.hidden = true;
+  bracketUi.bracketMergeOutput.innerHTML = "";
+  bracketUi.bracketResults.innerHTML = "";
+  bracketUi.selectAllBracketGroups.checked = false;
 }
 
 async function startBracketDetection(force) {
@@ -52,16 +171,16 @@ async function startBracketDetection(force) {
     const start = await fetchJson(`/api/bracket-detection?${params.toString()}`, { method: "GET" });
     if (start.state === "cached") {
       state.currentBracketResult = start;
-      bracketStatus.textContent = `已有缓存结果：${start.groups.length} 组。`;
-      bracketCacheActions.hidden = false;
+      bracketUi.bracketStatus.textContent = `已有缓存结果：${start.groups.length} 组。`;
+      bracketUi.bracketCacheActions.hidden = false;
       saveCurrentBracketProject();
       return;
     }
-    bracketCacheActions.hidden = true;
+    bracketUi.bracketCacheActions.hidden = true;
     renderBracketProgress(start, Date.now(), 0);
     pollBracketDetection(state.currentBracketRoot, state.currentBracketFolder, start.taskId);
   } catch (error) {
-    bracketStatus.textContent = error.message;
+    bracketUi.bracketStatus.textContent = error.message;
   }
 }
 
@@ -77,7 +196,7 @@ async function pollBracketDetection(root, folderPath, taskId) {
       params.set("task_id", taskId);
       const result = await fetchJson(`/api/bracket-detection?${params.toString()}`);
       if (result.state === "error") {
-        bracketStatus.textContent = result.message;
+        bracketUi.bracketStatus.textContent = result.message;
         return;
       }
       if (result.state === "done") {
@@ -88,7 +207,7 @@ async function pollBracketDetection(root, folderPath, taskId) {
       lastProgress = result.progress || lastProgress;
       renderBracketProgress(result, startedAt, lastProgress);
     } catch (error) {
-      bracketStatus.textContent = error.message;
+      bracketUi.bracketStatus.textContent = error.message;
       return;
     }
     await sleep(500);
@@ -104,24 +223,24 @@ function renderBracketProgress(result, startedAt, lastProgress) {
   const groupText = `已找到 ${result.count || 0} 组包围曝光`;
   const timeText = `已耗时 ${formatDuration(elapsedSeconds)}`;
   const etaText = etaSeconds === null ? "预计还需计算中" : `预计还需 ${formatDuration(etaSeconds)}`;
-  bracketStatus.textContent = `${stageText} · 进度 ${percent.toFixed(0)}% · ${groupText} · ${timeText} · ${etaText}`;
+  bracketUi.bracketStatus.textContent = `${stageText} · 进度 ${percent.toFixed(0)}% · ${groupText} · ${timeText} · ${etaText}`;
 }
 
 function renderBracketDetection(result) {
   state.currentBracketResult = result;
   state.currentBracketMergeResult = null;
-  bracketResults.innerHTML = "";
-  bracketMergeOutput.hidden = true;
-  bracketMergeOutput.innerHTML = "";
+  bracketUi.bracketResults.innerHTML = "";
+  bracketUi.bracketMergeOutput.hidden = true;
+  bracketUi.bracketMergeOutput.innerHTML = "";
   if (!result.groups.length) {
     const truncatedText = result.truncated ? ` 已扫描前 ${result.scanned} 张，目录过大，结果可能不完整。` : "";
-    bracketStatus.textContent = `没有发现符合规则的包围曝光组。${truncatedText}`;
-    bracketMergePanel.hidden = true;
+    bracketUi.bracketStatus.textContent = `没有发现符合规则的包围曝光组。${truncatedText}`;
+    bracketUi.bracketMergePanel.hidden = true;
     return;
   }
   const truncatedText = result.truncated ? ` 已扫描前 ${result.scanned} 张，目录过大，结果可能不完整。` : "";
-  bracketStatus.textContent = `发现 ${result.groups.length} 组疑似包围曝光。${truncatedText}`;
-  bracketMergePanel.hidden = false;
+  bracketUi.bracketStatus.textContent = `发现 ${result.groups.length} 组疑似包围曝光。${truncatedText}`;
+  bracketUi.bracketMergePanel.hidden = false;
 
   result.groups.forEach((group) => {
     const section = document.createElement("section");
@@ -169,7 +288,7 @@ function renderBracketDetection(result) {
 
     compare.append(sourcePane, resultPane);
     section.append(compare);
-    bracketResults.append(section);
+    bracketUi.bracketResults.append(section);
   });
 }
 
@@ -198,15 +317,15 @@ function restoreBracketProject(project, path) {
   state.currentBracketProjectPath = path || null;
   state.currentBracketRoot = project.root || state.rootId || "root1";
   state.currentBracketFolder = project.folder || "";
-  bracketDialogPath.textContent = `${state.currentBracketRoot}/${state.currentBracketFolder}`.replace(/\/$/, "");
+  bracketUi.bracketDialogPath.textContent = `${state.currentBracketRoot}/${state.currentBracketFolder}`.replace(/\/$/, "");
   applyMergeParams(project.params || {});
-  bracketDialog.showModal();
+  bracketUi.bracketDialog.showModal();
   renderBracketDetection({ root: state.currentBracketRoot, folder: state.currentBracketFolder, state: "done", ...project.detection });
   restoreSelectedBracketGroups(project.selectedGroupIds || []);
   if (project.mergeResult) {
     renderMergeOutput(project.mergeResult);
   }
-  bracketStatus.textContent = `已打开项目：${path || "bracket_project.prj"} · ${project.detection.groups?.length || 0} 组`;
+  bracketUi.bracketStatus.textContent = `已打开项目：${path || "bracket_project.prj"} · ${project.detection.groups?.length || 0} 组`;
 }
 
 function restoreSelectedBracketGroups(groupIds) {
@@ -214,19 +333,19 @@ function restoreSelectedBracketGroups(groupIds) {
   document.querySelectorAll(".bracket-group-check").forEach((input) => {
     input.checked = selected.has(input.value);
   });
-  selectAllBracketGroups.checked = Boolean(groupIds.length) && Array.from(document.querySelectorAll(".bracket-group-check")).every((input) => input.checked);
+  bracketUi.selectAllBracketGroups.checked = Boolean(groupIds.length) && Array.from(document.querySelectorAll(".bracket-group-check")).every((input) => input.checked);
 }
 
 function applyMergeParams(params) {
-  if (params.algorithm) mergeAlgorithm.value = params.algorithm;
-  if (params.alignment) mergeAlignment.value = params.alignment;
-  if (params.exposure !== undefined) mergeExposure.value = params.exposure;
-  if (params.shadows !== undefined) mergeShadows.value = params.shadows;
-  if (params.highlights !== undefined) mergeHighlights.value = params.highlights;
-  if (params.contrast !== undefined) mergeContrast.value = params.contrast;
-  if (params.saturation !== undefined) mergeSaturation.value = params.saturation;
-  if (params.sharpen !== undefined) mergeSharpen.value = params.sharpen;
-  if (params.quality !== undefined) mergeQuality.value = params.quality;
+  if (params.algorithm) bracketUi.mergeAlgorithm.value = params.algorithm;
+  if (params.alignment) bracketUi.mergeAlignment.value = params.alignment;
+  if (params.exposure !== undefined) bracketUi.mergeExposure.value = params.exposure;
+  if (params.shadows !== undefined) bracketUi.mergeShadows.value = params.shadows;
+  if (params.highlights !== undefined) bracketUi.mergeHighlights.value = params.highlights;
+  if (params.contrast !== undefined) bracketUi.mergeContrast.value = params.contrast;
+  if (params.saturation !== undefined) bracketUi.mergeSaturation.value = params.saturation;
+  if (params.sharpen !== undefined) bracketUi.mergeSharpen.value = params.sharpen;
+  if (params.quality !== undefined) bracketUi.mergeQuality.value = params.quality;
 }
 
 async function saveCurrentBracketProject() {
@@ -251,12 +370,12 @@ async function saveCurrentBracketProject() {
     state.currentBracketProjectPath = data.path;
     updateBracketProjectUrl(data.path);
   } catch (error) {
-    bracketStatus.textContent = `项目保存失败：${error.message}`;
+    bracketUi.bracketStatus.textContent = `项目保存失败：${error.message}`;
   }
 }
 
 function updateBracketProjectUrl(path) {
-  if (!path || !bracketDialog.open) {
+  if (!path || !bracketUi.bracketDialog.open) {
     return;
   }
   const url = new URL(window.location.href);
@@ -307,11 +426,11 @@ function normalizeBracketPhoto(photo) {
 async function mergeSelectedBracketGroups() {
   const groupIds = currentSelectedBracketGroupIds();
   if (!groupIds.length) {
-    bracketMergeOutput.hidden = false;
-    bracketMergeOutput.textContent = "先选择要合成的包围曝光组。";
+    bracketUi.bracketMergeOutput.hidden = false;
+    bracketUi.bracketMergeOutput.textContent = "先选择要合成的包围曝光组。";
     return;
   }
-  bracketMergeOutput.hidden = false;
+  bracketUi.bracketMergeOutput.hidden = false;
   markBracketGroupsMerging(groupIds);
   renderMergeProgress({ stage: "正在提交合成任务", progress: 0, processed: 0, total: groupIds.length });
   try {
@@ -329,7 +448,7 @@ async function mergeSelectedBracketGroups() {
     saveCurrentBracketProject();
     pollBracketMerge(start.taskId);
   } catch (error) {
-    bracketMergeOutput.textContent = error.message;
+    bracketUi.bracketMergeOutput.textContent = error.message;
   }
 }
 
@@ -347,12 +466,12 @@ async function pollBracketMerge(taskId) {
         return;
       }
       if (status.state === "error") {
-        bracketMergeOutput.textContent = status.message || "合成失败";
+        bracketUi.bracketMergeOutput.textContent = status.message || "合成失败";
         return;
       }
       renderMergeProgress(status);
     } catch (error) {
-      bracketMergeOutput.textContent = error.message;
+      bracketUi.bracketMergeOutput.textContent = error.message;
       return;
     }
     await sleep(500);
@@ -361,21 +480,21 @@ async function pollBracketMerge(taskId) {
 
 function renderMergeProgress(status) {
   const progress = Math.max(0, Math.min(1, Number(status.progress) || 0));
-  bracketMergeOutput.innerHTML = "";
+  bracketUi.bracketMergeOutput.innerHTML = "";
   const text = document.createElement("div");
   text.textContent = `${status.stage || "正在合成"} · ${Math.round(progress * 100)}% · ${status.processed || 0}/${status.total || 0}`;
   const bar = document.createElement("progress");
   bar.max = 100;
   bar.value = Math.round(progress * 100);
-  bracketMergeOutput.append(text, bar);
+  bracketUi.bracketMergeOutput.append(text, bar);
 }
 
 function renderMergeOutput(result) {
   state.currentBracketMergeResult = result;
-  bracketMergeOutput.innerHTML = "";
+  bracketUi.bracketMergeOutput.innerHTML = "";
   const dir = document.createElement("div");
   dir.textContent = `临时目录：${result.outputDir}`;
-  bracketMergeOutput.append(dir);
+  bracketUi.bracketMergeOutput.append(dir);
   result.files.forEach((file) => {
     renderGroupMergeResult(file);
   });
@@ -495,15 +614,15 @@ function formatAlignMethod(method) {
 
 function getMergeParams() {
   return {
-    algorithm: mergeAlgorithm.value,
-    alignment: mergeAlignment.value,
-    exposure: mergeExposure.value,
-    shadows: mergeShadows.value,
-    highlights: mergeHighlights.value,
-    contrast: mergeContrast.value,
-    saturation: mergeSaturation.value,
-    sharpen: mergeSharpen.value,
-    quality: mergeQuality.value,
+    algorithm: bracketUi.mergeAlgorithm.value,
+    alignment: bracketUi.mergeAlignment.value,
+    exposure: bracketUi.mergeExposure.value,
+    shadows: bracketUi.mergeShadows.value,
+    highlights: bracketUi.mergeHighlights.value,
+    contrast: bracketUi.mergeContrast.value,
+    saturation: bracketUi.mergeSaturation.value,
+    sharpen: bracketUi.mergeSharpen.value,
+    quality: bracketUi.mergeQuality.value,
   };
 }
 
@@ -580,3 +699,4 @@ function photoToEntry(photo) {
 function sleep(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
+

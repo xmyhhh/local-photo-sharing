@@ -4,6 +4,8 @@ async function loadConfig() {
   state.rootId = "";
   state.uploadPasswordRequired = Boolean(config.uploadPasswordRequired);
   state.enabledPlugins = new Set(config.plugins || []);
+  state.pluginAssets = config.pluginAssets || [];
+  state.pluginComponents = config.pluginComponents || [];
   if (uploadPasswordLabel) {
     uploadPasswordLabel.hidden = !state.uploadPasswordRequired;
   }
@@ -109,7 +111,7 @@ function updateGalleryHistoryState() {
 }
 
 function handleGalleryBackNavigation() {
-  if (viewer.open || bracketDialog.open) {
+  if (viewer.open || document.querySelector("#pluginDialogs dialog[open]")) {
     return false;
   }
   if (!state.folder) {

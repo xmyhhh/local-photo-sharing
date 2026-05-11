@@ -139,16 +139,6 @@ h1 {
   transform: translateY(-1px);
 }
 
-#openBracketProjectBtn {
-  border-color: transparent;
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-#openBracketProjectBtn:hover {
-  background: rgba(23, 107, 135, 0.15);
-}
-
 main {
   width: 100%;
   margin: 0;
@@ -1630,8 +1620,7 @@ main {
   }
 
   .subtle,
-  .root-selector,
-  #openBracketProjectBtn {
+  .root-selector {
     display: none;
   }
 

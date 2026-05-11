@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import mimetypes
 import os
+import shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -193,7 +194,12 @@ def move_to_trash(path: Path, root: Path, root_id: str) -> Path:
     target_dir = TRASH_DIR / root_id / rel.parent
     target_dir.mkdir(parents=True, exist_ok=True)
     target = unique_trash_path(target_dir / path.name)
-    os.replace(path, target)
+    try:
+        os.replace(path, target)
+    except OSError as error:
+        if getattr(error, "winerror", None) != 17 and getattr(error, "errno", None) != 18:
+            raise
+        shutil.move(str(path), str(target))
     return target
 
 

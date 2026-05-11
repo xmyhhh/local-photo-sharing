@@ -92,6 +92,8 @@ const state = {
   currentBracketRoot: null,
   uploadPasswordRequired: false,
   enabledPlugins: new Set(),
+  pluginAssets: [],
+  pluginComponents: [],
   filters: {
     ratings: [],
     dateFrom: "",
@@ -111,7 +113,7 @@ const ENTRY_PLACEHOLDER_LIMIT = 10000;
 const grid = document.querySelector("#grid");
 const emptyState = document.querySelector("#emptyState");
 const breadcrumb = document.querySelector("#breadcrumb");
-const openBracketProjectBtn = document.querySelector("#openBracketProjectBtn");
+const topbarActions = document.querySelector("#topbarActions");
 const openUploadBtn = document.querySelector("#openUploadBtn");
 const backBtn = document.querySelector("#backBtn");
 const refreshBtn = document.querySelector("#refreshBtn");
@@ -161,26 +163,5 @@ const uploadStatus = document.querySelector("#uploadStatus");
 const createUploadFolderBtn = document.querySelector("#createUploadFolderBtn");
 const submitUploadBtn = document.querySelector("#submitUploadBtn");
 const folderContextMenu = document.querySelector("#folderContextMenu");
-const detectBracketsBtn = document.querySelector("#detectBracketsBtn");
-const bracketDialog = document.querySelector("#bracketDialog");
-const bracketDialogPath = document.querySelector("#bracketDialogPath");
-const bracketStatus = document.querySelector("#bracketStatus");
-const bracketResults = document.querySelector("#bracketResults");
-const closeBracketDialogBtn = document.querySelector("#closeBracketDialogBtn");
-const bracketCacheActions = document.querySelector("#bracketCacheActions");
-const useBracketCacheBtn = document.querySelector("#useBracketCacheBtn");
-const rescanBracketsBtn = document.querySelector("#rescanBracketsBtn");
-const bracketMergePanel = document.querySelector("#bracketMergePanel");
-const selectAllBracketGroups = document.querySelector("#selectAllBracketGroups");
-const mergeAlgorithm = document.querySelector("#mergeAlgorithm");
-const mergeAlignment = document.querySelector("#mergeAlignment");
-const mergeExposure = document.querySelector("#mergeExposure");
-const mergeShadows = document.querySelector("#mergeShadows");
-const mergeHighlights = document.querySelector("#mergeHighlights");
-const mergeContrast = document.querySelector("#mergeContrast");
-const mergeSaturation = document.querySelector("#mergeSaturation");
-const mergeSharpen = document.querySelector("#mergeSharpen");
-const mergeQuality = document.querySelector("#mergeQuality");
-const mergeBracketsBtn = document.querySelector("#mergeBracketsBtn");
-const bracketMergeOutput = document.querySelector("#bracketMergeOutput");
+const pluginDialogs = document.querySelector("#pluginDialogs");
 const isAppleMobileBrowser = /iPhone|iPad|iPod/i.test(navigator.userAgent);

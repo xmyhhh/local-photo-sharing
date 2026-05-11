@@ -174,13 +174,18 @@ D:\codex_prj\photo\.venv\Scripts\python.exe platform_app\shell\app.py
   "preview_size": 2560,
   "preview_quality": 88,
   "upload_password": "",
-  "plugins": []
+  "plugins": [
+    {
+      "name": "duplicate_checker",
+      "path": "plugins/duplicate_checker/plugin.py"
+    }
+  ]
 }
 ```
 
 `upload_password` 留空表示不限制上传；设置为非空字符串后，新建上传文件夹和上传照片都必须输入正确密码。
 
-`plugins` 用于控制可选功能。core 默认不启用任何插件。平台打包时可以选择把某些插件一起打包，也可以在配置里指定启动哪些插件。
+`plugins` 用于控制可选功能。默认启用 `duplicate_checker` 重复照片检查插件。平台打包时可以选择把某些插件一起打包，也可以在配置里指定启动哪些插件。
 
 ```json
 {
@@ -199,6 +204,8 @@ D:\codex_prj\photo\.venv\Scripts\python.exe platform_app\shell\app.py
 ```
 
 插件模块需要提供 `register(app, services)` 函数，启动时由 core 加载。
+插件还可以在 `PLUGIN["components"]` 中声明组件能力、触发点和页面形态，例如文件夹批处理、后台常驻、文件处理、函数调用、工程文件、弹窗、全局菜单或专属页面。
+组件模型说明见 [docs/plugin_components.md](docs/plugin_components.md)。
 
 也可以指定外部插件模块：
 

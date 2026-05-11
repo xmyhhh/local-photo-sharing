@@ -8,6 +8,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any
 
+from .runtime import get_app_base_dir
+
 if TYPE_CHECKING:
     from flask import Flask
     from .context import AppServices
@@ -56,7 +58,7 @@ def parse_plugin_specs(config: dict[str, Any]) -> list[PluginSpec]:
             PluginSpec(
                 name=name.strip(),
                 module=module.strip() if isinstance(module, str) else None,
-                path=Path(path).expanduser().resolve() if isinstance(path, str) else None,
+                path=resolve_plugin_path(path) if isinstance(path, str) else None,
                 enabled=enabled,
             )
         )
@@ -73,6 +75,8 @@ def register_plugins(app: "Flask", services: "AppServices", specs: list[PluginSp
             raise PluginLoadError(f"Plugin {spec.name} does not expose register(app, services).")
         register(app, services)
         services.enabled_plugins.add(spec.name)
+        _register_plugin_assets(app, services, spec, module)
+        _register_plugin_components(services, spec, module)
 
 def _load_plugin_module(spec: PluginSpec) -> ModuleType:
     if spec.module:
@@ -92,3 +96,66 @@ def _load_plugin_module(spec: PluginSpec) -> ModuleType:
     sys.modules[module_name] = module
     module_spec.loader.exec_module(module)
     return module
+
+
+def resolve_plugin_path(value: str) -> Path:
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = get_app_base_dir() / path
+    return path.resolve()
+
+
+def _register_plugin_assets(app: "Flask", services: "AppServices", spec: PluginSpec, module: ModuleType) -> None:
+    from flask import send_from_directory
+
+    manifest = getattr(module, "PLUGIN", None)
+    if not isinstance(manifest, dict):
+        return
+    static_dir_value = manifest.get("static_dir")
+    if not isinstance(static_dir_value, str) or not static_dir_value.strip():
+        return
+    module_file = Path(getattr(module, "__file__", "")).resolve()
+    static_dir = (module_file.parent / static_dir_value).resolve()
+    if not static_dir.is_dir():
+        raise PluginLoadError(f"Plugin {spec.name} static_dir was not found: {static_dir}")
+
+    endpoint = f"plugin_static_{spec.name.replace('-', '_')}"
+    url_prefix = f"/plugin-assets/{spec.name}"
+
+    def plugin_static(filename: str, root: Path = static_dir):
+        return send_from_directory(root, filename)
+
+    app.add_url_rule(f"{url_prefix}/<path:filename>", endpoint, plugin_static)
+    services.plugin_assets.append({
+        "name": spec.name,
+        "scripts": [_plugin_asset_url(url_prefix, static_dir, item) for item in manifest.get("scripts", []) if isinstance(item, str)],
+        "styles": [_plugin_asset_url(url_prefix, static_dir, item) for item in manifest.get("styles", []) if isinstance(item, str)],
+    })
+
+
+def _plugin_asset_url(url_prefix: str, static_dir: Path, filename: str) -> str:
+    asset = (static_dir / filename).resolve()
+    version = int(asset.stat().st_mtime) if asset.is_file() else 0
+    return f"{url_prefix}/{filename}?v={version}"
+
+
+def _register_plugin_components(services: "AppServices", spec: PluginSpec, module: ModuleType) -> None:
+    manifest = getattr(module, "PLUGIN", None)
+    if not isinstance(manifest, dict):
+        return
+    components = manifest.get("components")
+    if components is None:
+        return
+    if not isinstance(components, list):
+        raise PluginLoadError(f"Plugin {spec.name} components must be an array.")
+    for index, component in enumerate(components):
+        if not isinstance(component, dict):
+            raise PluginLoadError(f"Plugin {spec.name} components[{index}] must be an object.")
+        component_id = component.get("id")
+        if not isinstance(component_id, str) or not component_id.strip():
+            raise PluginLoadError(f"Plugin {spec.name} components[{index}].id must be a non-empty string.")
+        services.plugin_components.append({
+            **component,
+            "id": component_id.strip(),
+            "plugin": spec.name,
+        })
