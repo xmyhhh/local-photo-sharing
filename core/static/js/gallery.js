@@ -391,12 +391,11 @@ function createGridTile(entry) {
       </svg>
     `;
     button.append(icon);
-    button.addEventListener("click", () => {
+    button.addEventListener("click", (event) => {
       if (consumeLongPressClick()) {
         return;
       }
-      if (state.selectionMode) {
-        toggleSelectedPath(entry.path);
+      if (handleSelectionClick(event, entry.path)) {
         return;
       }
       navigateFolder(entry.path);
@@ -439,12 +438,11 @@ function createGridTile(entry) {
     if (img) {
       thumbPayload = { entry, img, spinner };
     }
-    button.addEventListener("click", () => {
+    button.addEventListener("click", (event) => {
       if (consumeLongPressClick()) {
         return;
       }
-      if (state.selectionMode) {
-        toggleSelectedPath(entry.path);
+      if (handleSelectionClick(event, entry.path)) {
         return;
       }
       openViewer(entry);
@@ -457,7 +455,7 @@ function createGridTile(entry) {
   select.checked = state.selectedPaths.has(entry.path);
   select.addEventListener("click", (event) => {
     event.stopPropagation();
-    toggleSelectedPath(entry.path);
+    handleSelectionClick(event, entry.path, { forceSelection: true });
   });
   tile.append(select);
 

@@ -58,9 +58,13 @@ document.addEventListener("contextmenu", (event) => {
 });
 grid.addEventListener("contextmenu", openBlankContextMenu);
 grid.addEventListener("pointerdown", scheduleBlankLongPress);
+grid.addEventListener("pointerdown", startBoxSelection);
 grid.addEventListener("pointermove", cancelLongPressIfMoved);
+grid.addEventListener("pointermove", updateBoxSelection);
 grid.addEventListener("pointerup", cancelLongPress);
+grid.addEventListener("pointerup", finishBoxSelection);
 grid.addEventListener("pointercancel", cancelLongPress);
+grid.addEventListener("pointercancel", cancelBoxSelection);
 copySelectedBtn.addEventListener("click", () => copyOrMoveSelected(false));
 cutSelectedBtn.addEventListener("click", cutSelectedEntries);
 downloadSelectedBtn.addEventListener("click", downloadSelectedEntries);

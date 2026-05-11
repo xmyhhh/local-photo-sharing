@@ -165,7 +165,10 @@ main {
 .browse-actions {
   display: flex;
   flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
+  min-width: 0;
 }
 
 .browse-actions button {
@@ -426,26 +429,20 @@ main {
 }
 
 .selection-bar {
-  position: sticky;
-  top: 118px;
-  z-index: 5;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  margin: 0 0 12px;
-  padding: 10px 12px;
-  border: 1px solid rgba(23, 107, 135, 0.18);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: var(--shadow-soft);
-  backdrop-filter: blur(12px);
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .selection-bar span {
-  flex: 1 1 140px;
+  flex: 0 0 auto;
+  padding: 0 4px;
   font-weight: 760;
   color: var(--accent-strong);
+  white-space: nowrap;
 }
 
 .selection-bar[hidden] {
@@ -847,6 +844,20 @@ main {
 .context-menu-item.plugin-action .context-menu-icon {
   background: rgba(100, 113, 128, 0.12);
   color: var(--muted);
+}
+
+.selection-box {
+  position: fixed;
+  z-index: 25;
+  border: 1px solid rgba(23, 107, 135, 0.62);
+  border-radius: 8px;
+  background: rgba(23, 107, 135, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+  pointer-events: none;
+}
+
+.selection-box[hidden] {
+  display: none;
 }
 
 .settings-dialog {

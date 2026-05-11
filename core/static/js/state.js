@@ -89,6 +89,8 @@ const state = {
   contextEntry: null,
   selectionMode: false,
   selectedPaths: new Set(),
+  selectionAnchorPath: "",
+  boxSelect: null,
   longPress: null,
   longPressTriggered: false,
   currentBracketResult: null,
@@ -174,6 +176,7 @@ const submitUploadBtn = document.querySelector("#submitUploadBtn");
 const folderContextMenu = document.querySelector("#folderContextMenu");
 const blankContextMenu = document.querySelector("#blankContextMenu");
 const itemContextMenu = document.querySelector("#itemContextMenu");
+const selectionBox = document.querySelector("#selectionBox");
 const selectionBar = document.querySelector("#selectionBar");
 const selectionCount = document.querySelector("#selectionCount");
 const downloadSelectedBtn = document.querySelector("#downloadSelectedBtn");

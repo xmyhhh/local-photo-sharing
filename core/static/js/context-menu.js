@@ -332,6 +332,7 @@ function enterSelectionMode(initialPath = "") {
   closeAllContextMenus();
   if (initialPath) {
     state.selectedPaths.add(initialPath);
+    state.selectionAnchorPath = initialPath;
   }
   updateSelectionBar();
   renderGrid();
@@ -340,6 +341,8 @@ function enterSelectionMode(initialPath = "") {
 function exitSelectionMode() {
   state.selectionMode = false;
   state.selectedPaths.clear();
+  state.selectionAnchorPath = "";
+  cancelBoxSelection();
   updateSelectionBar();
   renderGrid();
 }
@@ -353,18 +356,65 @@ function invertSelection() {
     }
   });
   state.selectedPaths = next;
+  state.selectionAnchorPath = "";
   updateSelectionBar();
   renderGrid();
 }
 
-function toggleSelectedPath(path) {
-  if (state.selectedPaths.has(path)) {
-    state.selectedPaths.delete(path);
+function handleSelectionClick(event, path, options = {}) {
+  const forceSelection = Boolean(options.forceSelection);
+  const additive = event.ctrlKey || event.metaKey;
+  const range = event.shiftKey;
+  if (!state.selectionMode && !forceSelection && !additive && !range) {
+    return false;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  if (!state.selectionMode) {
+    state.selectionMode = true;
+    closeAllContextMenus();
+  }
+  if (range) {
+    selectRangeTo(path, additive);
   } else {
-    state.selectedPaths.add(path);
+    toggleSelectedPath(path);
+    state.selectionAnchorPath = path;
+  }
+  renderGrid();
+  return true;
+}
+
+function toggleSelectedPath(path, selected = null) {
+  if (state.selectedPaths.has(path)) {
+    if (selected !== true) {
+      state.selectedPaths.delete(path);
+    }
+  } else {
+    if (selected !== false) {
+      state.selectedPaths.add(path);
+    }
   }
   updateSelectionBar();
   updateSelectionTile(path);
+}
+
+function selectRangeTo(path, additive = false) {
+  const paths = state.entries.map((entry) => qualifyPath(entry.path));
+  const end = paths.indexOf(path);
+  if (end < 0) {
+    return;
+  }
+  const anchor = state.selectionAnchorPath && paths.includes(state.selectionAnchorPath)
+    ? paths.indexOf(state.selectionAnchorPath)
+    : end;
+  if (!additive) {
+    state.selectedPaths.clear();
+  }
+  const start = Math.min(anchor, end);
+  const stop = Math.max(anchor, end);
+  paths.slice(start, stop + 1).forEach((item) => state.selectedPaths.add(item));
+  state.selectionAnchorPath = paths[anchor] || path;
+  updateSelectionBar();
 }
 
 function updateSelectionTile(path) {
@@ -377,11 +427,115 @@ function updateSelectionTile(path) {
   }
 }
 
+function startBoxSelection(event) {
+  if (event.pointerType !== "mouse" || event.button !== 0 || event.target.closest(".tile") || event.target.closest(".context-menu")) {
+    return;
+  }
+  event.preventDefault();
+  closeAllContextMenus();
+  if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
+    state.selectedPaths.clear();
+  }
+  state.boxSelect = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    active: false,
+    base: new Set(state.selectedPaths),
+  };
+  grid.setPointerCapture(event.pointerId);
+}
+
+function updateBoxSelection(event) {
+  if (!state.boxSelect || state.boxSelect.pointerId !== event.pointerId) {
+    return;
+  }
+  event.preventDefault();
+  const width = Math.abs(event.clientX - state.boxSelect.startX);
+  const height = Math.abs(event.clientY - state.boxSelect.startY);
+  if (!state.boxSelect.active && Math.hypot(width, height) < 6) {
+    return;
+  }
+  if (!state.boxSelect.active) {
+    state.boxSelect.active = true;
+    state.selectionMode = true;
+    closeAllContextMenus();
+  }
+  updateSelectionBox(event.clientX, event.clientY);
+  const rect = selectionBox.getBoundingClientRect();
+  state.selectedPaths = new Set(state.boxSelect.base);
+  document.querySelectorAll(".tile").forEach((tile) => {
+    const tileRect = tile.getBoundingClientRect();
+    const intersects = rect.left <= tileRect.right
+      && rect.right >= tileRect.left
+      && rect.top <= tileRect.bottom
+      && rect.bottom >= tileRect.top;
+    if (intersects && tile.dataset.path) {
+      state.selectedPaths.add(tile.dataset.path);
+    }
+  });
+  updateAllSelectionTiles();
+  updateSelectionBar();
+}
+
+function finishBoxSelection(event) {
+  if (!state.boxSelect || state.boxSelect.pointerId !== event.pointerId) {
+    return;
+  }
+  if (!state.boxSelect.active) {
+    cancelBoxSelection();
+    return;
+  }
+  updateBoxSelection(event);
+  const selected = Array.from(state.selectedPaths);
+  state.selectionAnchorPath = selected[selected.length - 1] || state.selectionAnchorPath;
+  cancelBoxSelection();
+  renderGrid();
+}
+
+function cancelBoxSelection() {
+  if (state.boxSelect?.pointerId !== undefined && grid.hasPointerCapture?.(state.boxSelect.pointerId)) {
+    grid.releasePointerCapture(state.boxSelect.pointerId);
+  }
+  state.boxSelect = null;
+  if (selectionBox) {
+    selectionBox.hidden = true;
+  }
+}
+
+function updateSelectionBox(clientX, clientY) {
+  if (!selectionBox || !state.boxSelect) {
+    return;
+  }
+  const left = Math.min(state.boxSelect.startX, clientX);
+  const top = Math.min(state.boxSelect.startY, clientY);
+  const width = Math.abs(clientX - state.boxSelect.startX);
+  const height = Math.abs(clientY - state.boxSelect.startY);
+  selectionBox.hidden = false;
+  selectionBox.style.left = `${left}px`;
+  selectionBox.style.top = `${top}px`;
+  selectionBox.style.width = `${width}px`;
+  selectionBox.style.height = `${height}px`;
+}
+
+function updateAllSelectionTiles() {
+  document.querySelectorAll(".tile").forEach((tile) => {
+    const selected = state.selectedPaths.has(tile.dataset.path);
+    tile.classList.toggle("selected", selected);
+    const checkbox = tile.querySelector(".tile-select");
+    if (checkbox) {
+      checkbox.checked = selected;
+    }
+  });
+}
+
 function updateSelectionBar() {
   if (!selectionBar) {
     return;
   }
   selectionBar.hidden = !state.selectionMode;
+  filterPanelToggleBtn.hidden = state.selectionMode;
+  compactToggleBtn.hidden = state.selectionMode;
   selectionCount.textContent = `已选择 ${state.selectedPaths.size} 项`;
   const hasSelection = state.selectedPaths.size > 0;
   [copySelectedBtn, cutSelectedBtn, downloadSelectedBtn, deleteSelectedBtn, moveSelectedBtn].forEach((button) => {
