@@ -21,21 +21,29 @@
 - 支持删除图片
 - 可选上传密码，密码为空时局域网内可直接上传
 
-## 安装
+## 架构
 
-推荐使用部署脚本自动创建虚拟环境并安装依赖。
+这个项目分三层：
+
+- `app.py`：Linux / Windows shell 场景下的最小启动入口，只启动 core，没有托盘或 GUI
+- `core/`：Web 服务、核心逻辑、前端页面、插件加载器和裸跑部署脚本
+- `platform_app/`：平台壳，负责 Windows EXE / Android APK 这类平台适配
+
+## 安装 Core
+
+推荐使用 `core/deploy` 里的部署脚本自动创建虚拟环境并安装依赖。
 
 Windows PowerShell：
 
 ```powershell
-.\deploy.ps1 install
+.\core\deploy\deploy.ps1 install
 ```
 
 Linux / macOS：
 
 ```bash
-chmod +x ./deploy.sh
-./deploy.sh install
+chmod +x ./core/deploy/deploy.sh
+./core/deploy/deploy.sh install
 ```
 
 也可以手动安装：
@@ -45,46 +53,101 @@ D:\codex_prj\photo\.venv\Scripts\python.exe -m ensurepip --upgrade --default-pip
 D:\codex_prj\photo\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-## 启动
+## 启动 Shell App
 
 Windows PowerShell：
 
 ```powershell
-.\deploy.ps1 init
-.\deploy.ps1 start
+.\core\deploy\deploy.ps1 init
+.\core\deploy\deploy.ps1 start
 ```
 
 Linux / macOS：
 
 ```bash
-./deploy.sh init
-./deploy.sh start
+./core/deploy/deploy.sh init
+./core/deploy/deploy.sh start
 ```
 
 后台运行：
 
 ```powershell
-.\deploy.ps1 start-bg
-.\deploy.ps1 status
-.\deploy.ps1 logs
-.\deploy.ps1 stop
+.\core\deploy\deploy.ps1 start-bg
+.\core\deploy\deploy.ps1 status
+.\core\deploy\deploy.ps1 logs
+.\core\deploy\deploy.ps1 stop
 ```
 
 ```bash
-./deploy.sh start-bg
-./deploy.sh status
-./deploy.sh logs
-./deploy.sh stop
+./core/deploy/deploy.sh start-bg
+./core/deploy/deploy.sh status
+./core/deploy/deploy.sh logs
+./core/deploy/deploy.sh stop
 ```
+
+`app.py` 是最小 shell app 入口，适合服务器、Linux、Windows 控制台和后台脚本调用。它只负责启动 core，不包含托盘图标、窗口或 GUI 壳。
+
+## Windows Platform App
+
+Windows 托盘常驻运行：
+
+```powershell
+python .\platform_app\windows\tray_app.py
+```
+
+启动后会在任务栏右下角出现常驻图标，右键可打开 Web 界面或退出程序。
+
+### 打包 EXE
+
+Windows:
+
+```powershell
+.\platform_app\windows\build_windows.ps1
+```
+
+生成文件：
+
+```text
+dist\LocalPhotoSharingTray.exe
+```
+
+这个 EXE 会：
+
+- 在后台启动本地 Web 服务
+- 在任务栏右下角显示常驻小图标
+- 右键菜单支持打开网页和退出
+- 将运行日志写到程序目录下的 `.deploy\tray-app.log`
+- 将配置、缓存、评分等数据写到 EXE 所在目录附近，而不是 PyInstaller 临时目录
+
+安装开机自启动：
+
+```powershell
+.\platform_app\windows\install_autostart.ps1
+```
+
+这会在当前用户的启动文件夹中创建快捷方式，实现开机后静默启动托盘程序。
+
+Linux 桌面托盘打包预留：
+
+```bash
+chmod +x ./platform_app/windows/build_linux.sh
+./platform_app/windows/build_linux.sh
+```
+
+Linux 版本后续还需要根据目标桌面环境补齐：
+
+- 托盘支持库
+- `.desktop` 自启动项
+- 可能的 AppImage / 单文件分发方案
 
 指定配置文件：
 
 ```powershell
-.\deploy.ps1 start -Config D:\photo-share-config.json
+.\core\deploy\deploy.ps1 start -Config D:\photo-share-config.json
 ```
 
 ```bash
-./deploy.sh start --config /opt/photo-share/config.json
+./core/deploy/deploy.sh start --config /opt/photo-share/config.json
 ```
 
 也可以直接用 Python 启动：
@@ -110,11 +173,33 @@ D:\codex_prj\photo\.venv\Scripts\python.exe app.py
   },
   "preview_size": 2560,
   "preview_quality": 88,
-  "upload_password": ""
+  "upload_password": "",
+  "plugins": ["brackets"]
 }
 ```
 
 `upload_password` 留空表示不限制上传；设置为非空字符串后，新建上传文件夹和上传照片都必须输入正确密码。
+
+`plugins` 用于控制可选功能。默认启用 `brackets` 包围曝光插件；如果某个平台不想包含这个能力，可以设为空数组：
+
+```json
+{
+  "plugins": []
+}
+```
+
+也可以指定外部插件模块或插件文件：
+
+```json
+{
+  "plugins": [
+    { "name": "my_plugin", "module": "my_package.my_plugin" },
+    { "name": "local_plugin", "path": "D:/plugins/local_plugin/plugin.py" }
+  ]
+}
+```
+
+插件模块需要提供 `register(app, services)` 函数，启动时由 core 加载。
 
 也可以指定配置文件路径：
 
@@ -160,7 +245,22 @@ http://192.168.1.20:8000
 
 见 [docs/coding_notes.md](docs/coding_notes.md)。这些约束用于保护缩略图队列、占位符渲染和大图预下载行为，改动相关代码前先核对。
 
+## Android Platform App
 
-![img_1.png](img_1.png)
+Android Studio 工程在 [platform_app/android](platform_app/android)。之前的 Python APK 试验目录保留在 [platform_app/android/python_demo/README.md](platform_app/android/python_demo/README.md)。
 
-![img.png](img.png)
+## Project Layout
+
+- `app.py`：最小 shell app，直接启动 core
+- `core/photo_share/`：core 后端服务和业务逻辑
+- `core/static/`：core 前端页面
+- `core/deploy/`：core 裸跑和后台运行脚本
+- `platform_app/windows/`：Windows 托盘壳与 EXE 打包
+- `platform_app/android/`：Android APK 平台工程
+- `core/photo_share/plugins.py`：core 插件加载器
+- `core/photo_share/plugins_builtin/`：随 core 附带的内置插件
+
+
+![img_1.png](/F:/codex_prj/local-photo-sharing/docs/images/img_1.png)
+
+![img.png](/F:/codex_prj/local-photo-sharing/docs/images/img.png)
