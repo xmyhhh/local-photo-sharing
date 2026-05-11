@@ -7,8 +7,9 @@ from PyInstaller.utils.hooks import collect_data_files
 project_root = Path.cwd()
 datas = collect_data_files("pillow_heif")
 datas += [
-    (str(project_root / "static"), "static"),
-    (str(project_root / "core" / "assets" / "bracket_project.prj"), "core/assets"),
+    (str(project_root / "core" / "static"), "static"),
+    (str(project_root / "core" / "assets" / "bracket_project.prj"), "assets"),
+    (str(project_root / "plugins"), "plugins"),
 ]
 
 hiddenimports = [

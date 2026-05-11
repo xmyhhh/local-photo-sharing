@@ -2,11 +2,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+SHELL_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ROOT_DIR="$(cd "${SHELL_DIR}/../.." && pwd)"
 VENV_DIR="${ROOT_DIR}/.venv"
 PYTHON_BIN="${VENV_DIR}/bin/python"
 PIP_BIN="${VENV_DIR}/bin/pip"
-APP_FILE="${ROOT_DIR}/app.py"
+APP_FILE="${SHELL_DIR}/app.py"
 DEFAULT_CONFIG="${ROOT_DIR}/config.json"
 DEPLOY_DIR="${ROOT_DIR}/.deploy"
 PID_FILE="${DEPLOY_DIR}/photo-share.pid"
@@ -14,17 +15,17 @@ LOG_FILE="${DEPLOY_DIR}/photo-share.log"
 
 usage() {
   cat <<EOF
-Usage: ./core/deploy/deploy.sh <command> [--config <path>]
+Usage: ./platform_app/shell/deploy/deploy.sh <command> [--config <path>]
 
 Commands:
   install     Create .venv and install requirements
   init        Create default config.json if it does not exist
-  start       Start core in foreground
-  start-bg    Start core in background
-  stop        Stop background core
-  restart     Restart background core
-  status      Show background core status
-  logs        Follow background core logs
+  start       Start shell app in foreground
+  start-bg    Start shell app in background
+  stop        Stop background shell app
+  restart     Restart background shell app
+  status      Show background shell app status
+  logs        Follow background shell app logs
 
 Options:
   --config <path>  Config file path. Default: ${DEFAULT_CONFIG}

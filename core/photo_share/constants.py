@@ -19,7 +19,7 @@ CACHE_DIR = APP_DIR / ".photo_share_cache"
 TRASH_DIR = APP_DIR / ".photo_share_trash"
 BRACKET_OUTPUT_DIR = APP_DIR / ".photo_share_bracket_results"
 BRACKET_CACHE_FILE = CACHE_DIR / "bracket_detection_cache.json"
-DEFAULT_BRACKET_PROJECT_FILE = RESOURCE_DIR / "core" / "assets" / "bracket_project.prj"
+DEFAULT_BRACKET_PROJECT_FILE = RESOURCE_DIR / "assets" / "bracket_project.prj"
 CPU_COUNT = os.cpu_count() or 1
 THUMBNAIL_WORKERS = min(16, max(2, CPU_COUNT))
 METADATA_WORKERS = min(4, max(2, CPU_COUNT // 2))
@@ -59,5 +59,5 @@ DEFAULT_CONFIG = {
     "preview_size": DEFAULT_PREVIEW_SIZE,
     "preview_quality": DEFAULT_PREVIEW_QUALITY,
     "upload_password": "",
-    "plugins": ["brackets"],
+    "plugins": [],
 }

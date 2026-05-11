@@ -28,14 +28,14 @@ class PluginLoadError(RuntimeError):
 def parse_plugin_specs(config: dict[str, Any]) -> list[PluginSpec]:
     value = config.get("plugins")
     if value is None:
-        return [PluginSpec(name="brackets", module="core.photo_share.plugins_builtin.brackets")]
+        return []
     if not isinstance(value, list):
         raise ValueError("Config field plugins must be an array.")
 
     specs: list[PluginSpec] = []
     for index, item in enumerate(value):
         if isinstance(item, str):
-            specs.append(_builtin_plugin_spec(item))
+            specs.append(PluginSpec(name=item.strip(), module=item.strip()))
             continue
         if not isinstance(item, dict):
             raise ValueError(f"Config field plugins[{index}] must be a string or object.")
@@ -50,7 +50,7 @@ def parse_plugin_specs(config: dict[str, Any]) -> list[PluginSpec]:
         if path is not None and (not isinstance(path, str) or not path.strip()):
             raise ValueError(f"Config field plugins[{index}].path must be a non-empty string.")
         if module is None and path is None:
-            specs.append(_builtin_plugin_spec(name, enabled=enabled))
+            specs.append(PluginSpec(name=name.strip(), module=name.strip(), enabled=enabled))
             continue
         specs.append(
             PluginSpec(
@@ -73,14 +73,6 @@ def register_plugins(app: "Flask", services: "AppServices", specs: list[PluginSp
             raise PluginLoadError(f"Plugin {spec.name} does not expose register(app, services).")
         register(app, services)
         services.enabled_plugins.add(spec.name)
-
-
-def _builtin_plugin_spec(name: str, enabled: bool = True) -> PluginSpec:
-    normalized = name.strip()
-    if normalized == "brackets":
-        return PluginSpec(name="brackets", module="core.photo_share.plugins_builtin.brackets", enabled=enabled)
-    return PluginSpec(name=normalized, module=normalized, enabled=enabled)
-
 
 def _load_plugin_module(spec: PluginSpec) -> ModuleType:
     if spec.module:

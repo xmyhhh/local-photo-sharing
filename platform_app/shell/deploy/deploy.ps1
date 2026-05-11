@@ -9,11 +9,12 @@ param(
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$RootDir = Split-Path -Parent (Split-Path -Parent $ScriptDir)
+$ShellDir = Split-Path -Parent $ScriptDir
+$RootDir = Split-Path -Parent (Split-Path -Parent $ShellDir)
 $VenvDir = Join-Path $RootDir ".venv"
 $PythonExe = Join-Path $VenvDir "Scripts\python.exe"
 $PipExe = Join-Path $VenvDir "Scripts\pip.exe"
-$AppFile = Join-Path $RootDir "app.py"
+$AppFile = Join-Path $ShellDir "app.py"
 $DefaultConfig = Join-Path $RootDir "config.json"
 $DeployDir = Join-Path $RootDir ".deploy"
 $PidFile = Join-Path $DeployDir "photo-share.pid"
@@ -26,17 +27,17 @@ if ([string]::IsNullOrWhiteSpace($Config)) {
 
 function Show-Usage {
     Write-Host @"
-Usage: .\core\deploy\deploy.ps1 <command> [-Config <path>]
+Usage: .\platform_app\shell\deploy\deploy.ps1 <command> [-Config <path>]
 
 Commands:
   install     Create .venv and install requirements
   init        Create default config.json if it does not exist
-  start       Start core in foreground
-  start-bg    Start core in background
-  stop        Stop background core
-  restart     Restart background core
-  status      Show background core status
-  logs        Follow background core logs
+  start       Start shell app in foreground
+  start-bg    Start shell app in background
+  stop        Stop background shell app
+  restart     Restart background shell app
+  status      Show background shell app status
+  logs        Follow background shell app logs
 
 Options:
   -Config <path>  Config file path. Default: $DefaultConfig

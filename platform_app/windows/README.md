@@ -9,4 +9,4 @@ It is responsible for:
 - exiting the background service from the tray menu
 - packaging the Windows EXE
 
-Core can still run without this folder through the root `app.py` shell entry.
+Core can still run without this folder through `platform_app/shell/app.py`.
