@@ -1010,6 +1010,10 @@ main {
   display: none;
 }
 
+.settings-page {
+  background: transparent;
+}
+
 .settings-card {
   display: grid;
   gap: 20px;
@@ -1150,6 +1154,7 @@ main {
   min-height: 0;
   overflow: auto;
   padding: 2px 8px 8px 2px;
+  background: transparent;
 }
 
 .plugin-row {
