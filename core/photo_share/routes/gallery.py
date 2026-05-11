@@ -54,6 +54,44 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
             "pluginComponents": services.plugin_components,
         })
 
+    @app.get("/api/warmup")
+    def warmup_status():
+        if services.warmup_status is None:
+            return jsonify({
+                "state": "idle",
+                "stage": "",
+                "total": 0,
+                "completed": 0,
+                "generated": 0,
+                "failed": 0,
+                "progress": 0,
+                "elapsedSeconds": 0,
+                "workers": 0,
+                "error": "",
+            })
+        return jsonify(services.warmup_status.snapshot())
+
+    @app.get("/api/folder-counts")
+    def folder_counts():
+        root_id = request.args.get("root", "")
+        folder = request.args.get("folder", "")
+        if not root_id and not folder:
+            entries = [
+                _folder_entry(root_services, item_root_id, "", root_services.root.name or item_root_id, item_root_id)
+                for item_root_id, root_services in services.root_services.items()
+            ]
+            return jsonify({"root": "", "folder": "", "entries": entries})
+
+        if not root_id:
+            root_id, folder = parse_rooted_path(folder)
+        root_services = _root_services(services, root_id)
+        folder_path = _resolve_rooted_folder(services, root_id, folder)
+        entries = [
+            _folder_entry(root_services, root_id, to_relative(root_services.root, child), child.name, join_rooted_path(root_id, to_relative(root_services.root, child)))
+            for child in _direct_child_folders(folder_path)
+        ]
+        return jsonify({"root": root_id, "folder": folder, "entries": entries})
+
     @app.get("/api/photos")
     def photos():
         root_id = request.args.get("root", "")
@@ -150,7 +188,7 @@ def _build_entry(
         return None
 
     stat = child.stat()
-    rating, rating_pending = _photo_rating(rel, child, root_services)
+    rating, rating_pending = _photo_rating(rel, child, root_services, stat)
     if filters.needs_rating and rating_pending:
         return None
     if not filters.matches_photo(rating, int(stat.st_mtime)):
@@ -205,16 +243,31 @@ def _folder_page(folder_path: Path, cursor: int, limit: int) -> dict[str, Any]:
     return {"items": items_out, "has_more": False, "next_seen": seen}
 
 
-def _photo_rating(rel: str, photo_path: Path, root_services: RootServices) -> tuple[int, bool]:
+def _direct_child_folders(folder_path: Path) -> list[Path]:
+    folders: list[Path] = []
+    with os.scandir(folder_path) as items:
+        for item in items:
+            if item.name in {RATINGS_FILE, THUMBNAIL_DIR}:
+                continue
+            try:
+                if item.is_dir():
+                    folders.append(Path(item.path))
+            except OSError:
+                continue
+    folders.sort(key=lambda p: p.name.lower())
+    return folders
+
+
+def _photo_rating(rel: str, photo_path: Path, root_services: RootServices, stat: os.stat_result) -> tuple[int, bool]:
     rating_override = root_services.ratings.get_override(rel)
     if rating_override is not None:
         return rating_override, False
 
-    rating = root_services.metadata.get_rating_ready(photo_path)
-    rating_pending = not root_services.metadata.is_ready(photo_path)
     indexed_rating = root_services.rating_index.get(rel)
     if indexed_rating is not None:
         return indexed_rating, False
+    rating = root_services.metadata.get_rating_ready(photo_path, stat)
+    rating_pending = not root_services.metadata.is_ready(photo_path, stat)
     return rating, rating_pending
 
 

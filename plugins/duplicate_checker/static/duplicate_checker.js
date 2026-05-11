@@ -363,7 +363,11 @@ async function deleteSelectedDuplicatePhotos() {
   if (!paths.length) {
     return;
   }
-  const ok = window.confirm(`确认按当前选择删除 ${paths.length} 张重复照片？文件会移动到 .photo_share_trash。`);
+  const ok = window.confirm(
+    recycleBinEnabled()
+      ? `确认按当前选择删除 ${paths.length} 张重复照片？文件会放入回收站。`
+      : `确认永久删除 ${paths.length} 张重复照片？回收站未启用，此操作不可撤销。`,
+  );
   if (!ok) {
     return;
   }

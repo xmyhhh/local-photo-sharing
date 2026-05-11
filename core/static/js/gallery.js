@@ -10,6 +10,7 @@ async function loadConfig() {
     uploadPasswordLabel.hidden = !state.uploadPasswordRequired;
   }
   applyThumbnailQueueLimits(config.thumbnailModes);
+  startWarmupPolling();
 }
 
 function applyThumbnailQueueLimits(modes) {
@@ -248,12 +249,20 @@ function renderGrid() {
   grid.classList.toggle("compact-mode", state.compactMode);
   grid.classList.toggle("selection-mode", state.selectionMode);
   compactToggleBtn.textContent = state.compactMode ? "展开" : "精简";
-  updateEmptyState();
 
-  state.entries.forEach((entry) => {
+  const fragment = document.createDocumentFragment();
+  const tiles = [];
+  state.entryByPath.clear();
+  state.entries.forEach((entry, index) => {
     entry.path = qualifyPath(entry.path);
-    appendGridEntry(entry);
+    state.entryByPath.set(entry.path, entry);
+    const tile = createGridTile(entry, index);
+    tiles.push(tile);
+    fragment.append(tile.element);
   });
+  grid.append(fragment);
+  tiles.forEach(observeGridTile);
+  updateEmptyState();
   scheduleVisibleWorkScan();
   scheduleFolderCountRefresh(state.filterGeneration);
 }
@@ -268,6 +277,7 @@ function showFolderLoading(targetFolder) {
   state.folder = targetFolder;
   state.parent = parentFolderPath(targetFolder);
   state.entries = [];
+  state.entryByPath.clear();
   state.indexing = false;
   grid.innerHTML = "";
   grid.className = `grid thumb-${state.thumbMode}`;
@@ -278,17 +288,23 @@ function showFolderLoading(targetFolder) {
   updateGalleryHistoryState();
 }
 
-function appendGridEntry(entry) {
-  const tile = createGridTile(entry);
+function appendGridEntry(entry, index = state.entries.findIndex((item) => item.path === entry.path)) {
+  entry.path = qualifyPath(entry.path);
+  state.entryByPath.set(entry.path, entry);
+  const tile = createGridTile(entry, index);
   grid.append(tile.element);
+  observeGridTile(tile);
+  updateEmptyState();
+  scheduleVisibleWorkScan();
+}
+
+function observeGridTile(tile) {
   if (tile.thumbPayload) {
-    observeThumbnail(tile.thumbPayload.entry, tile.thumbPayload.img, tile.thumbPayload.spinner);
+    observeThumbnail(tile.thumbPayload.entry, tile.thumbPayload.img, tile.thumbPayload.spinner, tile.thumbPayload.index);
   }
   if (tile.ratingPayload) {
     observeRating(tile.ratingPayload.entry, tile.ratingPayload.ratingWrap);
   }
-  updateEmptyState();
-  scheduleVisibleWorkScan();
 }
 
 function updateEmptyState(message = "") {
@@ -330,7 +346,7 @@ function scheduleFolderCountRefresh(generation) {
   state.folderCountRefreshTimer = window.setTimeout(() => {
     state.folderCountRefreshTimer = null;
     if (generation === state.filterGeneration) {
-      loadFolder(state.folder, { silent: true });
+      refreshFolderCounts(generation);
     }
   }, 1200);
 }
@@ -348,6 +364,11 @@ function updateFolderCountTiles(entries) {
       return;
     }
     const path = qualifyPath(entry.path);
+    const current = state.entryByPath.get(path);
+    if (current) {
+      current.photoCount = entry.photoCount;
+      current.photoCountPending = entry.photoCountPending;
+    }
     const tile = document.querySelector(`.tile[data-path="${CSS.escape(path)}"]`);
     const count = tile?.querySelector(".folder-count");
     if (!count) {
@@ -359,7 +380,28 @@ function updateFolderCountTiles(entries) {
   });
 }
 
-function createGridTile(entry) {
+async function refreshFolderCounts(generation) {
+  const params = new URLSearchParams();
+  if (state.rootId) {
+    params.set("root", state.rootId);
+  }
+  params.set("folder", state.folder);
+  try {
+    const data = await fetchJson(`/api/folder-counts?${params.toString()}`);
+    if (generation !== state.filterGeneration || data.folder !== state.folder || data.root !== state.rootId) {
+      return;
+    }
+    updateFolderCountTiles(data.entries || []);
+    const stillPending = (data.entries || []).some((entry) => entry.type === "folder" && entry.photoCountPending);
+    if (stillPending) {
+      scheduleFolderCountRefresh(generation);
+    }
+  } catch {
+    scheduleFolderCountRefresh(generation);
+  }
+}
+
+function createGridTile(entry, index = -1) {
   const tile = document.createElement("article");
   tile.className = "tile";
   if (entry.type !== "folder") {
@@ -367,12 +409,8 @@ function createGridTile(entry) {
   }
   tile.classList.add(`${entry.type}-tile`);
   tile.dataset.path = entry.path;
+  tile.dataset.type = entry.type;
   tile.classList.toggle("selected", state.selectedPaths.has(entry.path));
-  tile.addEventListener("contextmenu", (event) => openItemContextMenu(event, entry));
-  tile.addEventListener("pointerdown", (event) => scheduleEntryLongPress(event, entry));
-  tile.addEventListener("pointermove", cancelLongPressIfMoved);
-  tile.addEventListener("pointerup", cancelLongPress);
-  tile.addEventListener("pointercancel", cancelLongPress);
   let thumbPayload = null;
   let ratingPayload = null;
 
@@ -391,19 +429,6 @@ function createGridTile(entry) {
       </svg>
     `;
     button.append(icon);
-    button.addEventListener("click", (event) => {
-      if (consumeLongPressClick()) {
-        return;
-      }
-      if (handleSelectionClick(event, entry.path)) {
-        return;
-      }
-      navigateFolder(entry.path);
-    });
-    button.addEventListener("contextmenu", (event) => {
-      event.stopPropagation();
-      openFolderContextMenu(event, entry);
-    });
   } else {
     const holder = document.createElement("div");
     holder.className = "thumb-holder";
@@ -436,27 +461,14 @@ function createGridTile(entry) {
     }
     button.append(holder);
     if (img) {
-      thumbPayload = { entry, img, spinner };
+      thumbPayload = { entry, img, spinner, index };
     }
-    button.addEventListener("click", (event) => {
-      if (consumeLongPressClick()) {
-        return;
-      }
-      if (handleSelectionClick(event, entry.path)) {
-        return;
-      }
-      openViewer(entry);
-    });
   }
 
   const select = document.createElement("input");
   select.type = "checkbox";
   select.className = "tile-select";
   select.checked = state.selectedPaths.has(entry.path);
-  select.addEventListener("click", (event) => {
-    event.stopPropagation();
-    handleSelectionClick(event, entry.path, { forceSelection: true });
-  });
   tile.append(select);
 
   const meta = document.createElement("div");

@@ -94,7 +94,7 @@
       button.type = "button";
       button.className = "global-search-result";
       button.innerHTML = `
-        <span class="global-search-result-icon">${item.type === "folder" ? "DIR" : "IMG"}</span>
+        ${renderResultPreview(item)}
         <span class="global-search-result-main">
           <strong>${escapeHtml(item.name)}</strong>
           <small>${escapeHtml(displayPath(item))}</small>
@@ -102,7 +102,60 @@
       `;
       button.addEventListener("click", () => openSearchResult(item));
       results.append(button);
+      loadSearchPreview(item, button.querySelector(".global-search-result-preview img"));
     });
+  }
+
+  function renderResultPreview(item) {
+    if (!item.thumbUrl) {
+      return `<span class="global-search-result-preview global-search-result-icon">DIR</span>`;
+    }
+    return `
+      <span class="global-search-result-preview global-search-result-thumb">
+        <span class="global-search-thumb-label">${item.type === "folder" ? "DIR" : "IMG"}</span>
+        <img alt="" loading="lazy" />
+      </span>
+    `;
+  }
+
+  async function loadSearchPreview(item, img, attempt = 0) {
+    if (!img?.isConnected || !item.thumbUrl) {
+      return;
+    }
+    const previewPath = item.previewPath || item.path;
+    try {
+      const response = await fetch(`/api/thumb-status/${encodePath(previewPath)}?mode=small`, { cache: "no-store" });
+      if (response.status === 200) {
+        const data = await response.json();
+        img.onload = () => img.classList.add("loaded");
+        img.onerror = () => showPreviewFallback(item, img);
+        img.src = withVersion(data.url || item.thumbUrl, item.mtime);
+        if (img.complete && img.naturalWidth > 0) {
+          img.classList.add("loaded");
+        }
+        return;
+      }
+      if (response.status !== 202) {
+        showPreviewFallback(item, img);
+        return;
+      }
+    } catch {
+      showPreviewFallback(item, img);
+      return;
+    }
+    if (attempt < 8) {
+      window.setTimeout(() => loadSearchPreview(item, img, attempt + 1), Math.min(2600, 400 + attempt * 250));
+    }
+  }
+
+  function showPreviewFallback(item, img) {
+    if (!img?.isConnected) {
+      return;
+    }
+    const previewPath = item.previewPath || item.path;
+    img.onload = () => img.classList.add("loaded");
+    img.onerror = () => img.removeAttribute("src");
+    img.src = `/api/image/${encodePath(previewPath)}`;
   }
 
   function openSearchResult(item) {

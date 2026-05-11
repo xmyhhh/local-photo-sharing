@@ -80,6 +80,91 @@ button.danger {
   backdrop-filter: blur(18px) saturate(1.2);
 }
 
+.warmup-banner {
+  position: sticky;
+  top: 64px;
+  z-index: 6;
+  margin: 0;
+  padding: 10px clamp(12px, 2vw, 28px);
+  border-bottom: 1px solid rgba(23, 107, 135, 0.16);
+  background: rgba(248, 252, 253, 0.94);
+  color: var(--text);
+  box-shadow: 0 12px 28px rgba(31, 63, 77, 0.08);
+  backdrop-filter: blur(14px) saturate(1.08);
+}
+
+.warmup-banner[hidden] {
+  display: none;
+}
+
+.warmup-banner.complete {
+  border-bottom-color: rgba(20, 114, 66, 0.22);
+}
+
+.warmup-banner.error {
+  border-bottom-color: rgba(180, 35, 24, 0.24);
+}
+
+.warmup-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.warmup-title {
+  font-size: 14px;
+  font-weight: 760;
+}
+
+.warmup-detail {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.warmup-percent {
+  flex: 0 0 auto;
+  color: var(--accent-strong);
+  font-size: 18px;
+  font-weight: 820;
+}
+
+.warmup-progress {
+  overflow: hidden;
+  height: 6px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: rgba(23, 107, 135, 0.1);
+}
+
+.warmup-progress-fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 220ms ease;
+}
+
+.warmup-progress-fill.indeterminate {
+  animation: warmup-indeterminate 900ms ease-in-out infinite alternate;
+}
+
+.warmup-banner:not([hidden]) + main .browse-bar {
+  top: 124px;
+}
+
+@keyframes warmup-indeterminate {
+  from {
+    width: 14%;
+  }
+
+  to {
+    width: 42%;
+  }
+}
+
 h1 {
   margin: 0 0 6px;
   letter-spacing: -0.04em;
@@ -134,6 +219,36 @@ h1 {
   box-shadow: none;
 }
 
+.actions .with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.actions .button-icon {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  line-height: 1;
+}
+
+.actions .button-icon svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.actions .settings-action {
+  order: 999;
+}
+
 .actions button:hover,
 #clearFiltersBtn:hover {
   transform: translateY(-1px);
@@ -183,6 +298,33 @@ main {
 .browse-actions button.active {
   background: var(--accent);
   color: #fff;
+}
+
+.thumb-mode-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.thumb-mode-control select {
+  min-height: 38px;
+  min-width: 86px;
+  border: 1px solid rgba(23, 107, 135, 0.14);
+  border-radius: 999px;
+  padding: 0 34px 0 14px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text);
+  font: inherit;
+  box-shadow: 0 10px 26px rgba(31, 63, 77, 0.06);
+}
+
+.thumb-mode-control select:focus {
+  outline: 3px solid rgba(23, 107, 135, 0.14);
+  border-color: rgba(23, 107, 135, 0.5);
 }
 
 .filters {
@@ -398,7 +540,6 @@ main {
   contain: layout paint style;
   content-visibility: auto;
   contain-intrinsic-size: 250px 300px;
-  animation: tile-enter 180ms ease both;
   transition:
     border-color 160ms ease,
     box-shadow 180ms ease,
@@ -521,10 +662,11 @@ main {
 .thumb {
   display: block;
   width: 100%;
-  height: 100%;
+  height: calc(100% - 6px);
   object-fit: contain;
-  object-position: center center;
+  object-position: center top;
   opacity: 0;
+  margin-top: 6px;
   transition:
     opacity 140ms ease,
     transform 180ms ease;
@@ -1150,10 +1292,10 @@ main {
 
 .plugin-list {
   display: grid;
-  gap: 12px;
+  gap: 14px;
   min-height: 0;
   overflow: auto;
-  padding: 2px 8px 8px 2px;
+  padding: 0;
   background: transparent;
 }
 
@@ -1163,26 +1305,24 @@ main {
   align-items: center;
   gap: 14px;
   padding: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.66);
+  border: 1px solid rgba(23, 107, 135, 0.1);
   border-radius: 20px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.42)),
-    rgba(255, 255, 255, 0.56);
-  box-shadow: 0 14px 34px rgba(31, 63, 77, 0.075);
+  background: rgba(255, 255, 255, 0.38);
+  box-shadow: none;
   transition:
+    background 160ms ease,
     border-color 160ms ease,
-    box-shadow 160ms ease,
     transform 160ms ease;
 }
 
 .plugin-row:hover {
-  border-color: rgba(23, 107, 135, 0.18);
-  box-shadow: 0 20px 42px rgba(31, 63, 77, 0.11);
+  border-color: rgba(23, 107, 135, 0.16);
+  background: rgba(255, 255, 255, 0.52);
   transform: translateY(-1px);
 }
 
 .plugin-row.enabled {
-  border-color: rgba(23, 107, 135, 0.2);
+  background: rgba(255, 255, 255, 0.46);
 }
 
 .plugin-row-icon {
@@ -1295,18 +1435,6 @@ main {
   background: #fff;
   box-shadow: 0 24px 80px rgba(22, 32, 46, 0.22);
   animation: panel-enter 180ms ease both;
-}
-
-@keyframes tile-enter {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 @keyframes panel-enter {
@@ -2188,11 +2316,27 @@ main {
 
   .browse-actions {
     align-self: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .warmup-banner:not([hidden]) + main .browse-bar {
+    top: 128px;
   }
 
   .browse-actions button {
     min-height: 36px;
     padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .thumb-mode-control {
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  .thumb-mode-control select {
+    min-height: 36px;
+    min-width: 78px;
     font-size: 13px;
   }
 
@@ -2305,6 +2449,11 @@ main {
 
   .filters {
     gap: 10px;
+  }
+
+  .thumb-mode-control select {
+    min-height: 48px;
+    font-size: 16px;
   }
 
   .filters label,
@@ -2533,6 +2682,11 @@ main {
   .filters select,
   .filters input,
   .filter-select {
+    min-height: 42px;
+    font-size: 15px;
+  }
+
+  .thumb-mode-control select {
     min-height: 42px;
     font-size: 15px;
   }

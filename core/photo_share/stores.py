@@ -3,6 +3,7 @@
 import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from os import stat_result
 from threading import Lock
 
 from .constants import METADATA_WORKERS
@@ -63,19 +64,19 @@ class MetadataStore:
         self.executor = ThreadPoolExecutor(max_workers=METADATA_WORKERS, thread_name_prefix="metadata")
         self.inflight: set[str] = set()
 
-    def get_rating_ready(self, photo_path: Path) -> int:
+    def get_rating_ready(self, photo_path: Path, stat: stat_result | None = None) -> int:
         rel = to_relative(self.root, photo_path)
-        stat = photo_path.stat()
+        file_stat = stat or photo_path.stat()
         cached = self.data.get(rel)
-        if cached and cached.get("mtime") == int(stat.st_mtime) and cached.get("size") == stat.st_size:
+        if cached and cached.get("mtime") == int(file_stat.st_mtime) and cached.get("size") == file_stat.st_size:
             return cached.get("rating", 0)
         return 0
 
-    def is_ready(self, photo_path: Path) -> bool:
+    def is_ready(self, photo_path: Path, stat: stat_result | None = None) -> bool:
         rel = to_relative(self.root, photo_path)
-        stat = photo_path.stat()
+        file_stat = stat or photo_path.stat()
         cached = self.data.get(rel)
-        return bool(cached and cached.get("mtime") == int(stat.st_mtime) and cached.get("size") == stat.st_size)
+        return bool(cached and cached.get("mtime") == int(file_stat.st_mtime) and cached.get("size") == file_stat.st_size)
 
     def get_error(self, photo_path: Path) -> str | None:
         return self.errors.get(self._task_key(photo_path))

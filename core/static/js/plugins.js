@@ -57,7 +57,15 @@ function clearPluginManagedTriggers() {
 function createPluginTriggerButton(component, trigger) {
   const button = document.createElement("button");
   button.type = "button";
-  button.textContent = trigger.label || component.title || component.id;
+  button.classList.add("with-icon");
+  const label = trigger.label || component.title || component.id;
+  const icon = document.createElement("span");
+  icon.className = "button-icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.innerHTML = trigger.iconSvg || topbarIconSvgForLabel(label);
+  const text = document.createElement("span");
+  text.textContent = label;
+  button.append(icon, text);
   button.dataset.pluginTrigger = "1";
   button.dataset.componentId = component.id;
   button.dataset.triggerType = trigger.type;
@@ -66,6 +74,30 @@ function createPluginTriggerButton(component, trigger) {
   }
   button.addEventListener("click", () => dispatchPluginComponentAction(component, trigger));
   return button;
+}
+
+function topbarIconSvgForLabel(label) {
+  if (label.includes("搜索")) {
+    return `
+      <svg viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="6"></circle>
+        <path d="m16 16 4 4"></path>
+      </svg>
+    `;
+  }
+  if (label.includes("包围") || label.includes("曝光")) {
+    return `
+      <svg viewBox="0 0 24 24">
+        <path d="M12 3 21 12 12 21 3 12 12 3Z"></path>
+        <path d="M12 8 16 12 12 16 8 12 12 8Z"></path>
+      </svg>
+    `;
+  }
+  return `
+    <svg viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="4"></circle>
+    </svg>
+  `;
 }
 
 function dispatchPluginComponentAction(component, trigger) {

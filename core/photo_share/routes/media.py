@@ -4,16 +4,16 @@ import mimetypes
 import os
 import shutil
 from io import BytesIO
-from datetime import datetime
 from pathlib import Path
 
 import piexif
 from flask import Flask, abort, jsonify, request, send_file
 from PIL import Image, ImageOps
 
-from ..constants import PHOTO_EXTENSIONS, TRASH_DIR, VIDEO_EXTENSIONS
+from ..constants import PHOTO_EXTENSIONS
 from ..context import AppServices
-from ..live_photos import find_case_insensitive_sibling, find_live_video
+from ..delete_service import delete_media
+from ..live_photos import find_live_video
 from ..paths import (
     get_thumbnail_mode,
     image_url,
@@ -163,30 +163,7 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
         root_id, rel_path = _split_rooted(photo_path)
         root_services = _root_services(services, root_id)
         path = resolve_media(root_services.root, rel_path)
-        rel = rel_path
-        live_video_path = find_live_video(path) if path.suffix.lower() in PHOTO_EXTENSIONS else None
-        live_delete_failed = False
-        if live_video_path is not None:
-            try:
-                move_to_trash(live_video_path, root_services.root, root_id)
-            except OSError:
-                live_delete_failed = True
-        counted_media_deleted = _is_counted_media(path)
-        trashed_path = move_to_trash(path, root_services.root, root_id)
-        root_services.ratings.delete(rel)
-        if path.suffix.lower() in PHOTO_EXTENSIONS:
-            for thumb_store in root_services.thumbnails.values():
-                thumb_store.delete(path)
-            root_services.previews.delete(path)
-            root_services.metadata.delete(path)
-            root_services.rating_index.delete(rel)
-        if counted_media_deleted:
-            root_services.folder_counts.decrement_deleted_media(path)
-        return jsonify({
-            "deleted": f"{root_id}/{rel}",
-            "trashed": str(trashed_path),
-            "liveVideoDeleted": not live_delete_failed,
-        })
+        return jsonify(delete_media(services, root_id, root_services, rel_path, path))
 
     @app.post("/api/rotate/<path:photo_path>")
     def rotate_photo(photo_path: str):
@@ -222,38 +199,6 @@ def _split_rooted(value: str) -> tuple[str, str]:
     if len(parts) == 1:
         return parts[0], ""
     return parts[0], parts[1]
-
-
-def _is_counted_media(path: Path) -> bool:
-    suffix = path.suffix.lower()
-    if suffix in VIDEO_EXTENSIONS and find_case_insensitive_sibling(path, PHOTO_EXTENSIONS) is not None:
-        return False
-    return True
-
-
-def move_to_trash(path: Path, root: Path, root_id: str) -> Path:
-    rel = path.resolve().relative_to(root)
-    target_dir = TRASH_DIR / root_id / rel.parent
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target = unique_trash_path(target_dir / path.name)
-    try:
-        os.replace(path, target)
-    except OSError as error:
-        if getattr(error, "winerror", None) != 17 and getattr(error, "errno", None) != 18:
-            raise
-        shutil.move(str(path), str(target))
-    return target
-
-
-def unique_trash_path(path: Path) -> Path:
-    if not path.exists():
-        return path
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    for index in range(1, 10_000):
-        candidate = path.with_name(f"{path.stem}_{timestamp}_{index}{path.suffix}")
-        if not candidate.exists():
-            return candidate
-    abort(409, "Too many duplicate files in trash.")
 
 
 def build_media_info(path: Path) -> dict:

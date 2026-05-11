@@ -21,6 +21,7 @@
         img.classList.add("loaded");
         spinner.hidden = true;
         entry.thumbUrl = img.src;
+        scheduleNeighborThumbnailPrefetch();
       };
       img.onerror = () => {
         showThumbnailFallback(entry, img, spinner);
@@ -30,6 +31,7 @@
         img.classList.add("loaded");
         spinner.hidden = true;
         entry.thumbUrl = img.src;
+        scheduleNeighborThumbnailPrefetch();
       }
       return;
     }
@@ -84,6 +86,7 @@ function showThumbnailFallback(entry, img, spinner) {
     img.classList.add("loaded");
     spinner.hidden = true;
     entry.thumbUrl = img.src;
+    scheduleNeighborThumbnailPrefetch();
   };
   img.onerror = () => {
     if (isThumbnailStillNeeded(img)) {
@@ -97,6 +100,7 @@ function showThumbnailFallback(entry, img, spinner) {
     img.classList.add("loaded");
     spinner.hidden = true;
     entry.thumbUrl = img.src;
+    scheduleNeighborThumbnailPrefetch();
   }
 }
 
@@ -144,28 +148,29 @@ function withVersion(url, mtime) {
   return `${url}${separator}v=${mtime}`;
 }
 
-function observeThumbnail(entry, img, spinner) {
+function observeThumbnail(entry, img, spinner, index = -1) {
   if (!state.thumbObserver) {
     state.thumbObserver = new IntersectionObserver(
       (items) => {
         items.forEach((item) => {
           if (!item.isIntersecting) {
+            state.visibleThumbHolders.delete(item.target);
             return;
           }
+          state.visibleThumbHolders.add(item.target);
           const payload = item.target.__thumbPayload;
           if (payload) {
             queueThumbnail(payload.entry, payload.img, payload.spinner);
+            scheduleNeighborThumbnailPrefetch();
           }
         });
       },
       { rootMargin: "360px 0px" },
     );
   }
-  img.parentElement.__thumbPayload = { entry, img, spinner };
+  img.parentElement.__thumbPayload = { entry, img, spinner, index };
+  state.thumbPayloads.set(entry.path, { entry, img, spinner, index });
   state.thumbObserver.observe(img.parentElement);
-  if (isNearViewport(img.parentElement, 420)) {
-    queueThumbnail(entry, img, spinner);
-  }
 }
 
 function isNearViewport(element, margin) {
@@ -175,18 +180,27 @@ function isNearViewport(element, margin) {
 
 function scanVisibleWork() {
   state.visibleScanTimer = null;
-  document.querySelectorAll(".thumb-holder").forEach((holder) => {
+  for (const holder of Array.from(state.visibleThumbHolders)) {
+    if (!holder.isConnected) {
+      state.visibleThumbHolders.delete(holder);
+      continue;
+    }
     const payload = holder.__thumbPayload;
-    if (payload && isNearViewport(holder, 420)) {
+    if (payload) {
       queueThumbnail(payload.entry, payload.img, payload.spinner);
     }
-  });
-  document.querySelectorAll(".rating").forEach((ratingWrap) => {
+  }
+  for (const ratingWrap of Array.from(state.visibleRatingWraps)) {
+    if (!ratingWrap.isConnected) {
+      state.visibleRatingWraps.delete(ratingWrap);
+      continue;
+    }
     const payload = ratingWrap.__ratingPayload;
-    if (payload && isNearViewport(ratingWrap, 220)) {
+    if (payload) {
       queueEmbeddedRating(payload.entry, payload.ratingWrap);
     }
-  });
+  }
+  scheduleNeighborThumbnailPrefetch();
 }
 
 function scheduleVisibleWorkScan() {
@@ -196,7 +210,7 @@ function scheduleVisibleWorkScan() {
   state.visibleScanTimer = window.setTimeout(scanVisibleWork, 80);
 }
 
-function queueThumbnail(entry, img, spinner, attempt = 0) {
+function queueThumbnail(entry, img, spinner, attempt = 0, options = {}) {
   if (!img.isConnected || img.classList.contains("loaded")) {
     return;
   }
@@ -205,12 +219,28 @@ function queueThumbnail(entry, img, spinner, attempt = 0) {
     return;
   }
   if (state.thumbQueued.has(key)) {
+    if (options.priority === "neighbor") {
+      return;
+    }
     state.thumbQueue = state.thumbQueue.filter((item) => item.key !== key);
   }
   spinner.hidden = false;
   spinner.classList.remove("failed");
   state.thumbQueued.add(key);
-  state.thumbQueue.unshift({ entry, img, spinner, attempt, mode: state.thumbMode, key });
+  const payload = {
+    entry,
+    img,
+    spinner,
+    attempt,
+    mode: state.thumbMode,
+    key,
+    priority: options.priority || "visible",
+  };
+  if (options.priority === "neighbor") {
+    state.thumbQueue.push(payload);
+  } else {
+    state.thumbQueue.unshift(payload);
+  }
   trimThumbQueue();
   runThumbQueue();
 }
@@ -228,6 +258,12 @@ function trimThumbQueue() {
 }
 
 function findDroppableThumbQueueIndex() {
+  for (let index = state.thumbQueue.length - 1; index >= 0; index -= 1) {
+    const item = state.thumbQueue[index];
+    if (item.priority === "neighbor" && !isQueuedThumbnailProtected(item)) {
+      return index;
+    }
+  }
   for (let index = state.thumbQueue.length - 1; index >= 0; index -= 1) {
     const item = state.thumbQueue[index];
     if (!isQueuedThumbnailProtected(item)) {
@@ -267,9 +303,104 @@ function runThumbQueue() {
         if (isThumbnailStillNeeded(payload.img)) {
           scheduleThumbnailRequeue(payload.entry, payload.img, payload.spinner, payload.mode);
         }
+        scheduleNeighborThumbnailPrefetch();
         runThumbQueue();
       });
   }
+}
+
+function scheduleNeighborThumbnailPrefetch() {
+  if (state.thumbNeighborPrefetchTimer) {
+    return;
+  }
+  state.thumbNeighborPrefetchTimer = window.setTimeout(() => {
+    state.thumbNeighborPrefetchTimer = null;
+    prefetchNeighborThumbnails();
+  }, 120);
+}
+
+function prefetchNeighborThumbnails() {
+  const visible = visibleLoadedThumbnailRange();
+  if (!visible) {
+    state.thumbNeighborPrefetchKey = "";
+    dropQueuedNeighborThumbnails();
+    return;
+  }
+  const key = `${state.thumbMode}:${visible.first}:${visible.last}`;
+  if (key !== state.thumbNeighborPrefetchKey) {
+    state.thumbNeighborPrefetchKey = key;
+    dropQueuedNeighborThumbnails();
+  }
+  const paths = neighborThumbnailPaths(visible.first, visible.last, 20);
+  paths.forEach((path) => {
+    const payload = state.thumbPayloads.get(path);
+    if (!payload || payload.img.classList.contains("loaded")) {
+      return;
+    }
+    queueThumbnail(payload.entry, payload.img, payload.spinner, 0, { priority: "neighbor" });
+  });
+}
+
+function dropQueuedNeighborThumbnails() {
+  state.thumbQueue = state.thumbQueue.filter((item) => {
+    if (item.priority !== "neighbor") {
+      return true;
+    }
+    state.thumbQueued.delete(item.key);
+    return false;
+  });
+}
+
+function visibleLoadedThumbnailRange() {
+  let first = Infinity;
+  let last = -1;
+  for (const holder of Array.from(state.visibleThumbHolders)) {
+    if (!holder.isConnected) {
+      state.visibleThumbHolders.delete(holder);
+      continue;
+    }
+    if (!isNearViewport(holder, 0)) {
+      continue;
+    }
+    const payload = holder.__thumbPayload;
+    if (!payload) {
+      continue;
+    }
+    if (!payload.img.classList.contains("loaded")) {
+      return null;
+    }
+    const index = Number.isInteger(payload.index) ? payload.index : state.entries.findIndex((entry) => qualifyPath(entry.path) === payload.entry.path);
+    if (index < 0) {
+      continue;
+    }
+    first = Math.min(first, index);
+    last = Math.max(last, index);
+  }
+  if (!Number.isFinite(first) || last < first) {
+    return null;
+  }
+  return { first, last };
+}
+
+function neighborThumbnailPaths(first, last, radius) {
+  const paths = [];
+  let beforeCount = 0;
+  for (let index = first - 1; index >= 0 && beforeCount < radius; index -= 1) {
+    const entry = state.entries[index];
+    if (entry?.type === "photo") {
+      paths.push(qualifyPath(entry.path));
+      beforeCount += 1;
+    }
+  }
+  let afterCount = 0;
+  for (let index = last + 1; index < state.entries.length && afterCount < radius; index += 1) {
+    const entry = state.entries[index];
+    if (entry?.type === "photo") {
+      paths.push(qualifyPath(entry.path));
+      afterCount += 1;
+    }
+  }
+  return paths;
 }
 
 function resetThumbObserver() {
@@ -277,6 +408,9 @@ function resetThumbObserver() {
     state.thumbObserver.disconnect();
     state.thumbObserver = null;
   }
+  state.visibleThumbHolders.clear();
+  state.thumbPayloads.clear();
+  state.thumbNeighborPrefetchKey = "";
 }
 
 function clearThumbTimers() {
@@ -287,6 +421,10 @@ function clearThumbTimers() {
   state.thumbQueue = [];
   state.thumbQueued.clear();
   state.thumbActiveKeys.clear();
+  if (state.thumbNeighborPrefetchTimer) {
+    window.clearTimeout(state.thumbNeighborPrefetchTimer);
+    state.thumbNeighborPrefetchTimer = null;
+  }
   for (const controller of state.thumbControllers.values()) {
     controller.abort();
   }
@@ -314,5 +452,6 @@ function resetRatingObserver() {
     state.ratingObserver.disconnect();
     state.ratingObserver = null;
   }
+  state.visibleRatingWraps.clear();
 }
 

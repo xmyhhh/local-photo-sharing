@@ -1,0 +1,79 @@
+.recycle-dialog {
+  width: min(760px, calc(100vw - 24px));
+  border: 0;
+  border-radius: 10px;
+  padding: 0;
+  background: transparent;
+}
+
+.recycle-dialog::backdrop {
+  background: rgba(7, 14, 18, 0.58);
+}
+
+.recycle-panel {
+  display: grid;
+  gap: 14px;
+  max-height: min(760px, calc(100vh - 36px));
+  padding: 18px;
+  border: 1px solid rgba(154, 174, 187, 0.24);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 22px 70px rgba(15, 23, 42, 0.24);
+}
+
+.recycle-header,
+.recycle-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.recycle-actions {
+  justify-content: flex-end;
+}
+
+.recycle-title {
+  font-size: 20px;
+  font-weight: 760;
+}
+
+.recycle-status,
+.recycle-item-meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.recycle-items {
+  display: grid;
+  gap: 8px;
+  overflow: auto;
+  max-height: min(560px, calc(100vh - 220px));
+}
+
+.recycle-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+  min-height: 58px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(248, 251, 252, 0.9);
+}
+
+.recycle-item input {
+  width: 18px;
+  height: 18px;
+}
+
+.recycle-item-name {
+  font-weight: 700;
+  word-break: break-all;
+}
+
+.recycle-item-meta {
+  margin-top: 3px;
+  word-break: break-all;
+}

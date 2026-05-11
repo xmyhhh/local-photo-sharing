@@ -104,6 +104,8 @@ def _create_services(
         plugin_components=[],
         available_plugins=[],
         plugin_modules={},
+        recycle_bin_recorder=None,
+        warmup_status=None,
     )
 
 

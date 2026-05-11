@@ -10,9 +10,9 @@ from typing import Any
 from flask import Flask, abort, after_this_request, jsonify, request, send_file
 
 from ..context import AppServices, RootServices
+from ..delete_service import delete_item
 from ..paths import join_rooted_path, normalize_rel_path, resolve_inside, to_relative
 from .gallery import _root_services
-from .media import move_to_trash
 
 
 def register_file_routes(app: Flask, services: AppServices) -> None:
@@ -45,13 +45,12 @@ def register_file_routes(app: Flask, services: AppServices) -> None:
         deleted = []
         for path_value in paths:
             root_services, path = resolve_existing_item(services, path_value)
-            if path.is_dir():
-                trashed = move_folder_to_trash(path, root_services.root, root_id_for_root(services, root_services.root))
-            else:
-                trashed = move_to_trash(path, root_services.root, root_id_for_root(services, root_services.root))
-            root_services.folder_counts.refresh_subtree_async(path.parent)
-            deleted.append({"path": path_value, "trashed": str(trashed)})
-        return jsonify({"deleted": deleted})
+            root_id = root_id_for_root(services, root_services.root)
+            deleted.append({"path": path_value, **delete_item(services, root_id, root_services, path)})
+        return jsonify({
+            "deleted": deleted,
+            "mode": "recycle" if "recycle_bin" in services.enabled_plugins else "permanent",
+        })
 
     @app.post("/api/files/copy")
     def copy_items():
@@ -174,17 +173,6 @@ def unique_child_path(parent: Path, name: str, want_dir: bool) -> Path:
         if not candidate.exists():
             return candidate
     abort(409, "Too many duplicate names.")
-
-
-def move_folder_to_trash(path: Path, root: Path, root_id: str) -> Path:
-    rel = path.resolve().relative_to(root)
-    from ..constants import TRASH_DIR
-
-    target_dir = TRASH_DIR / root_id / rel.parent
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target = unique_child_path(target_dir, path.name, want_dir=True)
-    shutil.move(str(path), str(target))
-    return target
 
 
 def write_zip_file(zip_path: Path, items: list[tuple[RootServices, Path]]) -> None:

@@ -510,7 +510,9 @@ async function setRating(entry, rating) {
     }
   }
   if (!entryMatchesActiveRatingFilter(entry)) {
-    removeGridEntry(entry);
+    if (!state.timelineViewerOpen) {
+      removeGridEntry(entry);
+    }
     return;
   }
   updateGridRating(entry);
@@ -525,6 +527,7 @@ function entryMatchesActiveRatingFilter(entry) {
 
 function removeGridEntry(entry) {
   state.entries = state.entries.filter((item) => item.path !== entry.path);
+  state.entryByPath.delete(entry.path);
   document.querySelector(`.tile[data-path="${CSS.escape(entry.path)}"]`)?.remove();
   updateEmptyState();
 }

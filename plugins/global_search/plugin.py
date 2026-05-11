@@ -2,16 +2,17 @@ from __future__ import annotations
 
 import threading
 import time
-from dataclasses import dataclass
+import unicodedata
+from dataclasses import dataclass, replace
 from os import scandir
 from pathlib import Path
 from typing import Any
 
 from flask import Flask, abort, jsonify, request
 
-from core.photo_share.constants import MEDIA_EXTENSIONS, RATINGS_FILE, THUMBNAIL_DIR
+from core.photo_share.constants import MEDIA_EXTENSIONS, PHOTO_EXTENSIONS, RATINGS_FILE, THUMBNAIL_DIR
 from core.photo_share.context import AppServices
-from core.photo_share.paths import join_rooted_path, to_relative
+from core.photo_share.paths import join_rooted_path, thumb_url, to_relative
 
 PLUGIN_NAME = "global_search"
 MAX_QUERY_RESULTS = 200
@@ -60,6 +61,7 @@ class SearchEntry:
     type: str
     size: int
     mtime: int
+    preview_rel: str = ""
 
 
 class GlobalSearchIndex:
@@ -149,7 +151,11 @@ class GlobalSearchIndex:
             for root_id, root in services.roots.items():
                 if self._stop.is_set() or len(entries) >= MAX_INDEX_ITEMS:
                     break
+                entries.append(build_root_entry(root_id, root))
+                if len(entries) >= MAX_INDEX_ITEMS:
+                    break
                 entries.extend(iter_root_entries(root_id, root, self._stop, MAX_INDEX_ITEMS - len(entries)))
+            entries = attach_folder_previews(entries)
             with self._lock:
                 self._entries = entries
                 self._indexed_at = time.time()
@@ -247,17 +253,61 @@ def build_entry(root_id: str, root: Path, path: Path, item_type: str) -> SearchE
         type=item_type,
         size=stat.st_size if item_type != "folder" else 0,
         mtime=int(stat.st_mtime),
+        preview_rel=rel if item_type == "media" and path.suffix.lower() in PHOTO_EXTENSIONS else "",
     )
 
 
+def build_root_entry(root_id: str, root: Path) -> SearchEntry:
+    try:
+        stat = root.stat()
+        mtime = int(stat.st_mtime)
+    except OSError:
+        mtime = 0
+    return SearchEntry(
+        root_id=root_id,
+        rel="",
+        name=root.name or root_id,
+        type="folder",
+        size=0,
+        mtime=mtime,
+    )
+
+
+def attach_folder_previews(entries: list[SearchEntry]) -> list[SearchEntry]:
+    previews: dict[tuple[str, str], str] = {}
+    for entry in entries:
+        if entry.type != "media" or not entry.preview_rel:
+            continue
+        folder = parent_rel(entry.rel)
+        while True:
+            previews.setdefault((entry.root_id, folder), entry.preview_rel)
+            if not folder:
+                break
+            folder = parent_rel(folder)
+    return [
+        replace(entry, preview_rel=previews.get((entry.root_id, entry.rel), ""))
+        if entry.type == "folder" else entry
+        for entry in entries
+    ]
+
+
+def parent_rel(value: str) -> str:
+    parent = Path(value).parent.as_posix()
+    return "" if parent == "." else parent
+
+
 def normalize_query(query: str) -> list[str]:
-    return [part.lower() for part in query.strip().split() if part.strip()]
+    return [normalize_search_text(part) for part in query.strip().split() if part.strip()]
+
+
+def normalize_search_text(value: str) -> str:
+    return unicodedata.normalize("NFKC", value).casefold()
 
 
 def match_score(entry: SearchEntry, tokens: list[str]) -> int:
     score = 0
-    name = entry.name.lower()
-    search_text = f"{entry.name}\n{entry.rel}".lower()
+    name = normalize_search_text(entry.name)
+    search_text = normalize_search_text(f"{entry.name}\n{entry.rel}")
     for token in tokens:
         if token not in search_text:
             return 0
@@ -274,7 +324,7 @@ def match_score(entry: SearchEntry, tokens: list[str]) -> int:
 
 def serialize_entry(entry: SearchEntry) -> dict[str, Any]:
     path = join_rooted_path(entry.root_id, entry.rel)
-    return {
+    result = {
         "root": entry.root_id,
         "rel": entry.rel,
         "name": entry.name,
@@ -284,3 +334,11 @@ def serialize_entry(entry: SearchEntry) -> dict[str, Any]:
         "mtime": entry.mtime,
         "folder": entry.rel if entry.type == "folder" else str(Path(entry.rel).parent).replace("\\", "/"),
     }
+    if entry.type == "media":
+        result["thumbUrl"] = thumb_url(path, "small")
+        result["previewPath"] = path
+    elif entry.preview_rel:
+        preview_path = join_rooted_path(entry.root_id, entry.preview_rel)
+        result["thumbUrl"] = thumb_url(preview_path, "small")
+        result["previewPath"] = preview_path
+    return result

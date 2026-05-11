@@ -175,7 +175,10 @@ async function renameEntry(entry) {
 }
 
 async function deleteEntries(paths) {
-  if (!paths.length || !window.confirm(`确认删除 ${paths.length} 项？文件会移动到 .photo_share_trash。`)) {
+  const message = recycleBinEnabled()
+    ? `确认删除 ${paths.length} 项？文件会放入回收站。`
+    : `确认永久删除 ${paths.length} 项？回收站未启用，此操作不可撤销。`;
+  if (!paths.length || !window.confirm(message)) {
     return;
   }
   await fetchJson("/api/files/delete", {
@@ -210,6 +213,69 @@ function currentRootedFolderPath() {
     return "";
   }
   return state.folder ? qualifyPath(state.folder) : state.rootId;
+}
+
+function entryFromTile(tile) {
+  return tile?.dataset?.path ? state.entryByPath.get(tile.dataset.path) : null;
+}
+
+function handleGridTileClick(event) {
+  const tile = event.target.closest(".tile");
+  if (!tile || !grid.contains(tile) || event.target.closest(".rating")) {
+    return;
+  }
+  const entry = entryFromTile(tile);
+  if (!entry) {
+    return;
+  }
+  if (event.target.closest(".tile-select")) {
+    handleSelectionClick(event, entry.path, { forceSelection: true });
+    return;
+  }
+  if (!event.target.closest(".tile-button")) {
+    return;
+  }
+  if (consumeLongPressClick()) {
+    return;
+  }
+  if (handleSelectionClick(event, entry.path)) {
+    return;
+  }
+  if (entry.type === "folder") {
+    navigateFolder(entry.path);
+  } else {
+    openViewer(entry);
+  }
+}
+
+function handleGridTileContextMenu(event) {
+  const tile = event.target.closest(".tile");
+  if (!tile || !grid.contains(tile)) {
+    openBlankContextMenu(event);
+    return;
+  }
+  const entry = entryFromTile(tile);
+  if (!entry) {
+    return;
+  }
+  if (entry.type === "folder") {
+    openFolderContextMenu(event, entry);
+  } else {
+    openItemContextMenu(event, entry);
+  }
+}
+
+function handleGridTilePointerDown(event) {
+  const tile = event.target.closest(".tile");
+  if (!tile || !grid.contains(tile)) {
+    scheduleBlankLongPress(event);
+    startBoxSelection(event);
+    return;
+  }
+  const entry = entryFromTile(tile);
+  if (entry) {
+    scheduleEntryLongPress(event, entry);
+  }
 }
 
 async function cutSelectedEntries() {

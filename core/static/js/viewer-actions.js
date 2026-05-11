@@ -67,9 +67,20 @@ function requestDeleteCurrentPhoto() {
   if (!state.currentPhoto) {
     return;
   }
+  deleteDialogMode.textContent = deleteModeMessage();
   deleteDialogPath.textContent = state.currentPhoto.path;
   deleteDialog.showModal();
   updateViewerControlsLock();
+}
+
+function recycleBinEnabled() {
+  return state.enabledPlugins?.has("recycle_bin");
+}
+
+function deleteModeMessage() {
+  return recycleBinEnabled()
+    ? "回收站已启用：删除后会放入回收站，可在回收站中还原。"
+    : "回收站未启用：删除后会直接永久删除，无法撤销。";
 }
 
 async function downloadCurrentPhoto() {

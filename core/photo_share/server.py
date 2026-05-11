@@ -17,7 +17,7 @@ from .config import (
 )
 from .factory import create_app
 from .plugins import discover_plugin_specs
-from .warmup import warmup_thumbnail_caches
+from .warmup import start_warmup_thumbnail_caches
 
 
 @dataclass(slots=True)
@@ -58,9 +58,9 @@ def create_server_runtime(config_path: Path, warmup: bool = False) -> ServerRunt
         config_path=config_path,
         default_save_folder=get_default_save_folder(config),
     )
-    if warmup:
-        warmup_thumbnail_caches(app.config["photo_share_services"])
     server = make_server(host, port, app, threaded=True)
+    if warmup:
+        start_warmup_thumbnail_caches(app.config["photo_share_services"])
     return ServerRuntime(
         config_path=config_path,
         host=host,

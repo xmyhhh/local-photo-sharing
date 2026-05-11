@@ -64,5 +64,15 @@ DEFAULT_CONFIG = {
             "path": "plugins/global_search/plugin.py",
             "enabled": False,
         },
+        {
+            "name": "timeline",
+            "path": "plugins/timeline/plugin.py",
+            "enabled": False,
+        },
+        {
+            "name": "recycle_bin",
+            "path": "plugins/recycle_bin/plugin.py",
+            "enabled": False,
+        },
     ],
 }

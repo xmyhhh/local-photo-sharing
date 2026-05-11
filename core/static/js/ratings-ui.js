@@ -7,8 +7,10 @@ function observeRating(entry, ratingWrap) {
       (items) => {
         items.forEach((item) => {
           if (!item.isIntersecting) {
+            state.visibleRatingWraps.delete(item.target);
             return;
           }
+          state.visibleRatingWraps.add(item.target);
           const payload = item.target.__ratingPayload;
           if (payload) {
             queueEmbeddedRating(payload.entry, payload.ratingWrap);
@@ -20,9 +22,6 @@ function observeRating(entry, ratingWrap) {
   }
   ratingWrap.__ratingPayload = { entry, ratingWrap };
   state.ratingObserver.observe(ratingWrap);
-  if (isNearViewport(ratingWrap, 220)) {
-    queueEmbeddedRating(entry, ratingWrap);
-  }
 }
 
 function queueEmbeddedRating(entry, ratingWrap, attempt = 0) {
@@ -192,33 +191,46 @@ function setRatingMenuOpen(open) {
 function createRating(entry, large) {
   const wrap = document.createElement("div");
   wrap.className = `rating ${large ? "rating-large" : ""}`;
+  wrap.__ratingEntry = entry;
 
   const off = document.createElement("button");
   off.type = "button";
   off.className = `rating-off ${entry.rating === 0 ? "active" : ""}`;
+  off.dataset.ratingValue = "0";
   off.textContent = "OFF";
   off.title = "取消评分";
-  off.addEventListener("click", async (event) => {
-    event.stopPropagation();
-    await setRating(entry, 0);
-  });
   wrap.append(off);
 
   for (let i = 1; i <= 5; i += 1) {
     const star = document.createElement("button");
     star.type = "button";
     star.className = `star ${i <= entry.rating ? "active" : ""}`;
+    star.dataset.ratingValue = String(i);
     star.textContent = "★";
     star.title = `${i} 分`;
     if (large) {
       star.style.fontSize = "28px";
     }
-    star.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      const nextRating = entry.rating === i ? 0 : i;
-      await setRating(entry, nextRating);
-    });
     wrap.append(star);
   }
   return wrap;
+}
+
+async function handleGridRatingClick(event) {
+  const button = event.target.closest(".rating button[data-rating-value]");
+  if (!button || !grid.contains(button) || button.closest(".viewer-rating-menu")) {
+    return;
+  }
+  const ratingWrap = button.closest(".rating");
+  const entry = ratingWrap?.__ratingEntry;
+  if (!entry) {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  const value = Number.parseInt(button.dataset.ratingValue, 10);
+  if (!Number.isInteger(value)) {
+    return;
+  }
+  await setRating(entry, entry.rating === value && value > 0 ? 0 : value);
 }

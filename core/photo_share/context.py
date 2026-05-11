@@ -44,3 +44,5 @@ class AppServices:
     plugin_components: list[dict[str, Any]]
     available_plugins: list[dict[str, Any]]
     plugin_modules: dict[str, Any]
+    recycle_bin_recorder: Any | None
+    warmup_status: Any | None

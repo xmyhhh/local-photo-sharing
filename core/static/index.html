@@ -13,15 +13,53 @@
   <body>
     <header class="topbar">
       <div id="topbarActions" class="actions">
-        <button id="openUploadBtn" type="button">上传</button>
-        <button id="openSettingsBtn" class="ghost" type="button">设置</button>
+        <button id="openUploadBtn" class="with-icon" type="button">
+          <span class="button-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 16V4"></path>
+              <path d="m7 9 5-5 5 5"></path>
+              <path d="M5 20h14"></path>
+            </svg>
+          </span>
+          <span>上传</span>
+        </button>
+        <button id="openSettingsBtn" class="ghost with-icon settings-action" type="button">
+          <span class="button-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"></path>
+              <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.2a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 4.6 15a1.6 1.6 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.2a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3h.1a1.6 1.6 0 0 0 .9-1.5V3a2 2 0 0 1 4 0v.2a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8v.1a1.6 1.6 0 0 0 1.5.9h.2a2 2 0 0 1 0 4h-.2a1.6 1.6 0 0 0-1.5 1Z"></path>
+            </svg>
+          </span>
+          <span>设置</span>
+        </button>
       </div>
     </header>
+    <div id="warmupBanner" class="warmup-banner" hidden>
+      <div class="warmup-row">
+        <div>
+          <div id="warmupTitle" class="warmup-title">正在预热缩略图</div>
+          <div id="warmupDetail" class="warmup-detail">正在准备...</div>
+        </div>
+        <div id="warmupPercent" class="warmup-percent">0%</div>
+      </div>
+      <div class="warmup-progress" aria-hidden="true">
+        <div id="warmupProgressFill" class="warmup-progress-fill"></div>
+      </div>
+    </div>
 
     <main>
       <section class="browse-bar" aria-label="浏览工具">
         <nav id="breadcrumb" class="breadcrumb"></nav>
         <div class="browse-actions">
+          <label class="thumb-mode-control">
+            <span>预览大小</span>
+            <select id="thumbModeSelect">
+              <option value="small">小</option>
+              <option value="medium">中</option>
+              <option value="large">大</option>
+              <option value="xlarge">超大</option>
+            </select>
+          </label>
           <button id="filterPanelToggleBtn" class="ghost" type="button" aria-expanded="false" aria-controls="filterPanel">筛选</button>
           <button id="compactToggleBtn" class="ghost" type="button">精简</button>
           <div id="selectionBar" class="selection-bar" hidden>
@@ -56,15 +94,6 @@
         <label>
           结束日期
           <input id="dateToFilter" type="date" />
-        </label>
-        <label>
-          预览大小
-          <select id="thumbModeSelect">
-            <option value="small">小</option>
-            <option value="medium">中</option>
-            <option value="large">大</option>
-            <option value="xlarge">超大</option>
-          </select>
         </label>
         <button id="clearFiltersBtn" class="ghost" type="button">清除筛选</button>
       </section>
@@ -167,6 +196,7 @@
     <dialog id="deleteDialog" class="confirm-dialog">
       <form method="dialog" class="confirm-panel">
         <div class="confirm-title">删除这张照片？</div>
+        <div id="deleteDialogMode" class="confirm-message"></div>
         <div id="deleteDialogPath" class="confirm-path"></div>
         <div class="confirm-actions">
           <button id="cancelDeleteBtn" class="ghost" value="cancel" type="button">取消</button>
@@ -216,6 +246,7 @@
     <script src="/static/js/thumbnails.js"></script>
     <script src="/static/js/context-menu.js"></script>
     <script src="/static/js/plugins.js"></script>
+    <script src="/static/js/warmup.js"></script>
     <script src="/static/js/gallery.js"></script>
     <script src="/static/js/viewer-core.js"></script>
     <script src="/static/js/viewer-cache.js"></script>

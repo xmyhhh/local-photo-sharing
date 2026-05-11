@@ -21,6 +21,7 @@ const state = {
   roots: [],
   parent: "",
   entries: [],
+  entryByPath: new Map(),
   loadingMore: false,
   loadingFolder: false,
   indexing: false,
@@ -42,11 +43,16 @@ const state = {
   thumbActiveKeys: new Set(),
   thumbActive: 0,
   thumbControllers: new Map(),
+  visibleThumbHolders: new Set(),
+  thumbPayloads: new Map(),
+  thumbNeighborPrefetchTimer: null,
+  thumbNeighborPrefetchKey: "",
   ratingTimers: new Map(),
   ratingObserver: null,
   ratingQueue: [],
   ratingQueued: new Set(),
   ratingActive: 0,
+  visibleRatingWraps: new Set(),
   filterGeneration: 0,
   filterRefreshTimer: null,
   folderCountRefreshTimer: null,
@@ -99,12 +105,14 @@ const state = {
   currentBracketMergeResult: null,
   currentBracketFolder: null,
   currentBracketRoot: null,
+  timelineViewerOpen: false,
   uploadPasswordRequired: false,
   memoryPrefetchWindowBefore: 5,
   memoryPrefetchWindowAfter: 35,
   enabledPlugins: new Set(),
   pluginAssets: [],
   pluginComponents: [],
+  warmupPollTimer: null,
   filters: {
     ratings: [],
     dateFrom: "",
@@ -124,6 +132,11 @@ const ENTRY_PLACEHOLDER_LIMIT = 10000;
 const grid = document.querySelector("#grid");
 const emptyState = document.querySelector("#emptyState");
 const breadcrumb = document.querySelector("#breadcrumb");
+const warmupBanner = document.querySelector("#warmupBanner");
+const warmupTitle = document.querySelector("#warmupTitle");
+const warmupDetail = document.querySelector("#warmupDetail");
+const warmupPercent = document.querySelector("#warmupPercent");
+const warmupProgressFill = document.querySelector("#warmupProgressFill");
 const topbarActions = document.querySelector("#topbarActions");
 const openUploadBtn = document.querySelector("#openUploadBtn");
 const openSettingsBtn = document.querySelector("#openSettingsBtn");
@@ -160,6 +173,7 @@ const closeBtn = document.querySelector("#closeBtn");
 const prevBtn = document.querySelector("#prevBtn");
 const nextBtn = document.querySelector("#nextBtn");
 const deleteDialog = document.querySelector("#deleteDialog");
+const deleteDialogMode = document.querySelector("#deleteDialogMode");
 const deleteDialogPath = document.querySelector("#deleteDialogPath");
 const cancelDeleteBtn = document.querySelector("#cancelDeleteBtn");
 const confirmDeleteBtn = document.querySelector("#confirmDeleteBtn");

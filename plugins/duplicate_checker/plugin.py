@@ -8,9 +8,9 @@ from flask import Flask, abort, jsonify, request
 
 from core.photo_share.constants import PHOTO_EXTENSIONS
 from core.photo_share.context import AppServices
+from core.photo_share.delete_service import cleanup_photo_indexes, delete_path
 from core.photo_share.paths import join_rooted_path, resolve_folder, resolve_media, thumb_url, to_relative
 from core.photo_share.routes.gallery import _root_services
-from core.photo_share.routes.media import move_to_trash
 
 PLUGIN = {
     "title": "重复照片检查",
@@ -76,15 +76,16 @@ def register(app: Flask, services: AppServices) -> None:
             if path.suffix.lower() not in PHOTO_EXTENSIONS:
                 abort(400, "duplicate checker can delete photos only.")
             parent = path.parent
-            trashed = move_to_trash(path, root_services.root, root_id)
+            result = delete_path(services, root_id, root_services.root, path, "recycle_bin" in services.enabled_plugins)
             cleanup_photo_indexes(root_services, rel_path, path)
             root_services.folder_counts.decrement_deleted_media(path)
             cleanup_folders.append((root_services.root, parent))
-            deleted.append({"path": item, "trashed": str(trashed)})
+            deleted.append({"path": item, **result})
 
         removed_empty_folders = cleanup_empty_folders(cleanup_folders) if delete_empty_folders else []
         return jsonify({
             "deleted": deleted,
+            "mode": "recycle" if "recycle_bin" in services.enabled_plugins else "permanent",
             "removedEmptyFolders": removed_empty_folders,
         })
 
@@ -141,15 +142,6 @@ def split_rooted_path(value: str) -> tuple[str, str]:
     if len(parts) != 2 or not parts[0] or not parts[1]:
         abort(400, "path must be a rooted media path.")
     return parts[0], parts[1]
-
-
-def cleanup_photo_indexes(root_services, rel_path: str, path: Path) -> None:
-    root_services.ratings.delete(rel_path)
-    for thumb_store in root_services.thumbnails.values():
-        thumb_store.delete(path)
-    root_services.previews.delete(path)
-    root_services.metadata.delete(path)
-    root_services.rating_index.delete(rel_path)
 
 
 def cleanup_empty_folders(folders: list[tuple[Path, Path]]) -> list[str]:

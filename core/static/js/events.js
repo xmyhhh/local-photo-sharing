@@ -56,9 +56,10 @@ document.addEventListener("contextmenu", (event) => {
     closeAllContextMenus();
   }
 });
-grid.addEventListener("contextmenu", openBlankContextMenu);
-grid.addEventListener("pointerdown", scheduleBlankLongPress);
-grid.addEventListener("pointerdown", startBoxSelection);
+grid.addEventListener("click", handleGridTileClick);
+grid.addEventListener("contextmenu", handleGridTileContextMenu);
+grid.addEventListener("click", handleGridRatingClick);
+grid.addEventListener("pointerdown", handleGridTilePointerDown);
 grid.addEventListener("pointermove", cancelLongPressIfMoved);
 grid.addEventListener("pointermove", updateBoxSelection);
 grid.addEventListener("pointerup", cancelLongPress);
