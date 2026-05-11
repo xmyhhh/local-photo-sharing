@@ -171,6 +171,7 @@ def _register_plugin_components(services: "AppServices", spec: PluginSpec, modul
             **component,
             "id": component_id.strip(),
             "plugin": spec.name,
+            "pluginTitle": _plugin_summary(spec, module)["title"],
             "enabled": spec.enabled,
         })
 

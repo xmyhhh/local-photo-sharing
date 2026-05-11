@@ -1,10 +1,11 @@
-# Plugin Component Model
+# Plugin Model
 
-Core plugins expose one or more components through `PLUGIN["components"]`.
-The manifest is declarative: it tells the core what a component can do, how it can be triggered, and what UI surface it owns.
-Current plugins still attach their own UI in JavaScript, but `/api/config` now exposes these component definitions as `pluginComponents` so the core can gradually take over menu and page routing.
+Core plugins expose one or more declarative units through `PLUGIN["components"]`.
+For now the API field is still named `pluginComponents`, but product UI should call them “插件” unless we are discussing the manifest schema.
+The manifest tells core what a plugin can do, how it can be triggered, and what UI surface it owns.
+Plugin business UI can still live in plugin JavaScript, while core owns shared placement such as grouped context menus and topbar buttons.
 
-## Component Shape
+## Manifest Shape
 
 ```json
 {
@@ -17,7 +18,7 @@ Current plugins still attach their own UI in JavaScript, but `/api/config` now e
 }
 ```
 
-`id` should be stable and namespaced by plugin. A component can declare several capabilities, triggers, and surfaces.
+`id` should be stable and namespaced by plugin. A manifest item can declare several capabilities, triggers, and surfaces.
 
 ## Capabilities
 

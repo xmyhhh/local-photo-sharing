@@ -21,7 +21,7 @@ def load_config(config_path: Path) -> dict[str, Any] | None:
     if not config_path.exists():
         create_default_config(config_path)
         print(f"Config file was not found. Created default config: {config_path}")
-        print("Edit photo_folder in the config file, then start the app again.")
+        print("Edit photo_folders/default_save_folder in the config file, then start the app again.")
         return None
     try:
         config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -41,9 +41,6 @@ def get_config_path(value: str | None) -> Path:
 def get_photo_folders(config: dict[str, Any]) -> list[Path]:
     value = config.get("photo_folders")
     if value is None:
-        legacy = config.get("photo_folder")
-        if isinstance(legacy, str) and legacy.strip():
-            return [Path(legacy).expanduser()]
         raise ValueError("Config field photo_folders must be a non-empty array of strings.")
     if not isinstance(value, list) or not value:
         raise ValueError("Config field photo_folders must be a non-empty array of strings.")

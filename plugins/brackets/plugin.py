@@ -6,6 +6,8 @@ from core.photo_share.context import AppServices
 from core.photo_share.routes.brackets import register_bracket_routes
 
 PLUGIN = {
+    "title": "包围曝光",
+    "description": "检测包围曝光序列并创建合成工程。",
     "static_dir": "static",
     "scripts": ["brackets.js"],
     "styles": ["brackets.css"],

@@ -13,6 +13,8 @@ from core.photo_share.routes.gallery import _root_services
 from core.photo_share.routes.media import move_to_trash
 
 PLUGIN = {
+    "title": "重复照片检查",
+    "description": "递归扫描并清理 MD5 完全一致的重复照片。",
     "static_dir": "static",
     "scripts": ["duplicate_checker.js"],
     "styles": ["duplicate_checker.css"],
