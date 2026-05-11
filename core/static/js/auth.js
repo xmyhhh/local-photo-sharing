@@ -1,6 +1,7 @@
 let loginBackgroundTimer = 0;
 let loginBackgroundIndex = 0;
 let loginBackgroundSparkTimer = 0;
+let loginBackgroundPointerTimer = 0;
 
 async function initializeAuth() {
   const status = await fetchJson("/api/auth/status", { cache: "no-store" });
@@ -17,6 +18,7 @@ function applyAuthStatus(status) {
   state.authRole = status.role || "none";
   state.authHasPassword = Boolean(status.hasPassword);
   state.publicAlbums = status.publicAlbums || [];
+  state.publicAlbumSet = new Set(state.publicAlbums.map(normalizeRootedSettingsPath).filter(Boolean));
   state.loginBackgrounds = status.loginBackgrounds || [];
   state.loginBackgroundUrls = status.loginBackgroundUrls || status.loginBackgrounds || [];
   state.loginBackgroundMode = status.loginBackgroundMode || "none";
@@ -48,6 +50,11 @@ function hideLoginScreen() {
     window.clearInterval(loginBackgroundSparkTimer);
     loginBackgroundSparkTimer = 0;
   }
+  if (loginBackgroundPointerTimer) {
+    window.clearTimeout(loginBackgroundPointerTimer);
+    loginBackgroundPointerTimer = 0;
+  }
+  loginBackdrop.onpointermove = null;
 }
 
 async function renderLoginBackgrounds() {
@@ -73,6 +80,7 @@ async function renderLoginBackgrounds() {
     tile.classList.toggle("awake", index % 11 === 0);
     loginBackdrop.append(tile);
   });
+  loginBackdrop.onpointermove = awakenLoginTilesNearPointer;
   loginBackgroundSparkTimer = window.setInterval(() => {
     const nodes = Array.from(loginBackdrop.querySelectorAll(".login-bg-tile"));
     if (!nodes.length) {
@@ -91,7 +99,7 @@ function setLoginTileImage(tile, url, attempt = 0) {
     tile.classList.add("ready");
   };
   image.onerror = () => {
-    if (attempt < 8) {
+    if (attempt < 2) {
       window.setTimeout(() => setLoginTileImage(tile, url, attempt + 1), 700 + attempt * 300);
     }
   };
@@ -103,21 +111,50 @@ function buildLoginMosaicItems(photos) {
   if (!urls.length) {
     return [];
   }
-  const count = Math.max(18, Math.min(46, urls.length < 8 ? urls.length * 7 : urls.length));
+  const cols = 9;
+  const rows = 6;
+  const count = cols * rows;
   return Array.from({ length: count }, (_, index) => {
-    const col = index % 9;
-    const row = Math.floor(index / 9);
-    const jitterX = pseudoRandom(index, 7) * 5.8;
-    const jitterY = pseudoRandom(index, 13) * 6.6;
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const jitterX = (pseudoRandom(index, 7) - 0.5) * 7.5;
+    const jitterY = (pseudoRandom(index, 13) - 0.5) * 8.5;
+    const rowShift = row % 2 ? 5 : 0;
     return {
       url: urls[index % urls.length],
-      x: -6 + col * 13.8 + jitterX,
-      y: -8 + row * 22 + jitterY,
-      w: 13 + pseudoRandom(index, 19) * 9,
-      h: 18 + pseudoRandom(index, 23) * 13,
-      rotate: -5 + pseudoRandom(index, 29) * 10,
+      x: -7 + col * 13.9 + rowShift + jitterX,
+      y: -10 + row * 23.2 + jitterY,
+      w: 15 + pseudoRandom(index, 19) * 8,
+      h: 20 + pseudoRandom(index, 23) * 12,
+      rotate: -4.5 + pseudoRandom(index, 29) * 9,
       delay: Math.floor(pseudoRandom(index, 31) * 4200),
     };
+  });
+}
+
+function awakenLoginTilesNearPointer(event) {
+  if (loginBackgroundPointerTimer) {
+    return;
+  }
+  loginBackgroundPointerTimer = window.setTimeout(() => {
+    loginBackgroundPointerTimer = 0;
+  }, 90);
+  const nodes = Array.from(loginBackdrop.querySelectorAll(".login-bg-tile.ready"));
+  if (!nodes.length) {
+    return;
+  }
+  const ranked = nodes
+    .map((node) => {
+      const rect = node.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      return { node, distance: Math.hypot(event.clientX - x, event.clientY - y) };
+    })
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, 4);
+  ranked.forEach(({ node }, index) => {
+    node.classList.add("awake");
+    window.setTimeout(() => node.classList.remove("awake"), 900 + index * 180);
   });
 }
 

@@ -119,7 +119,7 @@ function publicAlbumMenuItems(entry) {
     return [];
   }
   const path = qualifyPath(entry.path);
-  const isPublic = isPublicAlbum(path);
+  const isPublic = isExactPublicAlbum(path);
   return [
     menuButton(isPublic ? "取消公开相册" : "设为公开相册", isPublic ? "🔒" : "🔓", () => setPublicAlbum(path, !isPublic)),
   ];
@@ -329,6 +329,9 @@ async function downloadSelectedEntries() {
 }
 
 async function downloadZip(paths, fallbackName = "photo-share.zip") {
+  if (state.authRole === "admin") {
+    notifyBackendTaskStarted();
+  }
   const response = await fetch("/api/files/download-zip", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -544,6 +547,7 @@ function updateSelectionTile(path) {
   const checkbox = tile?.querySelector(".tile-select");
   if (checkbox) {
     checkbox.checked = selected;
+    checkbox.toggleAttribute("checked", selected);
   }
 }
 
@@ -592,6 +596,7 @@ function updateBoxSelection(event) {
   state.boxSelect.committed = true;
   state.selectedPaths = next;
   updateAllSelectionTiles();
+  requestAnimationFrame(updateAllSelectionTiles);
   updateSelectionBar();
 }
 
@@ -672,6 +677,7 @@ function updateAllSelectionTiles() {
     const checkbox = tile.querySelector(".tile-select");
     if (checkbox) {
       checkbox.checked = selected;
+      checkbox.toggleAttribute("checked", selected);
     }
   });
 }

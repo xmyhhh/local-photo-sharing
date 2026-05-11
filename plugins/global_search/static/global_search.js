@@ -38,11 +38,18 @@
   refreshButton.addEventListener("click", async () => {
     status.textContent = "已请求刷新索引...";
     await fetchJson("/api/global-search/refresh", { method: "POST" });
+    if (typeof notifyBackendTaskStarted === "function") {
+      notifyBackendTaskStarted();
+    }
     await refreshStatus();
   });
   dialog.addEventListener("close", () => {
-    window.clearInterval(statusTimer);
-    statusTimer = 0;
+    stopStatusPolling();
+  });
+  document.addEventListener("photoShare:backend-task-started", () => {
+    if (dialog.open) {
+      scheduleStatusPolling(800);
+    }
   });
 
   async function openGlobalSearch() {
@@ -50,9 +57,6 @@
     input.focus();
     await refreshStatus();
     await runSearch();
-    if (!statusTimer) {
-      statusTimer = window.setInterval(refreshStatus, 2500);
-    }
   }
 
   async function refreshStatus() {
@@ -63,8 +67,31 @@
       status.textContent = data.indexing
         ? `正在建立索引，当前 ${data.count || 0} 项${suffix}`
         : `已索引 ${data.count || 0} 项，上次更新 ${indexedAt}${suffix}`;
+      if (dialog.open && data.indexing) {
+        scheduleStatusPolling(1200);
+      } else {
+        stopStatusPolling();
+      }
     } catch (error) {
       status.textContent = error.message;
+      stopStatusPolling();
+    }
+  }
+
+  function scheduleStatusPolling(delay = 1200) {
+    if (statusTimer || !dialog.open) {
+      return;
+    }
+    statusTimer = window.setTimeout(async () => {
+      statusTimer = 0;
+      await refreshStatus();
+    }, delay);
+  }
+
+  function stopStatusPolling() {
+    if (statusTimer) {
+      window.clearTimeout(statusTimer);
+      statusTimer = 0;
     }
   }
 

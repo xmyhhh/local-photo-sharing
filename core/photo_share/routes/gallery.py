@@ -98,6 +98,8 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
                 _folder_entry(root_services, item_root_id, "", root_services.root.name or item_root_id, item_root_id)
                 for item_root_id, root_services in services.root_services.items()
             ]
+            for root_services in services.root_services.values():
+                root_services.folder_counts.refresh_subtree_async(root_services.root)
             return jsonify({"root": "", "folder": "", "entries": entries})
 
         if not root_id:
@@ -106,12 +108,15 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
         root_services = _root_services(services, root_id)
         folder_path = _resolve_rooted_folder(services, root_id, folder)
         entries = []
-        for child in _direct_child_folders(folder_path):
+        child_folders = _direct_child_folders(folder_path)
+        for child in child_folders:
             child_rel = to_relative(root_services.root, child)
             child_rooted = join_rooted_path(root_id, child_rel)
             if is_guest(services) and not is_public_or_ancestor(services, child_rooted):
                 continue
             entries.append(_folder_entry(root_services, root_id, child_rel, child.name, child_rooted))
+        for child in child_folders:
+            root_services.folder_counts.refresh_subtree_async(child)
         return jsonify({"root": root_id, "folder": folder, "entries": entries})
 
     @app.get("/api/photos")
@@ -332,7 +337,7 @@ def _folder_entry(root_services: RootServices, root_id: str, rel: str, name: str
         "name": name,
         "path": rooted_path,
         "photoCount": count,
-        "photoCountPending": count is None or not root_services.folder_counts.is_ready(),
+        "photoCountPending": count is None or root_services.folder_counts.is_pending(folder_path),
     }
 
 

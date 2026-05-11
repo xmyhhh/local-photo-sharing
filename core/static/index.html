@@ -40,6 +40,17 @@
     </section>
     <header class="topbar">
       <div id="topbarActions" class="actions">
+        <button id="backendTasksBtn" class="ghost with-icon backend-tasks-action" type="button" hidden>
+          <span class="button-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M4 7h16"></path>
+              <path d="M4 12h10"></path>
+              <path d="M4 17h7"></path>
+            </svg>
+          </span>
+          <span>任务</span>
+          <span id="backendTasksBadge" class="task-badge" hidden>0</span>
+        </button>
         <button id="openUploadBtn" class="with-icon" type="button">
           <span class="button-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24">
@@ -136,6 +147,20 @@
     <div id="selectionBox" class="selection-box" hidden></div>
     <div id="pluginDialogs"></div>
 
+    <dialog id="backendTasksDialog" class="backend-tasks-dialog">
+      <div class="backend-tasks-panel">
+        <header class="backend-tasks-head">
+          <div>
+            <div class="settings-kicker">后台</div>
+            <h2>任务进度</h2>
+          </div>
+          <button id="closeBackendTasksBtn" class="settings-close" type="button" aria-label="关闭任务面板">×</button>
+        </header>
+        <div id="backendTasksSummary" class="backend-tasks-summary"></div>
+        <div id="backendTasksList" class="backend-tasks-list"></div>
+      </div>
+    </dialog>
+
     <dialog id="settingsDialog" class="settings-dialog">
       <form method="dialog" class="settings-panel">
         <aside class="settings-sidebar" aria-label="设置分类">
@@ -230,7 +255,7 @@
                 <label class="settings-field auth-background-folder-field">
                   <span>图集文件夹</span>
                   <span class="auth-background-folder-control">
-                    <input id="loginBackgroundFolderInput" type="text" placeholder="例如 root1/Public" />
+                    <input id="loginBackgroundFolderInput" type="text" placeholder="留空则使用公开相册，例如 root1/Public" />
                     <button id="useCurrentLoginBackgroundFolderBtn" class="ghost" type="button">当前文件夹</button>
                   </span>
                 </label>
@@ -337,6 +362,7 @@
     <script src="/static/js/context-menu.js"></script>
     <script src="/static/js/plugins.js"></script>
     <script src="/static/js/warmup.js"></script>
+    <script src="/static/js/tasks.js"></script>
     <script src="/static/js/gallery.js"></script>
     <script src="/static/js/viewer-core.js"></script>
     <script src="/static/js/viewer-cache.js"></script>

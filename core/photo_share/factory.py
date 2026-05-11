@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import secrets
+from threading import Lock
 
 from flask import Flask
 
@@ -18,6 +19,7 @@ from .plugins import PluginSpec, register_plugins
 from .routes import register_routes
 from .services import FolderCountIndex, ImageCacheStore, MetadataStore, RatingIndex, RatingStore
 from .image_formats import register_image_formats
+from .auth import ensure_login_background_cache
 
 
 def create_app(
@@ -57,8 +59,7 @@ def create_app(
         default_save,
     )
     app.config["photo_share_services"] = services
-    for root_services in services.root_services.values():
-        root_services.folder_counts.ensure_async()
+    ensure_login_background_cache(services, async_rebuild=True)
     register_routes(app, services)
     register_plugins(app, services, plugin_specs or [])
     return app
@@ -98,6 +99,7 @@ def _create_services(
         bracket_cache={},
         bracket_cache_loaded=False,
         bracket_merge_tasks={},
+        zip_tasks={},
         thumbnail_mode_settings=thumbnail_mode_settings or {},
         upload_password=upload_password,
         auth=_build_auth_settings(config),
@@ -111,6 +113,9 @@ def _create_services(
         warmup_status=None,
         login_background_cache={},
         login_background_items=[],
+        login_background_cache_key="",
+        login_background_refreshing=False,
+        login_background_lock=Lock(),
     )
 
 

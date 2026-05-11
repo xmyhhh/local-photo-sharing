@@ -43,6 +43,11 @@ class FolderCountIndex:
         with self.lock:
             return self.counts.get(rel)
 
+    def is_pending(self, folder_path: Path) -> bool:
+        rel = self._folder_key(folder_path)
+        with self.lock:
+            return rel in self.refreshing or (self.inflight and rel not in self.counts) or rel not in self.counts
+
     def is_ready(self) -> bool:
         with self.lock:
             return self.ready

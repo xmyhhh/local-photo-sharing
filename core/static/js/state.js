@@ -117,6 +117,7 @@ const state = {
   authRole: "none",
   authHasPassword: false,
   publicAlbums: [],
+  publicAlbumSet: new Set(),
   loginBackgrounds: [],
   loginBackgroundUrls: [],
   loginBackgroundMode: "none",
@@ -127,6 +128,9 @@ const state = {
   pluginAssets: [],
   pluginComponents: [],
   warmupPollTimer: null,
+  backendTasksPollTimer: null,
+  backendTasks: [],
+  backendTasksVisibleUntil: 0,
   filters: {
     ratings: [],
     dateFrom: "",
@@ -151,6 +155,12 @@ const warmupTitle = document.querySelector("#warmupTitle");
 const warmupDetail = document.querySelector("#warmupDetail");
 const warmupPercent = document.querySelector("#warmupPercent");
 const warmupProgressFill = document.querySelector("#warmupProgressFill");
+const backendTasksBtn = document.querySelector("#backendTasksBtn");
+const backendTasksBadge = document.querySelector("#backendTasksBadge");
+const backendTasksDialog = document.querySelector("#backendTasksDialog");
+const closeBackendTasksBtn = document.querySelector("#closeBackendTasksBtn");
+const backendTasksSummary = document.querySelector("#backendTasksSummary");
+const backendTasksList = document.querySelector("#backendTasksList");
 const topbarActions = document.querySelector("#topbarActions");
 const openUploadBtn = document.querySelector("#openUploadBtn");
 const openSettingsBtn = document.querySelector("#openSettingsBtn");

@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
+import time
+import uuid
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -78,9 +80,12 @@ def register_file_routes(app: Flask, services: AppServices) -> None:
         fd, zip_path_value = tempfile.mkstemp(prefix="photo-share-", suffix=".zip")
         os.close(fd)
         zip_path = Path(zip_path_value)
+        task_id = create_zip_task(services, archive_name)
         try:
-            write_zip_file(zip_path, items)
+            write_zip_file(zip_path, items, services, task_id)
+            finish_zip_task(services, task_id)
         except Exception:
+            fail_zip_task(services, task_id)
             if zip_path.exists():
                 zip_path.unlink()
             raise
@@ -184,8 +189,12 @@ def unique_child_path(parent: Path, name: str, want_dir: bool) -> Path:
     abort(409, "Too many duplicate names.")
 
 
-def write_zip_file(zip_path: Path, items: list[tuple[RootServices, Path]]) -> None:
+def write_zip_file(zip_path: Path, items: list[tuple[RootServices, Path]], services: AppServices | None = None, task_id: str = "") -> None:
     used_names: set[str] = set()
+    total_files = count_zip_files(items)
+    if services and task_id:
+        update_zip_task(services, task_id, state="running", total=total_files, completed=0, detail="正在写入压缩包")
+    completed = 0
     with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
         for root_services, item_path in items:
             base_name = unique_archive_name(item_path.name, used_names)
@@ -195,8 +204,77 @@ def write_zip_file(zip_path: Path, items: list[tuple[RootServices, Path]]) -> No
                         continue
                     rel = child.relative_to(item_path).as_posix()
                     archive.write(child, f"{base_name}/{rel}")
+                    completed += 1
+                    if services and task_id and (completed == total_files or completed % 10 == 0):
+                        update_zip_task(services, task_id, completed=completed)
             else:
                 archive.write(item_path, base_name)
+                completed += 1
+                if services and task_id:
+                    update_zip_task(services, task_id, completed=completed)
+
+
+def count_zip_files(items: list[tuple[RootServices, Path]]) -> int:
+    total = 0
+    for _root_services, item_path in items:
+        if item_path.is_dir():
+            for child in item_path.rglob("*"):
+                if child.is_file():
+                    total += 1
+        else:
+            total += 1
+    return max(1, total)
+
+
+def create_zip_task(services: AppServices, archive_name: str) -> str:
+    cleanup_zip_tasks(services)
+    task_id = uuid.uuid4().hex
+    services.zip_tasks[task_id] = {
+        "id": task_id,
+        "title": "多选下载压缩",
+        "detail": archive_name,
+        "state": "scanning",
+        "completed": 0,
+        "total": None,
+        "error": "",
+        "createdAt": time.time(),
+        "updatedAt": time.time(),
+    }
+    return task_id
+
+
+def update_zip_task(services: AppServices, task_id: str, **values: Any) -> None:
+    task = services.zip_tasks.get(task_id)
+    if task is None:
+        return
+    task.update(values)
+    task["updatedAt"] = time.time()
+
+
+def finish_zip_task(services: AppServices, task_id: str) -> None:
+    task = services.zip_tasks.get(task_id)
+    if task is None:
+        return
+    total = task.get("total")
+    task.update({
+        "state": "done",
+        "completed": total if total is not None else task.get("completed", 0),
+        "updatedAt": time.time(),
+        "finishedAt": time.time(),
+    })
+
+
+def fail_zip_task(services: AppServices, task_id: str) -> None:
+    update_zip_task(services, task_id, state="error", error="压缩包生成失败。")
+
+
+def cleanup_zip_tasks(services: AppServices, keep_seconds: int = 120) -> None:
+    cutoff = time.time() - keep_seconds
+    for task_id, task in list(services.zip_tasks.items()):
+        state = task.get("state")
+        finished_at = float(task.get("finishedAt") or task.get("updatedAt") or 0)
+        if state in {"done", "error"} and finished_at < cutoff:
+            services.zip_tasks.pop(task_id, None)
 
 
 def unique_archive_name(name: str, used_names: set[str]) -> str:

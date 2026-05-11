@@ -4,10 +4,11 @@ from typing import Any
 
 import mimetypes
 
-from flask import Flask, abort, jsonify, request
+from flask import Flask, abort, jsonify, request, Response
 
 from ..auth import (
     auth_status_payload,
+    ensure_login_background_cache,
     login_background_candidate_paths,
     login_background_gallery,
     login_admin,
@@ -91,6 +92,16 @@ def register_auth_routes(app: Flask, services: AppServices) -> None:
             return jsonify({"status": "processing"}), 202
         return send_cached_file(thumb, mimetype="image/jpeg")
 
+    @app.get("/api/auth/background-memory/<path:key>")
+    def auth_background_memory(key: str):
+        data = services.login_background_cache.get(key)
+        if data is None:
+            ensure_login_background_cache(services)
+            data = services.login_background_cache.get(key)
+        if data is None:
+            abort(404)
+        return Response(data, mimetype="image/jpeg", headers={"Cache-Control": "no-store"})
+
     @app.post("/api/auth/settings")
     def update_auth_settings():
         require_admin(services)
@@ -140,6 +151,8 @@ def register_auth_routes(app: Flask, services: AppServices) -> None:
             auth["login_background_folder"] = services.auth.login_background_folder
         auth.setdefault("session_secret", services.auth.session_secret)
         write_config(services.config_path, services.config)
+        if any(field in data for field in ("loginBackgrounds", "loginBackgroundMode", "loginBackgroundFolder", "publicAlbums")):
+            ensure_login_background_cache(services, force=True, async_rebuild=True)
         if services.auth.enabled:
             login_admin()
         return jsonify(auth_status_payload(services))

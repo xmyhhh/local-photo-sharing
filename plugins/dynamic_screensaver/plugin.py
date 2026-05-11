@@ -9,7 +9,7 @@ from typing import Any
 
 from flask import Flask, abort, jsonify, request
 
-from core.photo_share.constants import PHOTO_EXTENSIONS, RATINGS_FILE, THUMBNAIL_DIR
+from core.photo_share.constants import CPU_COUNT, PHOTO_EXTENSIONS, RATINGS_FILE, THUMBNAIL_DIR
 from core.photo_share.context import AppServices, RootServices
 from core.photo_share.paths import image_url, join_rooted_path, parse_rooted_path, preview_url, resolve_folder, thumb_url, to_relative
 from core.photo_share.routes.gallery import _root_services
@@ -18,7 +18,7 @@ PLUGIN_NAME = "dynamic_screensaver"
 MAX_RESULTS = 800
 MAX_SCAN_FILES = 300_000
 WARMUP_MODE = "xlarge"
-WARMUP_WORKERS = 1
+WARMUP_WORKERS = min(8, max(2, CPU_COUNT))
 
 _warmup_lock = Lock()
 _warmup_executor = ThreadPoolExecutor(max_workers=WARMUP_WORKERS, thread_name_prefix="dynamic-screensaver-warmup")
@@ -196,6 +196,38 @@ def task_status_payload(task: dict[str, Any]) -> dict[str, Any]:
             "truncated": bool(task.get("truncated", False)),
             "error": task.get("error", ""),
         }
+
+
+def get_backend_tasks(services: AppServices) -> list[dict[str, Any]]:
+    tasks: list[dict[str, Any]] = []
+    with _warmup_lock:
+        snapshots = [dict(task) for task in _warmup_tasks.values()]
+    for task in snapshots:
+        state = str(task.get("state") or "")
+        if state not in {"queued", "running", "error"}:
+            continue
+        total = int(task.get("matched") or 0)
+        prepared = int(task.get("prepared") or 0)
+        failed = int(task.get("failed") or 0)
+        progress_total = max(total, prepared + failed, 1)
+        tasks.append({
+            "id": f"screensaver_warmup.{task.get('key', '')}",
+            "title": "动态屏保照片准备",
+            "detail": str(task.get("folder") or "全部照片"),
+            "state": state,
+            "progress": min(1.0, (prepared + failed) / progress_total),
+            "completed": prepared + failed,
+            "total": total or None,
+            "error": str(task.get("error") or ""),
+            "meta": {
+                "scanned": int(task.get("scanned") or 0),
+                "matched": total,
+                "prepared": prepared,
+                "failed": failed,
+                "minRating": int(task.get("minRating") or 1),
+            },
+        })
+    return tasks
 
 
 def run_warmup_task(services: AppServices, task: dict[str, Any]) -> None:

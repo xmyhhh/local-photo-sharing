@@ -87,7 +87,7 @@ def core_task_snapshots(services: AppServices) -> list[dict[str, Any]]:
         modes: list[str] = []
         for mode, store in root_services.thumbnails.items():
             with store.lock:
-                mode_queued = len(store.queued) + len(store.queue)
+                mode_queued = len(store.queue)
                 mode_inflight = len(store.inflight)
                 mode_errors = len(store.errors)
             if mode_queued or mode_inflight or mode_errors:
@@ -116,6 +116,35 @@ def core_task_snapshots(services: AppServices) -> list[dict[str, Any]]:
             }))
 
     tasks.extend(bracket_task_snapshots(services))
+    tasks.extend(zip_task_snapshots(services))
+    return tasks
+
+
+def zip_task_snapshots(services: AppServices) -> list[dict[str, Any]]:
+    tasks: list[dict[str, Any]] = []
+    for task_id, task in services.zip_tasks.items():
+        state = task.get("state")
+        if state not in ACTIVE_STATES:
+            continue
+        total = task.get("total")
+        completed = task.get("completed")
+        progress = None
+        try:
+            if total:
+                progress = float(completed or 0) / float(total)
+        except (TypeError, ValueError, ZeroDivisionError):
+            progress = None
+        tasks.append(normalize_task({
+            "id": f"core.zip.{task_id}",
+            "source": "core",
+            "title": task.get("title") or "下载压缩",
+            "detail": task.get("detail") or "",
+            "state": state,
+            "completed": completed,
+            "total": total,
+            "progress": progress,
+            "error": task.get("error", ""),
+        }))
     return tasks
 
 
@@ -200,6 +229,7 @@ def normalize_task(raw: dict[str, Any], fallback_source: str = "core") -> dict[s
         "detail": str(raw.get("detail") or raw.get("stage") or ""),
         "state": state,
         "progress": progress_value,
+        "progressMode": str(raw.get("progressMode") or ("percent" if progress_value is not None else "activity")),
         "completed": raw.get("completed"),
         "total": raw.get("total"),
         "error": str(raw.get("error") or raw.get("message") or ""),

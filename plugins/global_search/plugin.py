@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import threading
-import time
 import unicodedata
 from dataclasses import dataclass, replace
 from os import scandir
@@ -16,7 +15,6 @@ from core.photo_share.paths import join_rooted_path, thumb_url, to_relative
 
 PLUGIN_NAME = "global_search"
 MAX_QUERY_RESULTS = 200
-SCAN_INTERVAL_SECONDS = 60
 MAX_INDEX_ITEMS = 300_000
 IGNORED_DIR_NAMES = {
     ".git",
@@ -82,11 +80,9 @@ class GlobalSearchIndex:
             self._services = services
             self._stop.clear()
             if self._thread and self._thread.is_alive():
-                self.request_refresh()
                 return
             self._thread = threading.Thread(target=self._run, name="global-search-index", daemon=True)
             self._thread.start()
-        self.request_refresh()
 
     def stop(self) -> None:
         with self._lock:
@@ -105,6 +101,12 @@ class GlobalSearchIndex:
 
     def request_refresh(self) -> None:
         self._wake.set()
+
+    def request_refresh_if_empty(self) -> None:
+        with self._lock:
+            should_refresh = self._services is not None and not self._entries and not self._indexing
+        if should_refresh:
+            self.request_refresh()
 
     def status(self) -> dict[str, Any]:
         with self._lock:
@@ -133,7 +135,7 @@ class GlobalSearchIndex:
 
     def _run(self) -> None:
         while not self._stop.is_set():
-            self._wake.wait(SCAN_INTERVAL_SECONDS)
+            self._wake.wait()
             self._wake.clear()
             if self._stop.is_set():
                 break
@@ -187,6 +189,7 @@ def register(app: Flask, services: AppServices) -> None:
             abort(404)
         query = request.args.get("q", "")
         limit = parse_limit(request.args.get("limit"))
+        INDEX.request_refresh_if_empty()
         return jsonify({
             "query": query,
             "results": INDEX.search(query, limit),
@@ -200,6 +203,26 @@ def on_enable(services: AppServices) -> None:
 
 def on_disable(services: AppServices) -> None:
     INDEX.stop()
+
+
+def get_backend_tasks(services: AppServices) -> list[dict[str, Any]]:
+    status = INDEX.status()
+    if not status.get("indexing") and not status.get("error"):
+        return []
+    return [{
+        "id": "global_search_index",
+        "title": "全局搜索索引",
+        "detail": f"已索引 {status.get('count', 0)} 项",
+        "state": "indexing" if status.get("indexing") else "error",
+        "progress": None,
+        "progressMode": "activity",
+        "completed": status.get("count"),
+        "total": None,
+        "error": status.get("error", ""),
+        "meta": {
+            "generation": status.get("generation", 0),
+        },
+    }]
 
 
 def parse_limit(value: str | None) -> int:

@@ -1,5 +1,11 @@
 function startWarmupPolling() {
   stopWarmupPolling();
+  if (state.authRole !== "admin") {
+    if (warmupBanner) {
+      warmupBanner.hidden = true;
+    }
+    return;
+  }
   pollWarmupStatus();
 }
 
@@ -11,6 +17,13 @@ function stopWarmupPolling() {
 }
 
 async function pollWarmupStatus() {
+  if (state.authRole !== "admin") {
+    stopWarmupPolling();
+    if (warmupBanner) {
+      warmupBanner.hidden = true;
+    }
+    return;
+  }
   try {
     const status = await fetchJson("/api/warmup", { cache: "no-store" });
     renderWarmupStatus(status);

@@ -20,13 +20,12 @@ from core.photo_share.live_photos import find_case_insensitive_sibling, find_liv
 from core.photo_share.paths import image_url, join_rooted_path, root_cache_key, thumb_url, to_relative
 
 PLUGIN_NAME = "timeline"
-SCAN_INTERVAL_SECONDS = 120
 MAX_TIMELINE_ITEMS = 300_000
 MAX_PAGE_SIZE = 600
 INDEX_CACHE_VERSION = 1
 INDEX_CACHE_FILE = "timeline_index_v1.json"
-INDEX_WORKERS = min(16, max(2, CPU_COUNT))
-INDEX_INFLIGHT_LIMIT = INDEX_WORKERS * 8
+INDEX_WORKERS = min(32, max(4, CPU_COUNT * 2))
+INDEX_INFLIGHT_LIMIT = INDEX_WORKERS * 16
 IGNORED_DIR_NAMES = {
     ".git",
     ".photo_share_cache",
@@ -97,11 +96,9 @@ class TimelineIndex:
             self._stop.clear()
             self._load_cache(services)
             if self._thread and self._thread.is_alive():
-                self.request_refresh()
                 return
             self._thread = threading.Thread(target=self._run, name="timeline-index", daemon=True)
             self._thread.start()
-        self.request_refresh()
 
     def stop(self) -> None:
         with self._lock:
@@ -122,6 +119,12 @@ class TimelineIndex:
 
     def request_refresh(self) -> None:
         self._wake.set()
+
+    def request_refresh_if_empty(self) -> None:
+        with self._lock:
+            should_refresh = self._services is not None and not self._entries and not self._indexing
+        if should_refresh:
+            self.request_refresh()
 
     def status(self) -> dict[str, Any]:
         with self._lock:
@@ -155,7 +158,7 @@ class TimelineIndex:
 
     def _run(self) -> None:
         while not self._stop.is_set():
-            self._wake.wait(SCAN_INTERVAL_SECONDS)
+            self._wake.wait()
             self._wake.clear()
             if self._stop.is_set():
                 break
@@ -169,6 +172,7 @@ class TimelineIndex:
             self._error = ""
             self._scanned_count = 0
         entries: list[TimelineEntry] = []
+        last_publish_at = time.monotonic()
         try:
             for root_id, root_services in services.root_services.items():
                 if self._stop.is_set() or len(entries) >= MAX_TIMELINE_ITEMS:
@@ -176,8 +180,10 @@ class TimelineIndex:
                 budget = MAX_TIMELINE_ITEMS - len(entries)
                 for entry in iter_root_media(root_id, root_services, self._stop, budget):
                     entries.append(entry)
-                    if should_publish_partial(len(entries)):
+                    now = time.monotonic()
+                    if should_publish_partial(len(entries)) or now - last_publish_at >= 0.6:
                         self._publish_partial(entries)
+                        last_publish_at = now
             entries.sort(key=lambda entry: (-entry.taken_ts, entry.root_id, entry.rel.lower()))
             with self._lock:
                 self._entries = entries
@@ -278,6 +284,7 @@ def register(app: Flask, services: AppServices) -> None:
         featured = request.args.get("featured") in {"1", "true", "yes"}
         cursor = parse_int(request.args.get("cursor"), 0)
         limit = parse_int(request.args.get("limit"), 160)
+        INDEX.request_refresh_if_empty()
         return jsonify(INDEX.page(featured, cursor, limit))
 
 
@@ -289,6 +296,28 @@ def on_disable(services: AppServices) -> None:
     INDEX.stop()
 
 
+def get_backend_tasks(services: AppServices) -> list[dict[str, Any]]:
+    status = INDEX.status()
+    if not status.get("indexing") and not status.get("error"):
+        return []
+    return [{
+        "id": "timeline_index",
+        "title": "时间线索引",
+        "detail": f"已发现 {status.get('count', 0)} 项",
+        "state": "indexing" if status.get("indexing") else "error",
+        "progress": status.get("progress"),
+        "progressMode": "percent" if status.get("progress") is not None else "activity",
+        "completed": status.get("scanned") or status.get("count"),
+        "total": status.get("estimatedTotal") or None,
+        "error": status.get("error", ""),
+        "meta": {
+            "featured": status.get("featuredCount", 0),
+            "generation": status.get("generation", 0),
+            "workers": INDEX_WORKERS,
+        },
+    }]
+
+
 def parse_int(value: str | None, fallback: int) -> int:
     try:
         return int(value or fallback)
@@ -297,9 +326,11 @@ def parse_int(value: str | None, fallback: int) -> int:
 
 
 def should_publish_partial(count: int) -> bool:
-    if count <= 60:
-        return count % 10 == 0
-    return count % 100 == 0
+    if count <= 40:
+        return count % 4 == 0
+    if count <= 400:
+        return count % 24 == 0
+    return count % 80 == 0
 
 
 def estimate_total_media(services: AppServices | None) -> int:

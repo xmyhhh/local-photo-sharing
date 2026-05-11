@@ -1,10 +1,12 @@
 (() => {
   const PAGE_SIZE = 180;
+  const DAY_COLLAPSE_LIMIT = 100;
   const TIMELINE_THUMB_MODES = ["small", "medium", "large", "xlarge"];
   const stateLocal = {
     featured: false,
     scale: "day",
     thumbMode: getStoredTimelineThumbMode(),
+    expandedGroups: new Set(),
     cursor: 0,
     loading: false,
     done: false,
@@ -14,7 +16,12 @@
     latestStatus: null,
     lastLoadedGeneration: -1,
     lastLoadedCount: -1,
+    thumbObserver: null,
+    thumbQueue: [],
+    thumbQueued: new Set(),
+    thumbActive: 0,
   };
+  const TIMELINE_THUMB_CONCURRENCY = 6;
 
   const dialog = document.createElement("dialog");
   dialog.id = "timelineDialog";
@@ -24,7 +31,7 @@
       <header class="timeline-header">
         <div>
           <div class="timeline-kicker">时间线</div>
-          <h2>照片流</h2>
+          <h2>时间线</h2>
           <div class="timeline-status">正在读取时间线索引...</div>
           <div class="timeline-progress" hidden>
             <span></span>
@@ -51,27 +58,40 @@
             <option value="xlarge">超大</option>
           </select>
         </label>
-        <button class="timeline-refresh" type="button">刷新索引</button>
       </div>
       <div class="timeline-content">
-        <div class="timeline-groups"></div>
-        <div class="timeline-sentinel"></div>
+        <aside class="timeline-axis" aria-label="时间线月份导航">
+          <div class="timeline-axis-list"></div>
+        </aside>
+        <main class="timeline-main">
+          <div class="timeline-groups"></div>
+          <div class="timeline-sentinel"></div>
+        </main>
       </div>
     </div>
   `;
   pluginDialogs.append(dialog);
 
+  const shell = dialog.querySelector(".timeline-shell");
   const status = dialog.querySelector(".timeline-status");
   const progress = dialog.querySelector(".timeline-progress");
   const progressBar = dialog.querySelector(".timeline-progress span");
   const groups = dialog.querySelector(".timeline-groups");
-  const content = dialog.querySelector(".timeline-content");
+  const content = dialog.querySelector(".timeline-main");
+  const axisList = dialog.querySelector(".timeline-axis-list");
   const sentinel = dialog.querySelector(".timeline-sentinel");
   const thumbModeSelect = dialog.querySelector(".timeline-thumb-mode select");
   const observer = new IntersectionObserver((items) => {
     if (items.some((item) => item.isIntersecting)) {
       loadNextPage();
     }
+  }, { root: content, rootMargin: "900px 0px" });
+  stateLocal.thumbObserver = new IntersectionObserver((items) => {
+    items.forEach((item) => {
+      if (item.isIntersecting) {
+        queueTimelineThumbnail(item.target);
+      }
+    });
   }, { root: content, rootMargin: "900px 0px" });
 
   registerPluginAction("timeline.open", () => openTimeline());
@@ -80,6 +100,9 @@
   dialog.querySelector(".timeline-refresh").addEventListener("click", async () => {
     status.textContent = "已请求刷新时间线索引...";
     await fetchJson("/api/timeline/refresh", { method: "POST" });
+    if (typeof notifyBackendTaskStarted === "function") {
+      notifyBackendTaskStarted();
+    }
     resetAndLoad();
   });
   thumbModeSelect.value = stateLocal.thumbMode;
@@ -91,11 +114,14 @@
     }
     stateLocal.thumbMode = mode;
     window.localStorage.setItem("timelineThumbMode", mode);
+    applyTimelineThumbMode();
+    resetTimelineThumbnailQueue();
     renderTimeline();
   });
   dialog.querySelectorAll("[data-timeline-featured]").forEach((button) => {
     button.addEventListener("click", () => {
       stateLocal.featured = button.dataset.timelineFeatured === "1";
+      stateLocal.expandedGroups.clear();
       updateToolbar();
       resetAndLoad();
     });
@@ -103,30 +129,34 @@
   dialog.querySelectorAll("[data-timeline-scale]").forEach((button) => {
     button.addEventListener("click", () => {
       stateLocal.scale = button.dataset.timelineScale;
+      stateLocal.expandedGroups.clear();
       updateToolbar();
       renderTimeline();
     });
   });
   dialog.addEventListener("close", () => {
-    window.clearInterval(stateLocal.statusTimer);
-    stateLocal.statusTimer = 0;
+    stopStatusPolling();
     observer.unobserve(sentinel);
+  });
+  document.addEventListener("photoShare:backend-task-started", () => {
+    if (dialog.open) {
+      scheduleStatusPolling(800);
+    }
   });
   viewer.addEventListener("close", restoreGalleryEntriesAfterTimelineViewer);
 
   async function openTimeline() {
+    applyTimelineThumbMode();
     dialog.showModal();
     observer.observe(sentinel);
     await resetAndLoad();
-    if (!stateLocal.statusTimer) {
-      stateLocal.statusTimer = window.setInterval(refreshStatus, 3000);
-    }
   }
 
   async function resetAndLoad() {
     stateLocal.cursor = 0;
     stateLocal.done = false;
     stateLocal.items = [];
+    stateLocal.expandedGroups.clear();
     stateLocal.lastLoadedGeneration = -1;
     stateLocal.lastLoadedCount = -1;
     groups.innerHTML = `<div class="timeline-empty"><span class="spinner inline-spinner"></span><span>正在打开时间线...</span></div>`;
@@ -138,8 +168,31 @@
       const data = await fetchJson("/api/timeline/status", { cache: "no-store" });
       renderStatus(data);
       maybeReloadForStatus(data);
+      if (dialog.open && data.indexing) {
+        scheduleStatusPolling(1200);
+      } else {
+        stopStatusPolling();
+      }
     } catch (error) {
       status.textContent = error.message;
+      stopStatusPolling();
+    }
+  }
+
+  function scheduleStatusPolling(delay = 1200) {
+    if (stateLocal.statusTimer || !dialog.open) {
+      return;
+    }
+    stateLocal.statusTimer = window.setTimeout(async () => {
+      stateLocal.statusTimer = 0;
+      await refreshStatus();
+    }, delay);
+  }
+
+  function stopStatusPolling() {
+    if (stateLocal.statusTimer) {
+      window.clearTimeout(stateLocal.statusTimer);
+      stateLocal.statusTimer = 0;
     }
   }
 
@@ -232,6 +285,8 @@
 
   function renderTimeline() {
     groups.innerHTML = "";
+    axisList.innerHTML = "";
+    resetTimelineThumbnailQueue();
     if (!stateLocal.items.length) {
       const message = stateLocal.latestStatus?.indexing
         ? "正在建立索引，照片会陆续显示。"
@@ -239,30 +294,87 @@
       groups.innerHTML = `<div class="timeline-empty">${message}</div>`;
       return;
     }
+    applyTimelineThumbMode();
+    const grouped = groupItems(stateLocal.items, stateLocal.scale);
+    renderAxis(grouped);
     const fragment = document.createDocumentFragment();
-    groupItems(stateLocal.items, stateLocal.scale).forEach((group) => {
+    grouped.forEach((group) => {
       fragment.append(createTimelineGroup(group));
     });
     groups.append(fragment);
   }
 
+  function renderAxis(grouped) {
+    const buckets = new Map();
+    grouped.forEach((group) => {
+      const key = group.axis.id;
+      if (!buckets.has(key)) {
+        buckets.set(key, { ...group.axis, groupId: group.id, count: 0 });
+      }
+      buckets.get(key).count += group.items.length;
+    });
+    const fragment = document.createDocumentFragment();
+    Array.from(buckets.values()).forEach((bucket) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "timeline-axis-item";
+      button.innerHTML = `
+        <span class="timeline-axis-year">${escapeHtml(bucket.year)}</span>
+        <span class="timeline-axis-month">${escapeHtml(bucket.month)}</span>
+        <span class="timeline-axis-count">${bucket.count}</span>
+      `;
+      button.addEventListener("click", () => scrollToTimelineGroup(bucket.groupId));
+      fragment.append(button);
+    });
+    axisList.append(fragment);
+  }
+
+  function scrollToTimelineGroup(groupId) {
+    const target = groups.querySelector(`[data-timeline-group="${CSS.escape(groupId)}"]`);
+    if (!target) {
+      return;
+    }
+    content.scrollTo({
+      top: Math.max(0, target.offsetTop - 8),
+      behavior: "smooth",
+    });
+  }
+
   function createTimelineGroup(group) {
     const section = document.createElement("section");
     section.className = "timeline-group";
+    section.dataset.timelineGroup = group.id;
+    const isCollapsible = group.scale === "day" && group.items.length > DAY_COLLAPSE_LIMIT;
+    const isExpanded = stateLocal.expandedGroups.has(group.id);
+    const visibleItems = isCollapsible && !isExpanded ? group.items.slice(0, DAY_COLLAPSE_LIMIT) : group.items;
+    const hiddenCount = group.items.length - visibleItems.length;
     section.innerHTML = `
       <div class="timeline-group-head">
         <div>
           <div class="timeline-group-title">${escapeHtml(group.title)}</div>
-          <div class="timeline-group-subtitle">${group.items.length} 项</div>
+          <div class="timeline-group-subtitle">${group.items.length} 项${hiddenCount > 0 ? `，已折叠 ${hiddenCount} 项` : ""}</div>
         </div>
+        ${isCollapsible ? `<button class="timeline-fold-toggle" type="button">${isExpanded ? "收起" : `展开剩余 ${hiddenCount} 项`}</button>` : ""}
       </div>
       <div class="timeline-mosaic"></div>
     `;
     const mosaic = section.querySelector(".timeline-mosaic");
-    group.items.forEach((item, index) => {
+    visibleItems.forEach((item, index) => {
       const card = createTimelineCard(item, index);
       mosaic.append(card);
     });
+    const toggle = section.querySelector(".timeline-fold-toggle");
+    if (toggle) {
+      toggle.addEventListener("click", () => {
+        if (isExpanded) {
+          stateLocal.expandedGroups.delete(group.id);
+        } else {
+          stateLocal.expandedGroups.add(group.id);
+        }
+        renderTimeline();
+        window.requestAnimationFrame(() => scrollToTimelineGroup(group.id));
+      });
+    }
     return section;
   }
 
@@ -286,10 +398,47 @@
     if (item.type === "photo") {
       const img = button.querySelector("img");
       button.classList.add("loading");
-      loadTimelineThumbnail(item, img);
+      button._timelineThumbPayload = { item, img };
+      stateLocal.thumbObserver.observe(button);
     }
     button.addEventListener("click", () => openTimelineItem(item, button));
     return button;
+  }
+
+  function resetTimelineThumbnailQueue() {
+    stateLocal.thumbQueue = [];
+    stateLocal.thumbQueued.clear();
+    stateLocal.thumbActive = 0;
+    stateLocal.thumbObserver?.disconnect();
+  }
+
+  function queueTimelineThumbnail(card) {
+    const payload = card?._timelineThumbPayload;
+    if (!payload || !payload.img?.isConnected) {
+      return;
+    }
+    stateLocal.thumbObserver.unobserve(card);
+    const key = `${payload.item.path}|${stateLocal.thumbMode}`;
+    if (stateLocal.thumbQueued.has(key)) {
+      return;
+    }
+    stateLocal.thumbQueued.add(key);
+    stateLocal.thumbQueue.push({ ...payload, key });
+    pumpTimelineThumbQueue();
+  }
+
+  function pumpTimelineThumbQueue() {
+    while (stateLocal.thumbActive < TIMELINE_THUMB_CONCURRENCY && stateLocal.thumbQueue.length) {
+      const payload = stateLocal.thumbQueue.shift();
+      stateLocal.thumbActive += 1;
+      loadTimelineThumbnail(payload.item, payload.img)
+        .catch(() => showTimelineImageFallback(payload.item, payload.img))
+        .finally(() => {
+          stateLocal.thumbActive = Math.max(0, stateLocal.thumbActive - 1);
+          stateLocal.thumbQueued.delete(payload.key);
+          pumpTimelineThumbQueue();
+        });
+    }
   }
 
   async function loadTimelineThumbnail(item, img, attempt = 0) {
@@ -315,9 +464,9 @@
       showTimelineImageFallback(item, img);
       return;
     }
-    if (attempt < 3) {
-      window.setTimeout(() => loadTimelineThumbnail(item, img, attempt + 1), 650 + attempt * 500);
-      return;
+    if (attempt < 12) {
+      await delay(450 + Math.min(attempt, 6) * 250);
+      return loadTimelineThumbnail(item, img, attempt + 1);
     }
     showTimelineImageFallback(item, img);
   }
@@ -405,7 +554,7 @@
     items.forEach((item) => {
       const key = groupKey(item.takenAt, scale);
       if (!map.has(key.id)) {
-        map.set(key.id, { title: key.title, items: [] });
+        map.set(key.id, { id: key.id, title: key.title, axis: key.axis, scale, items: [] });
       }
       map.get(key.id).items.push(item);
     });
@@ -417,13 +566,18 @@
     const year = date.getFullYear();
     const month = date.getMonth() + 1;
     const day = date.getDate();
+    const axis = {
+      id: `${year}-${String(month).padStart(2, "0")}`,
+      year: `${year}`,
+      month: `${month}月`,
+    };
     if (scale === "year") {
-      return { id: String(year), title: `${year} 年` };
+      return { id: String(year), title: `${year} 年`, axis: { id: String(year), year: `${year}`, month: "全年" } };
     }
     if (scale === "month") {
-      return { id: `${year}-${month}`, title: `${year} 年 ${month} 月` };
+      return { id: `${year}-${month}`, title: `${year} 年 ${month} 月`, axis };
     }
-    return { id: `${year}-${month}-${day}`, title: dayTitle(date) };
+    return { id: `${year}-${month}-${day}`, title: dayTitle(date), axis };
   }
 
   function dayTitle(date) {
@@ -457,6 +611,14 @@
       return stored;
     }
     return TIMELINE_THUMB_MODES.includes(state.thumbMode) ? state.thumbMode : "medium";
+  }
+
+  function applyTimelineThumbMode() {
+    shell.dataset.thumbMode = TIMELINE_THUMB_MODES.includes(stateLocal.thumbMode) ? stateLocal.thumbMode : "medium";
+  }
+
+  function delay(ms) {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
   }
 
   function escapeHtml(value) {

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Lock
 from typing import Any
 
 from .folder_counts import FolderCountIndex
@@ -47,6 +48,7 @@ class AppServices:
     bracket_cache: dict[str, dict[str, Any]]
     bracket_cache_loaded: bool
     bracket_merge_tasks: dict[str, dict[str, Any]]
+    zip_tasks: dict[str, dict[str, Any]]
     thumbnail_mode_settings: dict[str, dict[str, int]]
     upload_password: str
     auth: AuthSettings
@@ -60,3 +62,6 @@ class AppServices:
     warmup_status: Any | None
     login_background_cache: dict[str, bytes]
     login_background_items: list[dict[str, str]]
+    login_background_cache_key: str
+    login_background_refreshing: bool
+    login_background_lock: Lock

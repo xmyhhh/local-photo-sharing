@@ -13,7 +13,10 @@ async function loadConfig() {
     uploadPasswordLabel.hidden = !state.uploadPasswordRequired;
   }
   applyThumbnailQueueLimits(config.thumbnailModes);
-  startWarmupPolling();
+  if (state.authRole !== "admin") {
+    stopWarmupPolling();
+    stopBackendTasksPolling();
+  }
 }
 
 function applyThumbnailQueueLimits(modes) {
@@ -513,8 +516,25 @@ function createGridTile(entry, index = -1) {
 }
 
 function isPublicAlbum(path) {
+  return Boolean(publicAlbumForPath(path));
+}
+
+function isExactPublicAlbum(path) {
   const normalized = normalizeRootedSettingsPath(path);
-  return Boolean(normalized) && state.publicAlbums.some((item) => normalizeRootedSettingsPath(item) === normalized);
+  return Boolean(normalized) && state.publicAlbumSet.has(normalized);
+}
+
+function publicAlbumForPath(path) {
+  const normalized = normalizeRootedSettingsPath(path);
+  if (!normalized) {
+    return "";
+  }
+  for (const publicRoot of state.publicAlbumSet) {
+    if (normalized === publicRoot || normalized.startsWith(`${publicRoot}/`)) {
+      return publicRoot;
+    }
+  }
+  return "";
 }
 
 function normalizeRootedSettingsPath(path) {
