@@ -457,15 +457,15 @@ function startBoxSelection(event) {
   }
   event.preventDefault();
   closeAllContextMenus();
-  if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
-    state.selectedPaths.clear();
-  }
+  const replacingSelection = !event.ctrlKey && !event.metaKey && !event.shiftKey;
   state.boxSelect = {
     pointerId: event.pointerId,
     startX: event.clientX,
     startY: event.clientY,
     active: false,
-    base: new Set(state.selectedPaths),
+    base: replacingSelection ? new Set() : new Set(state.selectedPaths),
+    committed: state.selectionMode,
+    startedInSelectionMode: state.selectionMode,
   };
   grid.setPointerCapture(event.pointerId);
 }
@@ -482,23 +482,19 @@ function updateBoxSelection(event) {
   }
   if (!state.boxSelect.active) {
     state.boxSelect.active = true;
-    state.selectionMode = true;
     closeAllContextMenus();
-    updateSelectionModeChrome();
   }
   updateSelectionBox(event.clientX, event.clientY);
-  const rect = selectionBox.getBoundingClientRect();
-  state.selectedPaths = new Set(state.boxSelect.base);
-  document.querySelectorAll(".tile").forEach((tile) => {
-    const tileRect = tile.getBoundingClientRect();
-    const intersects = rect.left <= tileRect.right
-      && rect.right >= tileRect.left
-      && rect.top <= tileRect.bottom
-      && rect.bottom >= tileRect.top;
-    if (intersects && tile.dataset.path) {
-      state.selectedPaths.add(tile.dataset.path);
-    }
-  });
+  const next = selectedPathsInBox();
+  if (!state.boxSelect.committed && next.size < 2) {
+    return;
+  }
+  if (!state.selectionMode) {
+    state.selectionMode = true;
+    updateSelectionModeChrome();
+  }
+  state.boxSelect.committed = true;
+  state.selectedPaths = next;
   updateAllSelectionTiles();
   updateSelectionBar();
 }
@@ -512,10 +508,40 @@ function finishBoxSelection(event) {
     return;
   }
   updateBoxSelection(event);
+  if (!state.boxSelect.committed) {
+    cancelBoxSelection();
+    return;
+  }
+  if (!state.boxSelect.startedInSelectionMode && state.selectedPaths.size < 2) {
+    state.selectionMode = false;
+    state.selectedPaths.clear();
+    state.selectionAnchorPath = "";
+    updateSelectionModeChrome();
+    updateSelectionBar();
+    cancelBoxSelection();
+    updateAllSelectionTiles();
+    return;
+  }
   const selected = Array.from(state.selectedPaths);
   state.selectionAnchorPath = selected[selected.length - 1] || state.selectionAnchorPath;
   cancelBoxSelection();
   updateAllSelectionTiles();
+}
+
+function selectedPathsInBox() {
+  const rect = selectionBox.getBoundingClientRect();
+  const next = new Set(state.boxSelect.base);
+  document.querySelectorAll(".tile").forEach((tile) => {
+    const tileRect = tile.getBoundingClientRect();
+    const intersects = rect.left <= tileRect.right
+      && rect.right >= tileRect.left
+      && rect.top <= tileRect.bottom
+      && rect.bottom >= tileRect.top;
+    if (intersects && tile.dataset.path) {
+      next.add(tile.dataset.path);
+    }
+  });
+  return next;
 }
 
 function cancelBoxSelection() {
