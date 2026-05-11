@@ -1,14 +1,19 @@
 (() => {
   const PAGE_SIZE = 180;
+  const TIMELINE_THUMB_MODES = ["small", "medium", "large", "xlarge"];
   const stateLocal = {
     featured: false,
     scale: "day",
+    thumbMode: getStoredTimelineThumbMode(),
     cursor: 0,
     loading: false,
     done: false,
     items: [],
     statusTimer: 0,
     previousEntries: null,
+    latestStatus: null,
+    lastLoadedGeneration: -1,
+    lastLoadedCount: -1,
   };
 
   const dialog = document.createElement("dialog");
@@ -21,6 +26,9 @@
           <div class="timeline-kicker">时间线</div>
           <h2>照片流</h2>
           <div class="timeline-status">正在读取时间线索引...</div>
+          <div class="timeline-progress" hidden>
+            <span></span>
+          </div>
         </div>
         <button class="timeline-close" type="button" aria-label="关闭时间线">×</button>
       </header>
@@ -34,6 +42,15 @@
           <button type="button" data-timeline-scale="month">月</button>
           <button type="button" data-timeline-scale="year">年</button>
         </div>
+        <label class="timeline-thumb-mode">
+          <span>预览</span>
+          <select aria-label="时间线预览尺寸">
+            <option value="small">小</option>
+            <option value="medium">中</option>
+            <option value="large">大</option>
+            <option value="xlarge">超大</option>
+          </select>
+        </label>
         <button class="timeline-refresh" type="button">刷新索引</button>
       </div>
       <div class="timeline-content">
@@ -45,9 +62,12 @@
   pluginDialogs.append(dialog);
 
   const status = dialog.querySelector(".timeline-status");
+  const progress = dialog.querySelector(".timeline-progress");
+  const progressBar = dialog.querySelector(".timeline-progress span");
   const groups = dialog.querySelector(".timeline-groups");
   const content = dialog.querySelector(".timeline-content");
   const sentinel = dialog.querySelector(".timeline-sentinel");
+  const thumbModeSelect = dialog.querySelector(".timeline-thumb-mode select");
   const observer = new IntersectionObserver((items) => {
     if (items.some((item) => item.isIntersecting)) {
       loadNextPage();
@@ -61,6 +81,17 @@
     status.textContent = "已请求刷新时间线索引...";
     await fetchJson("/api/timeline/refresh", { method: "POST" });
     resetAndLoad();
+  });
+  thumbModeSelect.value = stateLocal.thumbMode;
+  thumbModeSelect.addEventListener("change", () => {
+    const mode = thumbModeSelect.value;
+    if (!TIMELINE_THUMB_MODES.includes(mode) || mode === stateLocal.thumbMode) {
+      thumbModeSelect.value = stateLocal.thumbMode;
+      return;
+    }
+    stateLocal.thumbMode = mode;
+    window.localStorage.setItem("timelineThumbMode", mode);
+    renderTimeline();
   });
   dialog.querySelectorAll("[data-timeline-featured]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -96,6 +127,8 @@
     stateLocal.cursor = 0;
     stateLocal.done = false;
     stateLocal.items = [];
+    stateLocal.lastLoadedGeneration = -1;
+    stateLocal.lastLoadedCount = -1;
     groups.innerHTML = `<div class="timeline-empty"><span class="spinner inline-spinner"></span><span>正在打开时间线...</span></div>`;
     await Promise.all([refreshStatus(), loadNextPage()]);
   }
@@ -103,14 +136,31 @@
   async function refreshStatus() {
     try {
       const data = await fetchJson("/api/timeline/status", { cache: "no-store" });
-      const indexedAt = data.indexedAt ? new Date(data.indexedAt * 1000).toLocaleTimeString() : "尚未完成";
-      const suffix = data.error ? `，错误：${data.error}` : "";
-      status.textContent = data.indexing
-        ? `正在建立索引，当前 ${data.count || 0} 项${suffix}`
-        : `已索引 ${data.count || 0} 项，精选 ${data.featuredCount || 0} 项，上次更新 ${indexedAt}${suffix}`;
+      renderStatus(data);
+      maybeReloadForStatus(data);
     } catch (error) {
       status.textContent = error.message;
     }
+  }
+
+  function maybeReloadForStatus(data) {
+    if (!dialog.open || stateLocal.loading) {
+      return;
+    }
+    const generation = Number(data.generation || 0);
+    const count = Number(data.count || 0);
+    const loadedGeneration = stateLocal.lastLoadedGeneration;
+    const loadedCount = stateLocal.lastLoadedCount;
+    const hasNewGeneration = generation > loadedGeneration && !data.indexing;
+    const hasNewPartialResults = data.indexing && count > loadedCount;
+    const isEmptyWaitingForIndex = data.indexing && !stateLocal.items.length && !stateLocal.loading;
+    if (!hasNewGeneration && !hasNewPartialResults && !isEmptyWaitingForIndex) {
+      return;
+    }
+    stateLocal.cursor = 0;
+    stateLocal.done = false;
+    stateLocal.items = [];
+    loadNextPage();
   }
 
   async function loadNextPage() {
@@ -128,11 +178,19 @@
       const data = await fetchJson(`/api/timeline/items?${params.toString()}`, { cache: "no-store" });
       stateLocal.items.push(...(data.items || []));
       stateLocal.cursor = data.nextCursor || 0;
-      stateLocal.done = data.nextCursor === null || data.nextCursor === undefined;
-      renderTimeline();
       if (data.status) {
         renderStatus(data.status);
       }
+      if (data.status?.indexing && !(data.items || []).length) {
+        stateLocal.done = false;
+      } else {
+        stateLocal.done = data.nextCursor === null || data.nextCursor === undefined;
+      }
+      if (data.status) {
+        stateLocal.lastLoadedGeneration = Number(data.status.generation || 0);
+        stateLocal.lastLoadedCount = Number(data.status.count || 0);
+      }
+      renderTimeline();
     } catch (error) {
       groups.innerHTML = `<div class="timeline-empty">${escapeHtml(error.message)}</div>`;
       stateLocal.done = true;
@@ -143,16 +201,42 @@
   }
 
   function renderStatus(data) {
+    stateLocal.latestStatus = data;
     const indexedAt = data.indexedAt ? new Date(data.indexedAt * 1000).toLocaleTimeString() : "尚未完成";
+    const suffix = data.error ? `，错误：${data.error}` : "";
+    const progressText = data.indexing && data.estimatedTotal
+      ? `，约 ${Math.round((data.progress || 0) * 100)}%`
+      : "";
     status.textContent = data.indexing
-      ? `正在建立索引，当前 ${data.count || 0} 项`
-      : `已索引 ${data.count || 0} 项，精选 ${data.featuredCount || 0} 项，上次更新 ${indexedAt}`;
+      ? `正在建立索引，当前 ${data.count || 0} 项${progressText}${suffix}`
+      : `已索引 ${data.count || 0} 项，精选 ${data.featuredCount || 0} 项，上次更新 ${indexedAt}${suffix}`;
+    renderProgress(data);
+  }
+
+  function renderProgress(data) {
+    if (!data.indexing) {
+      progress.hidden = true;
+      progress.classList.remove("indeterminate");
+      progressBar.style.width = "0%";
+      return;
+    }
+    progress.hidden = false;
+    if (data.estimatedTotal && Number.isFinite(data.progress)) {
+      progress.classList.remove("indeterminate");
+      progressBar.style.width = `${Math.max(2, Math.min(100, Math.round(data.progress * 100)))}%`;
+      return;
+    }
+    progress.classList.add("indeterminate");
+    progressBar.style.width = "42%";
   }
 
   function renderTimeline() {
     groups.innerHTML = "";
     if (!stateLocal.items.length) {
-      groups.innerHTML = `<div class="timeline-empty">${stateLocal.featured ? "还没有有评级的精选照片。" : "时间线里还没有照片。"}</div>`;
+      const message = stateLocal.latestStatus?.indexing
+        ? "正在建立索引，照片会陆续显示。"
+        : (stateLocal.featured ? "还没有有评级的精选照片。" : "时间线里还没有照片。");
+      groups.innerHTML = `<div class="timeline-empty">${message}</div>`;
       return;
     }
     const fragment = document.createDocumentFragment();
@@ -192,7 +276,7 @@
     const rating = item.rating > 0 ? `<span class="timeline-rating">${"★".repeat(item.rating)}</span>` : "";
     button.innerHTML = `
       <span class="timeline-thumb">
-        ${item.type === "video" ? `<span class="timeline-video-badge">VIDEO</span><span class="timeline-video-icon">▶</span>` : `<img alt="${escapeHtml(item.name)}" loading="lazy" decoding="async" />`}
+        ${item.type === "video" ? `<span class="timeline-video-badge">VIDEO</span><span class="timeline-video-icon">▶</span>` : `<img alt="${escapeHtml(item.name)}" loading="eager" decoding="async" fetchpriority="high" />`}
         ${rating}
       </span>
       <span class="timeline-card-meta">
@@ -201,6 +285,7 @@
     `;
     if (item.type === "photo") {
       const img = button.querySelector("img");
+      button.classList.add("loading");
       loadTimelineThumbnail(item, img);
     }
     button.addEventListener("click", () => openTimelineItem(item, button));
@@ -211,16 +296,15 @@
     if (!img?.isConnected) {
       return;
     }
+    const mode = stateLocal.thumbMode || state.thumbMode || "medium";
+    if (attempt === 0 && item.thumbUrl) {
+      setTimelineImageSource(item, img, item.thumbUrl);
+    }
     try {
-      const response = await fetch(`/api/thumb-status/${encodePath(item.path)}?mode=${state.thumbMode || "medium"}`, { cache: "no-store" });
+      const response = await fetch(`/api/thumb-status/${encodePath(item.path)}?mode=${mode}`, { cache: "no-store" });
       if (response.status === 200) {
         const data = await response.json();
-        img.onload = () => img.classList.add("loaded");
-        img.onerror = () => showTimelineImageFallback(item, img);
-        img.src = withVersion(data.url || item.thumbUrl, item.mtime);
-        if (img.complete && img.naturalWidth > 0) {
-          img.classList.add("loaded");
-        }
+        setTimelineImageSource(item, img, data.url || item.thumbUrl);
         return;
       }
       if (response.status !== 202) {
@@ -231,8 +315,26 @@
       showTimelineImageFallback(item, img);
       return;
     }
-    if (attempt < 10) {
-      window.setTimeout(() => loadTimelineThumbnail(item, img, attempt + 1), Math.min(2800, 380 + attempt * 240));
+    if (attempt < 3) {
+      window.setTimeout(() => loadTimelineThumbnail(item, img, attempt + 1), 650 + attempt * 500);
+      return;
+    }
+    showTimelineImageFallback(item, img);
+  }
+
+  function setTimelineImageSource(item, img, url) {
+    if (!url || !img?.isConnected) {
+      return;
+    }
+    const nextSrc = withVersion(url, item.mtime);
+    if (img.src.endsWith(nextSrc)) {
+      return;
+    }
+    img.onload = () => markTimelineImageLoaded(img);
+    img.onerror = () => showTimelineImageFallback(item, img);
+    img.src = nextSrc;
+    if (img.complete && img.naturalWidth > 0) {
+      markTimelineImageLoaded(img);
     }
   }
 
@@ -240,9 +342,22 @@
     if (!img?.isConnected) {
       return;
     }
-    img.onload = () => img.classList.add("loaded");
-    img.onerror = () => img.removeAttribute("src");
-    img.src = `/api/image/${encodePath(item.path)}`;
+    if (item.browserRenderable === false) {
+      markTimelineImageFailed(img);
+      return;
+    }
+    setTimelineImageSource(item, img, item.originalUrl || `/api/image/${encodePath(item.path)}`);
+  }
+
+  function markTimelineImageLoaded(img) {
+    img.classList.add("loaded");
+    img.closest(".timeline-card")?.classList.remove("loading", "failed");
+  }
+
+  function markTimelineImageFailed(img) {
+    img.removeAttribute("src");
+    img.closest(".timeline-card")?.classList.remove("loading");
+    img.closest(".timeline-card")?.classList.add("failed");
   }
 
   function openTimelineItem(item, origin) {
@@ -334,6 +449,14 @@
       return 2;
     }
     return [2, 1, 1, 2, 1, 1, 1, 2][index % 8];
+  }
+
+  function getStoredTimelineThumbMode() {
+    const stored = window.localStorage.getItem("timelineThumbMode");
+    if (TIMELINE_THUMB_MODES.includes(stored)) {
+      return stored;
+    }
+    return TIMELINE_THUMB_MODES.includes(state.thumbMode) ? state.thumbMode : "medium";
   }
 
   function escapeHtml(value) {

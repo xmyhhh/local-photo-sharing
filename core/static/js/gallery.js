@@ -6,6 +6,9 @@ async function loadConfig() {
   state.enabledPlugins = new Set(config.plugins || []);
   state.pluginAssets = config.pluginAssets || [];
   state.pluginComponents = config.pluginComponents || [];
+  if (config.theme) {
+    applyThemeMode(config.theme);
+  }
   if (uploadPasswordLabel) {
     uploadPasswordLabel.hidden = !state.uploadPasswordRequired;
   }
@@ -155,7 +158,7 @@ function normalizeFolderPath(folder) {
 
 function normalizeVirtualRootPath(folder) {
   const normalized = folder.replace(/^\/+/, "");
-  const root = state.roots.find((item) => item.id === normalized || normalized.startsWith(`${item.id}/`));
+  const root = state.roots.find((item) => normalized === item.id || normalized.startsWith(`${item.id}/`));
   if (!root) {
     return normalized;
   }
@@ -429,6 +432,14 @@ function createGridTile(entry, index = -1) {
       </svg>
     `;
     button.append(icon);
+    if (state.authEnabled && isPublicAlbum(entry.path)) {
+      const publicBadge = document.createElement("div");
+      publicBadge.className = "public-folder-badge";
+      publicBadge.title = "公开相册";
+      publicBadge.setAttribute("aria-label", "公开相册");
+      publicBadge.textContent = "🔓";
+      button.append(publicBadge);
+    }
   } else {
     const holder = document.createElement("div");
     holder.className = "thumb-holder";
@@ -465,14 +476,14 @@ function createGridTile(entry, index = -1) {
     }
   }
 
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  const actionRow = document.createElement("div");
+  actionRow.className = "tile-actions-row";
   const select = document.createElement("input");
   select.type = "checkbox";
   select.className = "tile-select";
   select.checked = state.selectedPaths.has(entry.path);
-  tile.append(select);
-
-  const meta = document.createElement("div");
-  meta.className = "meta";
   const name = document.createElement("div");
   name.className = "name";
   name.textContent = entry.name;
@@ -480,22 +491,32 @@ function createGridTile(entry, index = -1) {
 
   if (entry.type === "photo") {
     const ratingWrap = createRating(entry, false);
-    meta.append(ratingWrap);
+    actionRow.append(ratingWrap);
     ratingPayload = { entry, ratingWrap };
   } else if (entry.type === "video") {
     const kind = document.createElement("div");
     kind.className = "folder-count";
     kind.textContent = "视频";
-    meta.append(kind);
+    actionRow.append(kind);
   } else if (entry.type === "folder") {
     const count = document.createElement("div");
     count.className = "folder-count";
     count.textContent = entry.photoCountPending || entry.photoCount === null || entry.photoCount === undefined
       ? "统计中"
       : `${entry.photoCount} 张照片`;
-    meta.append(count);
+    actionRow.append(count);
   }
 
-  tile.append(button, meta);
+  meta.append(actionRow);
+  tile.append(select, button, meta);
   return { element: tile, thumbPayload, ratingPayload };
+}
+
+function isPublicAlbum(path) {
+  const normalized = normalizeRootedSettingsPath(path);
+  return Boolean(normalized) && state.publicAlbums.some((item) => normalizeRootedSettingsPath(item) === normalized);
+}
+
+function normalizeRootedSettingsPath(path) {
+  return String(path || "").replace(/\\/g, "/").replace(/^\/+|\/+$/g, "").split("/").filter(Boolean).join("/");
 }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import secrets
 
 from flask import Flask
 
@@ -10,7 +11,7 @@ from .constants import (
     RATINGS_FILE,
     STATIC_DIR,
 )
-from .context import AppServices, RootServices
+from .context import AppServices, AuthSettings, RootServices
 from .memory_prefetch import MemoryPrefetchPool, MemoryPrefetchSettings
 from .paths import build_thumbnail_modes, root_cache_key
 from .plugins import PluginSpec, register_plugins
@@ -45,6 +46,7 @@ def create_app(
         roots.append(default_save)
 
     app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="/static")
+    app.secret_key = _session_secret(config or {}, config_path)
     services = _create_services(
         roots,
         thumbnail_mode_settings,
@@ -98,6 +100,7 @@ def _create_services(
         bracket_merge_tasks={},
         thumbnail_mode_settings=thumbnail_mode_settings or {},
         upload_password=upload_password,
+        auth=_build_auth_settings(config),
         memory_prefetch=MemoryPrefetchPool(memory_prefetch_settings),
         enabled_plugins=set(),
         plugin_assets=[],
@@ -106,6 +109,8 @@ def _create_services(
         plugin_modules={},
         recycle_bin_recorder=None,
         warmup_status=None,
+        login_background_cache={},
+        login_background_items=[],
     )
 
 
@@ -115,6 +120,37 @@ def _is_relative_to(path: Path, root: Path) -> bool:
         return True
     except ValueError:
         return False
+
+
+def _build_auth_settings(config: dict) -> AuthSettings:
+    auth = config.get("auth", {})
+    if not isinstance(auth, dict):
+        auth = {}
+    return AuthSettings(
+        enabled=bool(auth.get("enabled", False)),
+        password=str(auth.get("password") or ""),
+        session_secret=str(auth.get("session_secret") or ""),
+        public_albums={_normalize_config_path(item) for item in auth.get("public_albums", []) if isinstance(item, str)},
+        login_backgrounds=[item.strip() for item in auth.get("login_backgrounds", []) if isinstance(item, str) and item.strip()],
+        login_background_mode=_login_background_mode(auth.get("login_background_mode")),
+        login_background_folder=_normalize_config_path(str(auth.get("login_background_folder") or "")),
+    )
+
+
+def _normalize_config_path(value: str) -> str:
+    return "/".join(part for part in value.replace("\\", "/").strip("/ ").split("/") if part)
+
+
+def _login_background_mode(value: object) -> str:
+    return value if value in {"none", "rated", "folder"} else "none"
+
+
+def _session_secret(config: dict, config_path: Path | None) -> str:
+    auth = config.get("auth", {}) if isinstance(config, dict) else {}
+    if isinstance(auth, dict) and isinstance(auth.get("session_secret"), str) and auth["session_secret"]:
+        return auth["session_secret"]
+    seed = f"{config_path or ''}|{auth.get('password', '') if isinstance(auth, dict) else ''}"
+    return seed or secrets.token_hex(32)
 
 
 def _create_root_services(

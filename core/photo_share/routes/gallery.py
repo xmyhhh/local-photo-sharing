@@ -6,6 +6,16 @@ from typing import Any
 
 from flask import Flask, abort, jsonify, request, send_file
 
+from ..auth import (
+    is_admin,
+    is_guest,
+    is_public_or_ancestor,
+    public_album_entries,
+    require_admin,
+    require_authenticated,
+    require_folder_access,
+    visible_roots,
+)
 from ..constants import (
     FILTER_WAIT_SECONDS,
     JPG_EXTENSIONS,
@@ -40,22 +50,23 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
 
     @app.get("/api/config")
     def config():
+        require_authenticated(services)
         return jsonify({
-            "roots": [
-                {"id": root_id, "name": root.name or root_id, "path": str(root.resolve())}
-                for root_id, root in services.roots.items()
-            ],
+            "roots": visible_roots(services),
             "defaultRootId": services.default_root_id,
             "allowDelete": True,
             "thumbnailModes": services.thumbnail_mode_settings,
             "uploadPasswordRequired": bool(services.upload_password),
-            "plugins": sorted(services.enabled_plugins),
-            "pluginAssets": services.plugin_assets,
-            "pluginComponents": services.plugin_components,
+            "plugins": sorted(services.enabled_plugins) if is_admin(services) else [],
+            "pluginAssets": services.plugin_assets if is_admin(services) else [],
+            "pluginComponents": services.plugin_components if is_admin(services) else [],
+            "theme": services.config.get("theme", "system"),
+            "role": "admin" if is_admin(services) else "guest",
         })
 
     @app.get("/api/warmup")
     def warmup_status():
+        require_admin(services)
         if services.warmup_status is None:
             return jsonify({
                 "state": "idle",
@@ -76,6 +87,13 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
         root_id = request.args.get("root", "")
         folder = request.args.get("folder", "")
         if not root_id and not folder:
+            require_authenticated(services)
+            if is_guest(services):
+                entries = [
+                    _folder_entry(_root_services(services, parse_rooted_path(item["id"])[0]), parse_rooted_path(item["id"])[0], parse_rooted_path(item["id"])[1], item["name"], item["id"])
+                    for item in public_album_entries(services)
+                ]
+                return jsonify({"root": "", "folder": "", "entries": entries})
             entries = [
                 _folder_entry(root_services, item_root_id, "", root_services.root.name or item_root_id, item_root_id)
                 for item_root_id, root_services in services.root_services.items()
@@ -84,12 +102,16 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
 
         if not root_id:
             root_id, folder = parse_rooted_path(folder)
+        require_folder_access(services, root_id, folder)
         root_services = _root_services(services, root_id)
         folder_path = _resolve_rooted_folder(services, root_id, folder)
-        entries = [
-            _folder_entry(root_services, root_id, to_relative(root_services.root, child), child.name, join_rooted_path(root_id, to_relative(root_services.root, child)))
-            for child in _direct_child_folders(folder_path)
-        ]
+        entries = []
+        for child in _direct_child_folders(folder_path):
+            child_rel = to_relative(root_services.root, child)
+            child_rooted = join_rooted_path(root_id, child_rel)
+            if is_guest(services) and not is_public_or_ancestor(services, child_rooted):
+                continue
+            entries.append(_folder_entry(root_services, root_id, child_rel, child.name, child_rooted))
         return jsonify({"root": root_id, "folder": folder, "entries": entries})
 
     @app.get("/api/photos")
@@ -97,10 +119,14 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
         root_id = request.args.get("root", "")
         folder = request.args.get("folder", "")
         if not root_id and not folder:
+            require_authenticated(services)
+            if is_guest(services):
+                return jsonify(_guest_virtual_root_payload(services))
             return jsonify(_virtual_root_payload(services))
 
         if not root_id:
             root_id, folder = parse_rooted_path(folder)
+        require_folder_access(services, root_id, folder)
         root_services = _root_services(services, root_id)
         folder_path = _resolve_rooted_folder(services, root_id, folder)
         filters = PhotoFilters.from_request(request.args)
@@ -116,6 +142,11 @@ def register_gallery_routes(app: Flask, services: AppServices) -> None:
         next_cursor: int | None = None
         page = _folder_page(folder_path, cursor, limit)
         for seen, child, sibling_map in page["items"]:
+            child_rooted = join_rooted_path(root_id, to_relative(root_services.root, child))
+            if is_guest(services) and child.is_dir() and not is_public_or_ancestor(services, child_rooted):
+                continue
+            if is_guest(services) and child.is_file() and not is_public_or_ancestor(services, child_rooted):
+                continue
             entry = _build_entry(services, root_id, child, root_services, filters, sibling_map)
             if entry is None:
                 continue
@@ -145,6 +176,28 @@ def _virtual_root_payload(services: AppServices) -> dict[str, Any]:
         _folder_entry(root_services, root_id, "", root_services.root.name or root_id, root_id)
         for root_id, root_services in services.root_services.items()
     ]
+    return {
+        "root": "",
+        "folder": "",
+        "parent": "",
+        "entries": entries,
+        "pendingEntries": [],
+        "indexing": False,
+        "nextCursor": None,
+    }
+
+
+def _guest_virtual_root_payload(services: AppServices) -> dict[str, Any]:
+    entries = []
+    for item in public_album_entries(services):
+        root_id, rel = parse_rooted_path(item["id"])
+        try:
+            root_services = _root_services(services, root_id)
+            if not is_public_or_ancestor(services, item["id"]):
+                continue
+            entries.append(_folder_entry(root_services, root_id, rel, item["name"], item["id"]))
+        except Exception:
+            continue
     return {
         "root": "",
         "folder": "",

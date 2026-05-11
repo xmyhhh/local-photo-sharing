@@ -1,12 +1,22 @@
 openSettingsBtn.addEventListener("click", openSettingsDialog);
 closeSettingsBtn.addEventListener("click", () => settingsDialog.close());
-settingsTabs.forEach((tab) => {
+settingsTabs().forEach((tab) => {
   tab.addEventListener("click", () => setSettingsTab(tab.dataset.settingsTab));
 });
 memoryPrefetchEnabledInput.addEventListener("change", saveGeneralSettings);
 memoryPrefetchLimitInput.addEventListener("input", scheduleGeneralSettingsSave);
 memoryPrefetchLimitInput.addEventListener("change", saveGeneralSettings);
 memoryPrefetchLimitInput.addEventListener("blur", saveGeneralSettings);
+authEnabledInput.addEventListener("change", () => saveAuthSettings());
+saveAuthPasswordBtn.addEventListener("click", saveAuthPassword);
+loginBackgroundModeButtons().forEach((button) => {
+  button.addEventListener("click", () => {
+    loginBackgroundModeButtons().forEach((item) => item.classList.toggle("active", item === button));
+    saveAuthSettings({ loginBackgroundMode: button.dataset.loginBackgroundMode });
+  });
+});
+loginBackgroundFolderInput.addEventListener("change", () => saveAuthSettings({ loginBackgroundFolder: loginBackgroundFolderInput.value.trim() }));
+useCurrentLoginBackgroundFolderBtn.addEventListener("click", useCurrentLoginBackgroundFolder);
 document.querySelectorAll(".settings-help").forEach((button) => {
   button.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -24,6 +34,7 @@ settingsDialog.addEventListener("click", (event) => {
 
 let generalSettingsSaveTimer = 0;
 let generalSettingsLoaded = false;
+let authSettingsLoaded = false;
 
 async function openSettingsDialog() {
   setSettingsTab("general");
@@ -38,6 +49,7 @@ async function openSettingsDialog() {
     renderGeneralSettings(general);
     applyComponentSettings(components);
     renderSettings(components);
+    renderPluginSettingsTabs();
     settingsStatus.textContent = "";
   } catch (error) {
     settingsStatus.textContent = error.message;
@@ -45,8 +57,9 @@ async function openSettingsDialog() {
 }
 
 function setSettingsTab(tabName) {
-  const name = tabName === "plugins" ? "plugins" : "general";
-  settingsTabs.forEach((tab) => {
+  const pluginPage = getPluginSettingsPage(tabName);
+  const name = pluginPage ? tabName : (["general", "auth", "plugins"].includes(tabName) ? tabName : "general");
+  settingsTabs().forEach((tab) => {
     const active = tab.dataset.settingsTab === name;
     tab.classList.toggle("active", active);
     if (active) {
@@ -56,17 +69,31 @@ function setSettingsTab(tabName) {
     }
   });
   generalSettingsPanel.hidden = name !== "general";
+  authSettingsPanel.hidden = name !== "auth";
   pluginsSettingsPanel.hidden = name !== "plugins";
-  settingsKicker.textContent = name === "general" ? "通用" : "扩展";
-  settingsPageTitle.textContent = name === "general" ? "通用设置" : "插件";
-  settingsPageDescription.textContent = name === "general"
-    ? "调整核心服务的运行策略。"
-    : "启用或禁用当前项目插件目录中的能力。";
+  Array.from(pluginSettingsPages?.querySelectorAll(".settings-page") || []).forEach((page) => {
+    page.hidden = page.dataset.settingsPage !== name;
+  });
+  const meta = pluginPage
+    ? [pluginPage.kicker || "插件", pluginPage.title || "插件设置", pluginPage.description || ""]
+    : {
+    general: ["通用", "通用设置", "调整核心服务的运行策略。"],
+    auth: ["安全", "访问控制", "管理登录页、游客入口和公开相册。"],
+    plugins: ["扩展", "插件", "启用或禁用当前项目插件目录中的能力。"],
+  }[name];
+  settingsKicker.textContent = meta[0];
+  settingsPageTitle.textContent = meta[1];
+  settingsPageDescription.textContent = meta[2];
+  if (pluginPage) {
+    pluginPage.render?.();
+  }
 }
 
 function renderGeneralSettings(settings) {
   const prefetch = settings.memoryPrefetch || {};
   generalSettingsLoaded = false;
+  themeModeSelect.value = ["system", "light", "dark"].includes(settings.theme) ? settings.theme : "system";
+  applyThemeMode(themeModeSelect.value);
   memoryPrefetchEnabledInput.checked = Boolean(prefetch.enabled);
   memoryPrefetchLimitInput.value = String(prefetch.memoryLimitMb || 1024);
   memoryPrefetchLimitInput.min = String(prefetch.minMb || 256);
@@ -74,6 +101,118 @@ function renderGeneralSettings(settings) {
   state.memoryPrefetchWindowBefore = Number.parseInt(prefetch.windowBefore, 10) || 5;
   state.memoryPrefetchWindowAfter = Number.parseInt(prefetch.windowAfter, 10) || 35;
   generalSettingsLoaded = true;
+  renderAuthSettings({
+    enabled: state.authEnabled,
+    hasPassword: state.authHasPassword,
+    loginBackgroundMode: state.loginBackgroundMode,
+    loginBackgroundFolder: state.loginBackgroundFolder,
+  });
+}
+
+function renderAuthSettings(settings) {
+  authSettingsLoaded = false;
+  authEnabledInput.checked = Boolean(settings.enabled);
+  authPasswordInput.value = "";
+  authPasswordInput.placeholder = settings.hasPassword ? "已设置，留空则不修改" : "启用登录页前必须设置";
+  const mode = ["none", "rated", "folder"].includes(settings.loginBackgroundMode) ? settings.loginBackgroundMode : "none";
+  loginBackgroundModeButtons().forEach((button) => {
+    button.classList.toggle("active", button.dataset.loginBackgroundMode === mode);
+  });
+  loginBackgroundFolderInput.value = settings.loginBackgroundFolder || "";
+  loginBackgroundFolderInput.disabled = mode !== "folder";
+  useCurrentLoginBackgroundFolderBtn.disabled = mode !== "folder";
+  authSettingsLoaded = true;
+}
+
+function renderEditableList(container, values, onRemove) {
+  container.innerHTML = "";
+  if (!values.length) {
+    const empty = document.createElement("div");
+    empty.className = "settings-list-empty";
+    empty.textContent = "还没有配置。";
+    container.append(empty);
+    return;
+  }
+  values.forEach((value) => {
+    const item = document.createElement("div");
+    item.className = "settings-chip";
+    const text = document.createElement("span");
+    text.textContent = value;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.setAttribute("aria-label", `删除 ${value}`);
+    button.textContent = "×";
+    button.addEventListener("click", () => onRemove(value));
+    item.append(text, button);
+    container.append(item);
+  });
+}
+
+async function saveAuthPassword() {
+  if (!authSettingsLoaded) {
+    return;
+  }
+  const password = authPasswordInput.value.trim();
+  if (!password) {
+    settingsStatus.textContent = "请输入管理员密码后再保存。";
+    authPasswordInput.focus();
+    return;
+  }
+  await saveAuthSettings({ password });
+}
+
+async function saveAuthSettings(overrides = null) {
+  if (!authSettingsLoaded) {
+    return;
+  }
+  if (!overrides && authEnabledInput.checked && !state.authHasPassword && !authPasswordInput.value.trim()) {
+    authEnabledInput.checked = false;
+    settingsStatus.textContent = "启用登录页前必须先设置管理员密码。";
+    authPasswordInput.focus();
+    return;
+  }
+  const payload = overrides || {
+    enabled: authEnabledInput.checked,
+    loginBackgroundMode: selectedLoginBackgroundMode(),
+    loginBackgroundFolder: loginBackgroundFolderInput.value.trim(),
+  };
+  if (authPasswordInput.value.trim() && (!overrides || Object.prototype.hasOwnProperty.call(overrides, "enabled"))) {
+    payload.password = authPasswordInput.value.trim();
+  }
+  settingsStatus.textContent = "正在保存访问控制...";
+  try {
+    const settings = await fetchJson("/api/auth/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    applyAuthStatus(settings);
+    renderAuthSettings(settings);
+    renderGrid();
+    settingsStatus.textContent = "访问控制已保存。";
+  } catch (error) {
+    settingsStatus.textContent = error.message;
+    renderAuthSettings({
+      enabled: state.authEnabled,
+      hasPassword: state.authHasPassword,
+      loginBackgroundMode: state.loginBackgroundMode,
+      loginBackgroundFolder: state.loginBackgroundFolder,
+    });
+  }
+}
+
+function selectedLoginBackgroundMode() {
+  return loginBackgroundModeButtons().find((button) => button.classList.contains("active"))?.dataset.loginBackgroundMode || "none";
+}
+
+function useCurrentLoginBackgroundFolder() {
+  if (!state.rootId) {
+    settingsStatus.textContent = "请先进入一个具体根目录或文件夹。";
+    return;
+  }
+  const folder = state.folder ? `${state.rootId}/${state.folder}` : state.rootId;
+  loginBackgroundFolderInput.value = folder;
+  saveAuthSettings({ loginBackgroundFolder: folder, loginBackgroundMode: "folder" });
 }
 
 function scheduleGeneralSettingsSave() {
@@ -112,6 +251,7 @@ async function saveGeneralSettings() {
           enabled: memoryPrefetchEnabledInput.checked,
           memoryLimitMb,
         },
+        theme: themeModeSelect.value,
       }),
     });
     renderGeneralSettings(settings);
@@ -120,6 +260,11 @@ async function saveGeneralSettings() {
     settingsStatus.textContent = error.message;
   }
 }
+
+themeModeSelect.addEventListener("change", () => {
+  applyThemeMode(themeModeSelect.value);
+  saveGeneralSettings();
+});
 
 function renderSettings(settings) {
   pluginComponentList.innerHTML = "";
@@ -197,6 +342,7 @@ async function toggleComponent(item) {
     applyComponentSettings(settings);
     await loadPluginAssets();
     renderSettings(settings);
+    renderPluginSettingsTabs();
     renderGrid();
     settingsStatus.textContent = "设置已保存。";
   } catch (error) {

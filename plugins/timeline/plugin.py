@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import os
 import threading
 import time
-from dataclasses import dataclass
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from os import scandir
 from pathlib import Path
@@ -12,15 +14,19 @@ from typing import Any
 import piexif
 from flask import Flask, abort, jsonify, request
 
-from core.photo_share.constants import MEDIA_EXTENSIONS, PHOTO_EXTENSIONS, RATINGS_FILE, THUMBNAIL_DIR, VIDEO_EXTENSIONS
+from core.photo_share.constants import CACHE_DIR, MEDIA_EXTENSIONS, PHOTO_EXTENSIONS, RATINGS_FILE, THUMBNAIL_DIR, VIDEO_EXTENSIONS, CPU_COUNT
 from core.photo_share.context import AppServices
 from core.photo_share.live_photos import find_case_insensitive_sibling, find_live_video
-from core.photo_share.paths import image_url, join_rooted_path, thumb_url, to_relative
+from core.photo_share.paths import image_url, join_rooted_path, root_cache_key, thumb_url, to_relative
 
 PLUGIN_NAME = "timeline"
 SCAN_INTERVAL_SECONDS = 120
 MAX_TIMELINE_ITEMS = 300_000
 MAX_PAGE_SIZE = 600
+INDEX_CACHE_VERSION = 1
+INDEX_CACHE_FILE = "timeline_index_v1.json"
+INDEX_WORKERS = min(16, max(2, CPU_COUNT))
+INDEX_INFLIGHT_LIMIT = INDEX_WORKERS * 8
 IGNORED_DIR_NAMES = {
     ".git",
     ".photo_share_cache",
@@ -83,11 +89,13 @@ class TimelineIndex:
         self._indexing = False
         self._error = ""
         self._generation = 0
+        self._scanned_count = 0
 
     def start(self, services: AppServices) -> None:
         with self._lock:
             self._services = services
             self._stop.clear()
+            self._load_cache(services)
             if self._thread and self._thread.is_alive():
                 self.request_refresh()
                 return
@@ -110,6 +118,7 @@ class TimelineIndex:
             self._indexing = False
             self._error = ""
             self._generation = 0
+            self._scanned_count = 0
 
     def request_refresh(self) -> None:
         self._wake.set()
@@ -117,6 +126,7 @@ class TimelineIndex:
     def status(self) -> dict[str, Any]:
         with self._lock:
             featured = sum(1 for entry in self._entries if entry.rating > 0)
+            estimated_total = estimate_total_media(self._services)
             return {
                 "enabled": self._services is not None,
                 "indexing": self._indexing,
@@ -125,6 +135,9 @@ class TimelineIndex:
                 "indexedAt": int(self._indexed_at),
                 "error": self._error,
                 "generation": self._generation,
+                "scanned": self._scanned_count,
+                "estimatedTotal": estimated_total,
+                "progress": min(1.0, self._scanned_count / estimated_total) if estimated_total else None,
             }
 
     def page(self, featured: bool, cursor: int, limit: int) -> dict[str, Any]:
@@ -154,24 +167,93 @@ class TimelineIndex:
         with self._lock:
             self._indexing = True
             self._error = ""
+            self._scanned_count = 0
         entries: list[TimelineEntry] = []
         try:
             for root_id, root_services in services.root_services.items():
                 if self._stop.is_set() or len(entries) >= MAX_TIMELINE_ITEMS:
                     break
                 budget = MAX_TIMELINE_ITEMS - len(entries)
-                entries.extend(iter_root_media(root_id, root_services, self._stop, budget))
+                for entry in iter_root_media(root_id, root_services, self._stop, budget):
+                    entries.append(entry)
+                    if should_publish_partial(len(entries)):
+                        self._publish_partial(entries)
             entries.sort(key=lambda entry: (-entry.taken_ts, entry.root_id, entry.rel.lower()))
             with self._lock:
                 self._entries = entries
                 self._indexed_at = time.time()
                 self._generation += 1
+                self._scanned_count = len(entries)
+            self._save_cache(services, entries)
         except Exception as exc:  # noqa: BLE001 - background plugin must not crash Flask.
             with self._lock:
                 self._error = str(exc)
         finally:
             with self._lock:
                 self._indexing = False
+
+    def _publish_partial(self, entries: list[TimelineEntry]) -> None:
+        partial = sorted(entries, key=lambda entry: (-entry.taken_ts, entry.root_id, entry.rel.lower()))
+        with self._lock:
+            self._entries = partial
+            self._scanned_count = len(entries)
+
+    def _load_cache(self, services: AppServices) -> None:
+        entries: list[TimelineEntry] = []
+        newest_cache = 0.0
+        for root_id, root_services in services.root_services.items():
+            cache_path = timeline_cache_path(root_services.root)
+            try:
+                raw = json.loads(cache_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if raw.get("version") != INDEX_CACHE_VERSION:
+                continue
+            for item in raw.get("entries", []):
+                entry = timeline_entry_from_cache(root_id, item)
+                if entry is not None:
+                    entries.append(entry)
+                    if len(entries) >= MAX_TIMELINE_ITEMS:
+                        break
+            try:
+                newest_cache = max(newest_cache, cache_path.stat().st_mtime)
+            except OSError:
+                pass
+            if len(entries) >= MAX_TIMELINE_ITEMS:
+                break
+        if not entries:
+            return
+        entries.sort(key=lambda entry: (-entry.taken_ts, entry.root_id, entry.rel.lower()))
+        with self._lock:
+            self._entries = entries
+            self._indexed_at = newest_cache or time.time()
+            self._generation += 1
+            self._scanned_count = len(entries)
+
+    def _save_cache(self, services: AppServices, entries: list[TimelineEntry]) -> None:
+        by_root: dict[str, list[TimelineEntry]] = {}
+        for entry in entries:
+            by_root.setdefault(entry.root_id, []).append(entry)
+        for root_id, root_services in services.root_services.items():
+            cache_path = timeline_cache_path(root_services.root)
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            payload = {
+                "version": INDEX_CACHE_VERSION,
+                "createdAt": int(time.time()),
+                "entries": [
+                    cache_entry(entry)
+                    for entry in by_root.get(root_id, [])
+                ],
+            }
+            tmp_path = cache_path.with_suffix(".tmp")
+            try:
+                tmp_path.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+                tmp_path.replace(cache_path)
+            except OSError:
+                try:
+                    tmp_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
 
 INDEX = TimelineIndex()
@@ -214,10 +296,70 @@ def parse_int(value: str | None, fallback: int) -> int:
         return fallback
 
 
+def should_publish_partial(count: int) -> bool:
+    if count <= 60:
+        return count % 10 == 0
+    return count % 100 == 0
+
+
+def estimate_total_media(services: AppServices | None) -> int:
+    if services is None:
+        return 0
+    total = 0
+    for root_services in services.root_services.values():
+        count = root_services.folder_counts.get(root_services.root)
+        if count is None:
+            return 0
+        total += count
+    return total
+
+
+def timeline_cache_path(root: Path) -> Path:
+    return CACHE_DIR / root_cache_key(root) / INDEX_CACHE_FILE
+
+
+def cache_entry(entry: TimelineEntry) -> dict[str, Any]:
+    data = asdict(entry)
+    data.pop("root_id", None)
+    return data
+
+
+def timeline_entry_from_cache(root_id: str, data: Any) -> TimelineEntry | None:
+    if not isinstance(data, dict):
+        return None
+    try:
+        rel = str(data["rel"])
+        name = str(data.get("name") or Path(rel).name)
+        entry_type = str(data.get("type") or "photo")
+        if entry_type not in {"photo", "video"}:
+            return None
+        return TimelineEntry(
+            root_id=root_id,
+            rel=rel,
+            name=name,
+            type=entry_type,
+            size=int(data.get("size") or 0),
+            mtime=int(data.get("mtime") or 0),
+            taken_ts=int(data.get("taken_ts") or data.get("takenAt") or data.get("mtime") or 0),
+            rating=max(0, min(5, int(data.get("rating") or 0))),
+            browser_renderable=bool(data.get("browser_renderable", data.get("browserRenderable", False))),
+            is_live=bool(data.get("is_live", data.get("isLive", False))),
+            live_video_path=data.get("live_video_path") or data.get("liveVideoPath"),
+        )
+    except (TypeError, ValueError, KeyError):
+        return None
+
+
 def iter_root_media(root_id: str, root_services, stop: threading.Event, budget: int):
+    with ThreadPoolExecutor(max_workers=INDEX_WORKERS, thread_name_prefix=f"timeline-index-{root_id}") as executor:
+        yield from iter_root_media_parallel(root_id, root_services, stop, budget, executor)
+
+
+def iter_root_media_parallel(root_id: str, root_services, stop: threading.Event, budget: int, executor: ThreadPoolExecutor):
     root = root_services.root
     stack = [root]
     emitted = 0
+    futures: set[Future[TimelineEntry | None]] = set()
     while stack and not stop.is_set() and emitted < budget:
         folder = stack.pop()
         try:
@@ -242,14 +384,51 @@ def iter_root_media(root_id: str, root_services, stop: threading.Event, budget: 
                 except OSError:
                     continue
         for path in pending_files:
-            if stop.is_set() or emitted >= budget:
-                return
+            if stop.is_set() or emitted + len(futures) >= budget:
+                break
             if path.suffix.lower() in VIDEO_EXTENSIONS and has_live_photo_still(path, sibling_map):
                 continue
-            entry = build_timeline_entry(root_id, root_services, path, sibling_map)
+            futures.add(executor.submit(build_timeline_entry, root_id, root_services, path, sibling_map))
+            if len(futures) >= INDEX_INFLIGHT_LIMIT:
+                for entry in drain_completed_entries(futures, stop, wait_for_one=True):
+                    yield entry
+                    emitted += 1
+                    if emitted >= budget:
+                        return
+        for entry in drain_completed_entries(futures, stop, wait_for_one=False):
+            yield entry
+            emitted += 1
+            if emitted >= budget:
+                return
+    for entry in drain_completed_entries(futures, stop, wait_for_all=True):
+        yield entry
+
+
+def drain_completed_entries(
+    futures: set[Future[TimelineEntry | None]],
+    stop: threading.Event,
+    wait_for_one: bool = False,
+    wait_for_all: bool = False,
+):
+    while futures and not stop.is_set():
+        if wait_for_all:
+            done, _ = wait(futures, timeout=0.2, return_when=FIRST_COMPLETED)
+        elif wait_for_one:
+            done, _ = wait(futures, timeout=0.2, return_when=FIRST_COMPLETED)
+        else:
+            done = {future for future in futures if future.done()}
+        if not done:
+            return
+        futures.difference_update(done)
+        for future in done:
+            try:
+                entry = future.result()
+            except Exception:
+                entry = None
             if entry is not None:
                 yield entry
-                emitted += 1
+        if not wait_for_all:
+            return
 
 
 def should_skip(path: Path) -> bool:
@@ -292,8 +471,13 @@ def photo_rating(rel: str, path: Path, root_services) -> int:
     override = root_services.ratings.get_override(rel)
     if override is not None:
         return override
+    indexed = root_services.rating_index.get(rel)
+    if indexed is not None:
+        return indexed
     try:
-        return root_services.rating_index.ensure_photo(path)
+        if root_services.metadata.is_ready(path):
+            return root_services.metadata.get_rating_ready(path)
+        return root_services.rating_index.ensure_photo_quick(path)
     except Exception:
         return root_services.metadata.get_rating_ready(path)
 

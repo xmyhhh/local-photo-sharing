@@ -382,13 +382,21 @@ function updateScrollTopButton() {
   scrollTopBtn.hidden = window.scrollY < 700 || viewer.open || pluginDialogOpen;
 }
 
-loadConfig()
-  .then(loadPluginAssets)
-  .then(() => loadFolder(""))
-  .then(armGalleryHistory)
-  .then(openInitialBracketProject)
-  .then(updateScrollTopButton)
+async function startGallery() {
+  await loadConfig();
+  await loadPluginAssets();
+  await loadFolder("");
+  armGalleryHistory();
+  await openInitialBracketProject();
+  updateScrollTopButton();
+}
+
+initializeAuth()
+  .then(startGallery)
   .catch((error) => {
+    if (error.message === "AUTH_REQUIRED") {
+      return;
+    }
     emptyState.hidden = false;
     emptyState.textContent = error.message;
   });

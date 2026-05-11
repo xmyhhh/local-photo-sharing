@@ -24,6 +24,17 @@ class RootServices:
 
 
 @dataclass
+class AuthSettings:
+    enabled: bool
+    password: str
+    session_secret: str
+    public_albums: set[str]
+    login_backgrounds: list[str]
+    login_background_mode: str
+    login_background_folder: str
+
+
+@dataclass
 class AppServices:
     config_path: Path | None
     config: dict[str, Any]
@@ -38,6 +49,7 @@ class AppServices:
     bracket_merge_tasks: dict[str, dict[str, Any]]
     thumbnail_mode_settings: dict[str, dict[str, int]]
     upload_password: str
+    auth: AuthSettings
     memory_prefetch: MemoryPrefetchPool
     enabled_plugins: set[str]
     plugin_assets: list[dict[str, Any]]
@@ -46,3 +58,5 @@ class AppServices:
     plugin_modules: dict[str, Any]
     recycle_bin_recorder: Any | None
     warmup_status: Any | None
+    login_background_cache: dict[str, bytes]
+    login_background_items: list[dict[str, str]]

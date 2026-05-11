@@ -157,6 +157,37 @@ def get_upload_password(config: dict[str, Any]) -> str:
     return value
 
 
+def get_auth_config(config: dict[str, Any]) -> dict[str, Any]:
+    value = config.get("auth", DEFAULT_CONFIG["auth"])
+    if value is None:
+        return dict(DEFAULT_CONFIG["auth"])
+    if not isinstance(value, dict):
+        raise ValueError("Config field auth must be an object.")
+    result = dict(DEFAULT_CONFIG["auth"])
+    result.update(value)
+    for field in ("password", "session_secret"):
+        if result.get(field) is None:
+            result[field] = ""
+        if not isinstance(result.get(field), str):
+            raise ValueError(f"Config field auth.{field} must be a string.")
+    for field in ("login_background_mode", "login_background_folder"):
+        if result.get(field) is None:
+            result[field] = ""
+        if not isinstance(result.get(field), str):
+            raise ValueError(f"Config field auth.{field} must be a string.")
+    for field in ("public_albums", "login_backgrounds"):
+        items = result.get(field, [])
+        if items is None:
+            items = []
+        if not isinstance(items, list) or any(not isinstance(item, str) for item in items):
+            raise ValueError(f"Config field auth.{field} must be an array of strings.")
+        result[field] = items
+    result["enabled"] = bool(result.get("enabled", False))
+    if result["login_background_mode"] not in {"none", "rated", "folder"}:
+        result["login_background_mode"] = "none"
+    return result
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Share a local JPG folder on your LAN.")
     parser.add_argument("mode", nargs="?", choices=("serve", "warmup"), default="serve", help="Startup mode. Use warmup to build all thumbnail caches before serving.")

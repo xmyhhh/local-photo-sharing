@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 
 from flask import Flask, abort, jsonify, redirect, request
 
+from ..auth import auth_enabled, is_admin
 from ..constants import PHOTO_EXTENSIONS, MEDIA_EXTENSIONS
 from ..context import AppServices
 from ..live_photos import find_live_video
@@ -63,6 +64,8 @@ def register_upload_routes(app: Flask, services: AppServices) -> None:
 
 
 def _upload_password_error(services: AppServices, password: str):
+    if auth_enabled(services) and not is_admin(services):
+        return jsonify({"message": "需要管理员登录后才能上传。"}), 403
     required = services.upload_password
     if not required:
         return None

@@ -7,8 +7,11 @@ from threading import Lock, Thread
 from time import monotonic
 from typing import Any
 
+from PIL import Image, ImageOps
+
 from .constants import PHOTO_EXTENSIONS, THUMBNAIL_WORKERS
 from .context import AppServices
+from .paths import to_relative
 
 
 @dataclass
@@ -75,20 +78,28 @@ def warmup_thumbnail_caches(services: AppServices, status: WarmupStatus | None =
 
 
 def _warmup_thumbnail_caches(services: AppServices, own_status: WarmupStatus) -> None:
-    tasks: list[tuple[str, str, Path]] = []
+    tasks: list[tuple[str, Path, str, list[str]]] = []
+    total = 0
+    cleanup_stale_warmup_files(services)
     for root_id, root_services in services.root_services.items():
         for photo in iter_photos(root_services.root):
-            for mode in root_services.thumbnails:
-                tasks.append((root_id, mode, photo))
+            rel = to_relative(root_services.root, photo)
+            modes = [
+                mode
+                for mode, store in root_services.thumbnails.items()
+                if store.needs_warmup(photo, rel)
+            ]
+            if modes:
+                tasks.append((root_id, photo, rel, modes))
+                total += len(modes)
 
-    total = len(tasks)
     if total == 0:
-        own_status.update(state="complete", stage="没有找到需要预热的照片", total=0, completed=0, finished_at=monotonic())
-        print("Warmup: no photos found.")
+        own_status.update(state="complete", stage="所有缩略图缓存都已可用", total=0, completed=0, finished_at=monotonic())
+        print("Warmup: all thumbnail caches are ready.")
         return
 
-    own_status.update(state="running", stage="正在生成缩略图缓存", total=total)
-    print(f"Warmup: {total} thumbnail tasks, {THUMBNAIL_WORKERS} workers.")
+    own_status.update(state="running", stage="正在生成缺失或损坏的缩略图缓存", total=total)
+    print(f"Warmup: {total} missing thumbnail caches across {len(tasks)} photos, {THUMBNAIL_WORKERS} workers.")
     started = monotonic()
     generated = 0
     completed = 0
@@ -97,19 +108,20 @@ def _warmup_thumbnail_caches(services: AppServices, own_status: WarmupStatus) ->
 
     with ThreadPoolExecutor(max_workers=THUMBNAIL_WORKERS, thread_name_prefix="thumbnail-warmup") as executor:
         futures = {
-            executor.submit(_warmup_task, services, root_id, mode, photo): (root_id, mode, photo)
-            for root_id, mode, photo in tasks
+            executor.submit(_warmup_photo_task, services, root_id, photo, rel, modes): (root_id, photo, modes)
+            for root_id, photo, rel, modes in tasks
         }
         for future in as_completed(futures):
-            completed += 1
-            root_id, mode, photo = futures[future]
+            root_id, photo, modes = futures[future]
             try:
-                if future.result():
-                    generated += 1
+                task_generated, task_failed = future.result()
+                generated += task_generated
+                failed += task_failed
             except Exception as exc:
-                failed += 1
+                failed += len(modes)
                 print()
-                print(f"Warmup failed: {root_id} {mode} {photo} ({exc})")
+                print(f"Warmup failed: {root_id} {photo} ({exc})")
+            completed += len(modes)
             own_status.update(completed=completed, generated=generated, failed=failed)
             if completed == total or completed % 20 == 0:
                 _print_progress(completed, total, generated, failed, started)
@@ -159,5 +171,34 @@ def iter_photos(root: Path):
                 continue
 
 
-def _warmup_task(services: AppServices, root_id: str, mode: str, photo: Path) -> bool:
-    return services.root_services[root_id].thumbnails[mode].warmup_one(photo)
+def _warmup_photo_task(services: AppServices, root_id: str, photo: Path, rel: str, modes: list[str]) -> tuple[int, int]:
+    root_services = services.root_services[root_id]
+    generated = 0
+    failed = 0
+    try:
+        with Image.open(photo) as image:
+            prepared = ImageOps.exif_transpose(image)
+            prepared.load()
+            for mode in modes:
+                store = root_services.thumbnails[mode]
+                try:
+                    if store.warmup_from_prepared_image(photo, rel, prepared):
+                        generated += 1
+                except Exception as exc:
+                    failed += 1
+                    print()
+                    print(f"Warmup failed: {root_id} {mode} {photo} ({exc})")
+    except Exception as exc:
+        print()
+        print(f"Warmup failed: {root_id} {photo} ({exc})")
+        return 0, len(modes)
+    return generated, failed
+
+
+def cleanup_stale_warmup_files(services: AppServices) -> None:
+    removed = 0
+    for root_services in services.root_services.values():
+        for store in root_services.thumbnails.values():
+            removed += store.cleanup_stale_temporary_files()
+    if removed:
+        print(f"Warmup: removed {removed} stale temporary thumbnail files.")

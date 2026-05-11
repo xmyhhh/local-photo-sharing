@@ -12,6 +12,7 @@ function openFolderContextMenu(event, entry) {
       menuSection("原生操作", [
         menuButton("打开", "↵", () => navigateFolder(entry.path)),
       ]),
+      menuSection("访问控制", publicAlbumMenuItems(entry)),
     ]);
     openContextMenuAt(folderContextMenu, event.clientX, event.clientY);
     return;
@@ -23,6 +24,7 @@ function openFolderContextMenu(event, entry) {
       menuButton("删除", "×", () => deleteEntries([entry.path]), { danger: true }),
       menuButton("多选", "☑", () => enterSelectionMode(entry.path)),
     ]),
+    menuSection("访问控制", publicAlbumMenuItems(entry)),
     ...pluginMenuSections("folder"),
   ]);
   openContextMenuAt(folderContextMenu, event.clientX, event.clientY);
@@ -110,6 +112,17 @@ function pluginMenuSections(target) {
     const label = trigger.label || component.title || component.id;
     return menuButton(label, trigger.icon || "", () => dispatchPluginComponentAction(component, trigger), { plugin: true });
   })));
+}
+
+function publicAlbumMenuItems(entry) {
+  if (!state.authEnabled || state.authRole !== "admin") {
+    return [];
+  }
+  const path = qualifyPath(entry.path);
+  const isPublic = isPublicAlbum(path);
+  return [
+    menuButton(isPublic ? "取消公开相册" : "设为公开相册", isPublic ? "🔒" : "🔓", () => setPublicAlbum(path, !isPublic)),
+  ];
 }
 
 function menuButton(label, icon, action, options = {}) {
@@ -213,6 +226,23 @@ function currentRootedFolderPath() {
     return "";
   }
   return state.folder ? qualifyPath(state.folder) : state.rootId;
+}
+
+async function setPublicAlbum(path, publicAlbum) {
+  const normalized = normalizeRootedSettingsPath(path);
+  if (!normalized) {
+    return;
+  }
+  const albums = publicAlbum
+    ? Array.from(new Set([...state.publicAlbums, normalized]))
+    : state.publicAlbums.filter((item) => normalizeRootedSettingsPath(item) !== normalized);
+  const settings = await fetchJson("/api/auth/settings", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ publicAlbums: albums }),
+  });
+  applyAuthStatus(settings);
+  renderGrid();
 }
 
 function entryFromTile(tile) {

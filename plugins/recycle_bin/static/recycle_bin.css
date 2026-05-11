@@ -17,7 +17,7 @@
   padding: 18px;
   border: 1px solid rgba(154, 174, 187, 0.24);
   border-radius: 10px;
-  background: #fff;
+  background: var(--panel);
   box-shadow: 0 22px 70px rgba(15, 23, 42, 0.24);
 }
 
@@ -60,7 +60,8 @@
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(248, 251, 252, 0.9);
+  background: var(--glass-row-bg);
+  color: var(--text);
 }
 
 .recycle-item input {

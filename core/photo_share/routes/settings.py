@@ -6,6 +6,7 @@ from typing import Any
 
 from flask import Flask, abort, jsonify, request
 
+from ..auth import require_admin
 from ..context import AppServices
 from ..memory_prefetch import MemoryPrefetchSettings, system_prefetch_memory_limit_mb
 from ..plugins import call_plugin_lifecycle
@@ -14,14 +15,17 @@ from ..plugins import call_plugin_lifecycle
 def register_settings_routes(app: Flask, services: AppServices) -> None:
     @app.get("/api/settings/general")
     def general_settings():
+        require_admin(services)
         return jsonify(build_general_settings(services))
 
     @app.post("/api/settings/general")
     def update_general_settings():
+        require_admin(services)
         data = request.get_json(silent=True) or {}
         prefetch = data.get("memoryPrefetch", {})
         if not isinstance(prefetch, dict):
             abort(400, "memoryPrefetch must be an object.")
+        theme = parse_theme(data.get("theme", services.config.get("theme", "system")))
         max_mb = system_prefetch_memory_limit_mb()
         settings = MemoryPrefetchSettings(
             enabled=bool(prefetch.get("enabled", False)),
@@ -31,16 +35,19 @@ def register_settings_routes(app: Flask, services: AppServices) -> None:
             "enabled": settings.enabled,
             "memory_limit_mb": settings.memory_limit_mb,
         }
+        services.config["theme"] = theme
         services.memory_prefetch.configure(settings)
         write_config(services.config_path, services.config)
         return jsonify(build_general_settings(services))
 
     @app.get("/api/settings/components")
     def component_settings():
+        require_admin(services)
         return jsonify(build_component_settings(services))
 
     @app.post("/api/settings/components")
     def update_component_settings():
+        require_admin(services)
         data = request.get_json(silent=True) or {}
         plugins = data.get("plugins", {})
         if not isinstance(plugins, dict):
@@ -72,8 +79,15 @@ def build_general_settings(services: AppServices) -> dict[str, Any]:
             "maxMb": max_mb,
             "windowBefore": settings.window_before,
             "windowAfter": settings.window_after,
-        }
+        },
+        "theme": services.config.get("theme", "system"),
     }
+
+
+def parse_theme(value: Any) -> str:
+    if value in {"system", "light", "dark"}:
+        return str(value)
+    abort(400, "theme must be system, light, or dark.")
 
 
 def parse_int_range(value: Any, minimum: int, maximum: int, field: str) -> int:

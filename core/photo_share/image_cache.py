@@ -1,8 +1,8 @@
 ﻿from __future__ import annotations
 
 from pathlib import Path
-from threading import Lock, Thread
-from time import monotonic
+from threading import Lock, Thread, get_ident
+from time import monotonic, monotonic_ns
 
 from PIL import Image, ImageOps
 
@@ -31,9 +31,9 @@ class ImageCacheStore:
         for index in range(THUMBNAIL_WORKERS):
             Thread(target=self._worker_loop, name=f"{thread_name}_{index}", daemon=True).start()
 
-    def get_ready(self, photo_path: Path) -> Path | None:
+    def get_ready(self, photo_path: Path, *, validate: bool = False) -> Path | None:
         rel = to_relative(self.root, photo_path)
-        cache_path = self.cache_root / f"{hash_text(rel)}.jpg"
+        cache_path = self.cache_path_for_rel(rel)
         source_stat = photo_path.stat()
 
         if (
@@ -41,6 +41,9 @@ class ImageCacheStore:
             and cache_path.stat().st_mtime >= source_stat.st_mtime
             and cache_path.stat().st_size > 0
         ):
+            if validate and not self._is_valid_cache_file(cache_path):
+                self._delete_cache_path(cache_path)
+                return None
             return cache_path
         return None
 
@@ -61,9 +64,49 @@ class ImageCacheStore:
 
     def warmup_one(self, photo_path: Path) -> bool:
         rel = to_relative(self.root, photo_path)
-        before = self.get_ready(photo_path)
+        before = self.get_ready(photo_path, validate=True)
         self._generate(photo_path, rel)
-        return before is None and self.get_ready(photo_path) is not None
+        return before is None and self.get_ready(photo_path, validate=True) is not None
+
+    def needs_warmup(self, photo_path: Path, rel: str | None = None) -> bool:
+        if rel is None:
+            rel = to_relative(self.root, photo_path)
+        try:
+            source_stat = photo_path.stat()
+        except OSError:
+            return False
+        cache_path = self.cache_path_for_rel(rel)
+        if not cache_path.exists():
+            return True
+        try:
+            cache_stat = cache_path.stat()
+        except OSError:
+            return True
+        if cache_stat.st_mtime < source_stat.st_mtime or cache_stat.st_size <= 0:
+            return True
+        if not self._is_valid_cache_file(cache_path):
+            self._delete_cache_path(cache_path)
+            return True
+        return False
+
+    def warmup_from_prepared_image(self, photo_path: Path, rel: str, image: Image.Image) -> bool:
+        if not self.needs_warmup(photo_path, rel):
+            return False
+        self._generate_from_prepared_image(photo_path, rel, image)
+        return self.get_ready(photo_path, validate=True) is not None
+
+    def cleanup_stale_temporary_files(self) -> int:
+        if not self.cache_root.is_dir():
+            return 0
+        removed = 0
+        tmp_paths = set(self.cache_root.glob("*.tmp.jpg")) | set(self.cache_root.glob(".*.tmp.jpg"))
+        for tmp_path in tmp_paths:
+            try:
+                tmp_path.unlink()
+                removed += 1
+            except OSError:
+                pass
+        return removed
 
     def _worker_loop(self) -> None:
         import time
@@ -101,33 +144,33 @@ class ImageCacheStore:
     def _generate(self, photo_path: Path, rel: str) -> None:
         if not photo_path.exists():
             return
-        cache_path = self.cache_root / f"{hash_text(rel)}.jpg"
-        source_stat = photo_path.stat()
-
-        if (
-            cache_path.exists()
-            and cache_path.stat().st_mtime >= source_stat.st_mtime
-            and cache_path.stat().st_size > 0
-        ):
+        if not self.needs_warmup(photo_path, rel):
             return
 
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path = cache_path.with_name(f"{cache_path.stem}.tmp.jpg")
         with Image.open(photo_path) as image:
-            image = ImageOps.exif_transpose(image)
-            image.thumbnail((self.size, self.size))
-            if image.mode not in {"RGB", "L"}:
-                image = image.convert("RGB")
-            image.save(tmp_path, format="JPEG", quality=self.quality, optimize=True, progressive=True)
-        tmp_path.replace(cache_path)
+            prepared = ImageOps.exif_transpose(image)
+            self._generate_from_prepared_image(photo_path, rel, prepared)
+
+    def _generate_from_prepared_image(self, photo_path: Path, rel: str, image: Image.Image) -> None:
+        cache_path = self.cache_path_for_rel(rel)
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_path = cache_path.with_name(f".{cache_path.stem}.{get_ident()}.{monotonic_ns()}.tmp.jpg")
+        try:
+            output = image.copy()
+            output.thumbnail((self.size, self.size))
+            if output.mode not in {"RGB", "L"}:
+                output = output.convert("RGB")
+            output.save(tmp_path, format="JPEG", quality=self.quality, optimize=True, progressive=False)
+            tmp_path.replace(cache_path)
+        finally:
+            try:
+                tmp_path.unlink()
+            except FileNotFoundError:
+                pass
 
     def delete(self, photo_path: Path) -> None:
         rel = to_relative(self.root, photo_path)
-        cache_path = self.cache_root / f"{hash_text(rel)}.jpg"
-        try:
-            cache_path.unlink()
-        except FileNotFoundError:
-            pass
+        self._delete_cache_path(self.cache_path_for_rel(rel))
 
     def get_error(self, photo_path: Path) -> str | None:
         with self.lock:
@@ -146,6 +189,25 @@ class ImageCacheStore:
         stale = [task_key for task_key, started_at in self.inflight.items() if now - started_at > 90]
         for task_key in stale:
             self.inflight.pop(task_key, None)
+
+    def cache_path_for_rel(self, rel: str) -> Path:
+        return self.cache_root / f"{hash_text(rel)}.jpg"
+
+    def _delete_cache_path(self, cache_path: Path) -> None:
+        try:
+            cache_path.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass
+
+    def _is_valid_cache_file(self, cache_path: Path) -> bool:
+        try:
+            with Image.open(cache_path) as image:
+                image.verify()
+            return True
+        except Exception:
+            return False
 
 
 

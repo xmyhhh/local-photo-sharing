@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from flask import Flask, abort, jsonify, request
 
+from ..auth import require_admin, require_path_access
 from ..context import AppServices
 from ..paths import resolve_photo
 from ..ratings import write_embedded_rating
@@ -12,6 +13,7 @@ from .media import _split_rooted
 def register_rating_routes(app: Flask, services: AppServices) -> None:
     @app.get("/api/rating-status/<path:photo_path>")
     def rating_status(photo_path: str):
+        require_path_access(services, photo_path)
         root_id, rel = _split_rooted(photo_path)
         root_services = _root_services(services, root_id)
         path = resolve_photo(root_services.root, rel)
@@ -28,6 +30,7 @@ def register_rating_routes(app: Flask, services: AppServices) -> None:
 
     @app.post("/api/rating/<path:photo_path>")
     def set_rating(photo_path: str):
+        require_admin(services)
         root_id, rel = _split_rooted(photo_path)
         root_services = _root_services(services, root_id)
         path = resolve_photo(root_services.root, rel)

@@ -7,6 +7,11 @@ function getStoredCompactMode() {
   return window.localStorage.getItem("compactMode") === "1";
 }
 
+function getStoredThemeMode() {
+  const value = window.localStorage.getItem("themeMode");
+  return ["system", "light", "dark"].includes(value) ? value : "system";
+}
+
 const THUMB_MODES = ["small", "medium", "large", "xlarge"];
 const THUMB_QUEUE_LIMITS = {
   small: 100,
@@ -107,6 +112,15 @@ const state = {
   currentBracketRoot: null,
   timelineViewerOpen: false,
   uploadPasswordRequired: false,
+  themeMode: getStoredThemeMode(),
+  authEnabled: false,
+  authRole: "none",
+  authHasPassword: false,
+  publicAlbums: [],
+  loginBackgrounds: [],
+  loginBackgroundUrls: [],
+  loginBackgroundMode: "none",
+  loginBackgroundFolder: "",
   memoryPrefetchWindowBefore: 5,
   memoryPrefetchWindowAfter: 35,
   enabledPlugins: new Set(),
@@ -202,16 +216,32 @@ const deleteSelectedBtn = document.querySelector("#deleteSelectedBtn");
 const invertSelectionBtn = document.querySelector("#invertSelectionBtn");
 const exitSelectionBtn = document.querySelector("#exitSelectionBtn");
 const pluginDialogs = document.querySelector("#pluginDialogs");
+const loginScreen = document.querySelector("#loginScreen");
+const loginBackdrop = document.querySelector("#loginBackdrop");
+const loginForm = document.querySelector("#loginForm");
+const loginPasswordInput = document.querySelector("#loginPasswordInput");
+const loginStatus = document.querySelector("#loginStatus");
+const guestLoginBtn = document.querySelector("#guestLoginBtn");
 const settingsDialog = document.querySelector("#settingsDialog");
 const closeSettingsBtn = document.querySelector("#closeSettingsBtn");
 const settingsStatus = document.querySelector("#settingsStatus");
 const settingsKicker = document.querySelector("#settingsKicker");
 const settingsPageTitle = document.querySelector("#settingsPageTitle");
 const settingsPageDescription = document.querySelector("#settingsPageDescription");
-const settingsTabs = Array.from(document.querySelectorAll("[data-settings-tab]"));
+const pluginSettingsTabs = document.querySelector("#pluginSettingsTabs");
+const pluginSettingsPages = document.querySelector("#pluginSettingsPages");
+const settingsTabs = () => Array.from(document.querySelectorAll("[data-settings-tab]"));
 const generalSettingsPanel = document.querySelector("#generalSettingsPanel");
+const authSettingsPanel = document.querySelector("#authSettingsPanel");
 const pluginsSettingsPanel = document.querySelector("#pluginsSettingsPanel");
+const themeModeSelect = document.querySelector("#themeModeSelect");
 const memoryPrefetchEnabledInput = document.querySelector("#memoryPrefetchEnabledInput");
 const memoryPrefetchLimitInput = document.querySelector("#memoryPrefetchLimitInput");
+const authEnabledInput = document.querySelector("#authEnabledInput");
+const authPasswordInput = document.querySelector("#authPasswordInput");
+const saveAuthPasswordBtn = document.querySelector("#saveAuthPasswordBtn");
+const loginBackgroundModeButtons = () => Array.from(document.querySelectorAll("[data-login-background-mode]"));
+const loginBackgroundFolderInput = document.querySelector("#loginBackgroundFolderInput");
+const useCurrentLoginBackgroundFolderBtn = document.querySelector("#useCurrentLoginBackgroundFolderBtn");
 const pluginComponentList = document.querySelector("#pluginComponentList");
 const isAppleMobileBrowser = /iPhone|iPad|iPod/i.test(navigator.userAgent);

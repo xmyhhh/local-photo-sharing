@@ -53,7 +53,17 @@ DEFAULT_CONFIG = {
         "enabled": False,
         "memory_limit_mb": 1024,
     },
+    "theme": "system",
     "upload_password": "",
+    "auth": {
+        "enabled": False,
+        "password": "",
+        "session_secret": "",
+        "public_albums": [],
+        "login_backgrounds": [],
+        "login_background_mode": "none",
+        "login_background_folder": "",
+    },
     "plugins": [
         {
             "name": "duplicate_checker",

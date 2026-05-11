@@ -9,6 +9,7 @@ from typing import Any
 
 from flask import Flask, abort, after_this_request, jsonify, request, send_file
 
+from ..auth import require_admin, require_guest_delete_access, require_path_access
 from ..context import AppServices, RootServices
 from ..delete_service import delete_item
 from ..paths import join_rooted_path, normalize_rel_path, resolve_inside, to_relative
@@ -18,6 +19,7 @@ from .gallery import _root_services
 def register_file_routes(app: Flask, services: AppServices) -> None:
     @app.post("/api/files/folder")
     def create_folder():
+        require_admin(services)
         data = request.get_json(silent=True) or {}
         name = clean_name(data.get("name"))
         parent = data.get("parent", "")
@@ -29,6 +31,7 @@ def register_file_routes(app: Flask, services: AppServices) -> None:
 
     @app.post("/api/files/rename")
     def rename_item():
+        require_admin(services)
         data = request.get_json(silent=True) or {}
         path_value = require_string(data.get("path"), "path")
         name = clean_name(data.get("name"))
@@ -42,6 +45,8 @@ def register_file_routes(app: Flask, services: AppServices) -> None:
     def delete_items():
         data = request.get_json(silent=True) or {}
         paths = require_paths(data.get("paths"))
+        for path_value in paths:
+            require_guest_delete_access(services, path_value)
         deleted = []
         for path_value in paths:
             root_services, path = resolve_existing_item(services, path_value)
@@ -54,16 +59,20 @@ def register_file_routes(app: Flask, services: AppServices) -> None:
 
     @app.post("/api/files/copy")
     def copy_items():
+        require_admin(services)
         return copy_or_move_items(services, move=False)
 
     @app.post("/api/files/move")
     def move_items():
+        require_admin(services)
         return copy_or_move_items(services, move=True)
 
     @app.post("/api/files/download-zip")
     def download_zip():
         data = request.get_json(silent=True) or {}
         paths = require_paths(data.get("paths"))
+        for path_value in paths:
+            require_path_access(services, path_value)
         items = [resolve_existing_item(services, path_value) for path_value in paths]
         archive_name = "photo-share.zip" if len(items) > 1 else f"{safe_archive_stem(items[0][1].name)}.zip"
         fd, zip_path_value = tempfile.mkstemp(prefix="photo-share-", suffix=".zip")

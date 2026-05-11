@@ -19,7 +19,7 @@
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fff;
+  background: var(--panel);
   box-shadow: 0 24px 80px rgba(22, 32, 46, 0.22);
 }
 
@@ -57,15 +57,15 @@
   gap: 10px;
   margin: 0 16px;
   padding: 12px;
-  border: 1px solid #cfe1ea;
+  border: 1px solid var(--glass-border);
   border-radius: 10px;
-  background: linear-gradient(135deg, #f7fbfd, #eef7f9);
+  background: var(--glass-card-bg);
 }
 
 .duplicate-strategy-title {
   font-size: 14px;
   font-weight: 760;
-  color: #0e5870;
+  color: var(--accent);
 }
 
 .duplicate-strategy-help,
@@ -78,7 +78,7 @@
 .duplicate-strategy label {
   display: grid;
   gap: 6px;
-  color: #314556;
+  color: var(--text);
   font-size: 12px;
   font-weight: 700;
 }
@@ -100,8 +100,8 @@
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 8px 10px;
-  background: #fff;
-  color: #12212d;
+  background: var(--input-bg);
+  color: var(--text);
   font: inherit;
   font-size: 13px;
 }
@@ -131,7 +131,7 @@
 
 .duplicate-group-title {
   padding: 9px 10px;
-  background: #f8fafc;
+  background: var(--panel-soft);
   color: var(--muted);
   font-size: 13px;
   font-weight: 700;
@@ -147,7 +147,7 @@
 }
 
 .duplicate-photo.duplicate-keep {
-  background: #f2faf6;
+  background: rgba(77, 165, 106, 0.14);
   box-shadow: inset 3px 0 0 #4da56a;
 }
 
@@ -162,7 +162,7 @@
   height: 72px;
   overflow: hidden;
   border-radius: 6px;
-  background: #e7edf3;
+  background: var(--thumb-bg);
 }
 
 .duplicate-photo img {

@@ -11,6 +11,33 @@
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
+    <section id="loginScreen" class="login-screen" hidden>
+      <div id="loginBackdrop" class="login-backdrop" aria-hidden="true"></div>
+      <div class="login-panel">
+        <div class="login-brand">
+          <div class="login-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M4 7.5A3.5 3.5 0 0 1 7.5 4h9A3.5 3.5 0 0 1 20 7.5v9a3.5 3.5 0 0 1-3.5 3.5h-9A3.5 3.5 0 0 1 4 16.5z"></path>
+              <path d="m7 15 2.7-2.7a1.2 1.2 0 0 1 1.7 0l1.1 1.1 1.9-1.9a1.2 1.2 0 0 1 1.7 0L20 15.4"></path>
+              <path d="M8.8 8.7h.1"></path>
+            </svg>
+          </div>
+          <div>
+            <div class="login-title">照片库访问</div>
+            <div class="login-subtitle">输入管理员密码，或以游客身份进入公开相册。</div>
+          </div>
+        </div>
+        <form id="loginForm" class="login-form">
+          <label>
+            管理员密码
+            <input id="loginPasswordInput" type="password" autocomplete="current-password" placeholder="输入密码" />
+          </label>
+          <div id="loginStatus" class="login-status"></div>
+          <button type="submit">进入管理模式</button>
+          <button id="guestLoginBtn" class="ghost" type="button">游客登录</button>
+        </form>
+      </div>
+    </section>
     <header class="topbar">
       <div id="topbarActions" class="actions">
         <button id="openUploadBtn" class="with-icon" type="button">
@@ -117,7 +144,9 @@
             <div class="settings-subtitle">管理核心服务和扩展能力</div>
           </div>
           <button class="settings-tab active" type="button" data-settings-tab="general" aria-current="page">通用设置</button>
+          <button class="settings-tab" type="button" data-settings-tab="auth">访问控制</button>
           <button class="settings-tab" type="button" data-settings-tab="plugins">插件</button>
+          <div id="pluginSettingsTabs" class="plugin-settings-tabs"></div>
         </aside>
         <section class="settings-content">
           <div class="settings-header">
@@ -130,6 +159,25 @@
           </div>
           <div id="settingsStatus" class="settings-status"></div>
           <div id="generalSettingsPanel" class="settings-page">
+            <section class="settings-card">
+              <div class="settings-card-head">
+                <h3>界面主题</h3>
+                <button class="settings-help" type="button" aria-label="查看主题说明">?</button>
+                <div class="settings-help-popover" role="tooltip">
+                  跟随系统会根据手机、平板或桌面操作系统的浅色/深色外观自动切换。也可以手动固定为浅色或深色。
+                </div>
+              </div>
+              <div class="settings-control-grid">
+                <label class="settings-field">
+                  <span>主题</span>
+                  <select id="themeModeSelect">
+                    <option value="system">跟随系统</option>
+                    <option value="light">浅色</option>
+                    <option value="dark">深色</option>
+                  </select>
+                </label>
+              </div>
+            </section>
             <section class="settings-card">
               <div class="settings-card-head">
                 <h3>启用内存预取</h3>
@@ -150,9 +198,49 @@
               </div>
             </section>
           </div>
+          <div id="authSettingsPanel" class="settings-page" hidden>
+            <section class="settings-card auth-settings-card">
+              <div class="settings-card-head">
+                <h3>登录保护</h3>
+              </div>
+              <div class="settings-control-grid">
+                <label class="switch-row">
+                  <span>启用登录页</span>
+                  <input id="authEnabledInput" type="checkbox" />
+                </label>
+                <label class="settings-field auth-password-field">
+                  <span>管理员密码</span>
+                  <span class="auth-password-control">
+                    <input id="authPasswordInput" type="password" autocomplete="new-password" placeholder="留空则不修改" />
+                    <button id="saveAuthPasswordBtn" class="ghost" type="button">保存密码</button>
+                  </span>
+                </label>
+              </div>
+            </section>
+            <section class="settings-card auth-settings-card">
+              <div class="settings-card-head">
+                <h3>登录背景</h3>
+              </div>
+              <div class="settings-control-grid">
+                <div class="segmented-control auth-background-mode" role="group" aria-label="登录背景模式">
+                  <button type="button" data-login-background-mode="none">无背景</button>
+                  <button type="button" data-login-background-mode="rated">评分图集</button>
+                  <button type="button" data-login-background-mode="folder">文件夹图集</button>
+                </div>
+                <label class="settings-field auth-background-folder-field">
+                  <span>图集文件夹</span>
+                  <span class="auth-background-folder-control">
+                    <input id="loginBackgroundFolderInput" type="text" placeholder="例如 root1/Public" />
+                    <button id="useCurrentLoginBackgroundFolderBtn" class="ghost" type="button">当前文件夹</button>
+                  </span>
+                </label>
+              </div>
+            </section>
+          </div>
           <div id="pluginsSettingsPanel" class="settings-page" hidden>
             <div id="pluginComponentList" class="plugin-list"></div>
           </div>
+          <div id="pluginSettingsPages"></div>
         </section>
       </form>
     </dialog>
@@ -241,7 +329,9 @@
     </dialog>
 
     <script src="/static/js/state.js"></script>
+    <script src="/static/js/theme.js"></script>
     <script src="/static/js/api.js"></script>
+    <script src="/static/js/auth.js"></script>
     <script src="/static/js/ratings-ui.js"></script>
     <script src="/static/js/thumbnails.js"></script>
     <script src="/static/js/context-menu.js"></script>

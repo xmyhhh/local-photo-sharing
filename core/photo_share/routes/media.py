@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import mimetypes
 import os
-import shutil
 from io import BytesIO
 from pathlib import Path
 
@@ -10,6 +9,7 @@ import piexif
 from flask import Flask, abort, jsonify, request, send_file
 from PIL import Image, ImageOps
 
+from ..auth import require_admin, require_guest_delete_access, require_path_access
 from ..constants import PHOTO_EXTENSIONS
 from ..context import AppServices
 from ..delete_service import delete_media
@@ -29,6 +29,7 @@ from .gallery import _root_services
 def register_media_routes(app: Flask, services: AppServices) -> None:
     @app.get("/api/image/<path:photo_path>")
     def image(photo_path: str):
+        require_path_access(services, photo_path)
         root_id, rel_path = _split_rooted(photo_path)
         root_services = _root_services(services, root_id)
         path = resolve_media(root_services.root, rel_path)
@@ -58,6 +59,7 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
         for item in paths:
             if not isinstance(item, str):
                 continue
+            require_path_access(services, item)
             root_id, rel_path = _split_rooted(item)
             root_services = _root_services(services, root_id)
             try:
@@ -77,6 +79,7 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
 
     @app.get("/api/preview/<path:photo_path>")
     def preview(photo_path: str):
+        require_path_access(services, photo_path)
         root_id, rel_path = _split_rooted(photo_path)
         root_services = _root_services(services, root_id)
         path = resolve_photo(root_services.root, rel_path)
@@ -88,6 +91,7 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
 
     @app.get("/api/preview-status/<path:photo_path>")
     def preview_status(photo_path: str):
+        require_path_access(services, photo_path)
         root_id, rel_path = _split_rooted(photo_path)
         root_services = _root_services(services, root_id)
         path = resolve_photo(root_services.root, rel_path)
@@ -102,6 +106,7 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
 
     @app.get("/api/download/<path:photo_path>")
     def download(photo_path: str):
+        require_path_access(services, photo_path)
         root_id, rel_path = _split_rooted(photo_path)
         root_services = _root_services(services, root_id)
         path = resolve_media(root_services.root, rel_path)
@@ -114,6 +119,7 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
 
     @app.get("/api/info/<path:photo_path>")
     def photo_info(photo_path: str):
+        require_path_access(services, photo_path)
         root_id, rel_path = _split_rooted(photo_path)
         root_services = _root_services(services, root_id)
         path = resolve_media(root_services.root, rel_path)
@@ -121,6 +127,7 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
 
     @app.get("/api/live-video/<path:photo_path>")
     def live_video(photo_path: str):
+        require_path_access(services, photo_path)
         root_id, rel_path = _split_rooted(photo_path)
         root_services = _root_services(services, root_id)
         photo = resolve_photo(root_services.root, rel_path)
@@ -131,6 +138,7 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
 
     @app.get("/api/thumb/<path:photo_path>")
     def thumbnail(photo_path: str):
+        require_path_access(services, photo_path)
         root_id, rel_path = _split_rooted(photo_path)
         root_services = _root_services(services, root_id)
         path = resolve_photo(root_services.root, rel_path)
@@ -144,6 +152,7 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
 
     @app.get("/api/thumb-status/<path:photo_path>")
     def thumbnail_status(photo_path: str):
+        require_path_access(services, photo_path)
         root_id, rel_path = _split_rooted(photo_path)
         root_services = _root_services(services, root_id)
         path = resolve_photo(root_services.root, rel_path)
@@ -160,6 +169,7 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
 
     @app.delete("/api/photo/<path:photo_path>")
     def delete_photo(photo_path: str):
+        require_guest_delete_access(services, photo_path)
         root_id, rel_path = _split_rooted(photo_path)
         root_services = _root_services(services, root_id)
         path = resolve_media(root_services.root, rel_path)
@@ -167,6 +177,7 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
 
     @app.post("/api/rotate/<path:photo_path>")
     def rotate_photo(photo_path: str):
+        require_admin(services)
         root_id, rel_path = _split_rooted(photo_path)
         root_services = _root_services(services, root_id)
         path = resolve_photo(root_services.root, rel_path)

@@ -35,7 +35,7 @@
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fff;
+  background: var(--panel);
   box-shadow: 0 24px 80px rgba(22, 32, 46, 0.22);
   animation: panel-enter 180ms ease both;
 }
@@ -135,6 +135,8 @@
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 0 8px;
+  background: var(--input-bg);
+  color: var(--text);
 }
 
 .bracket-merge-panel select {
@@ -165,7 +167,7 @@
   margin-top: 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
+  background: var(--panel);
 }
 
 .bracket-group-title {
@@ -215,13 +217,13 @@
   border-radius: 8px;
   padding: 0;
   overflow: hidden;
-  background: #fff;
+  background: var(--panel);
   color: var(--text);
   text-align: left;
 }
 
 .bracket-photo:hover {
-  background: #fff;
+  background: var(--panel-soft);
   border-color: var(--accent);
 }
 
@@ -230,7 +232,7 @@
   width: 100%;
   aspect-ratio: 1 / 1;
   object-fit: cover;
-  background: #e7edf3;
+  background: var(--thumb-bg);
 }
 
 .bracket-photo-name,
@@ -254,7 +256,7 @@
   place-items: center;
   border: 1px dashed var(--line);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--panel-soft);
   color: var(--muted);
   font-size: 14px;
   text-align: center;
@@ -263,7 +265,7 @@
 .bracket-result-body.has-result {
   display: block;
   border-style: solid;
-  background: #fff;
+  background: var(--panel);
   color: var(--text);
 }
 
@@ -279,14 +281,14 @@
   border-radius: 8px;
   padding: 0;
   overflow: hidden;
-  background: #fff;
+  background: var(--panel);
   color: var(--text);
   text-align: left;
 }
 
 .bracket-merged-photo:hover {
   border-color: var(--accent);
-  background: #fff;
+  background: var(--panel-soft);
 }
 
 .bracket-merged-photo img {
@@ -294,7 +296,7 @@
   width: 100%;
   max-height: 520px;
   object-fit: contain;
-  background: #e7edf3;
+  background: var(--thumb-bg);
 }
 
 .bracket-merged-photo span {
