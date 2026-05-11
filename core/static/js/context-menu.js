@@ -95,7 +95,7 @@ function pluginMenuSections(target) {
   }
   return pluginContextMenuGroups(target).map((group) => menuSection(group.title, group.items.map(({ component, trigger }) => {
     const label = trigger.label || component.title || component.id;
-    return menuButton(label, "◆", () => dispatchPluginComponentAction(component, trigger), { plugin: true });
+    return menuButton(label, trigger.icon || "", () => dispatchPluginComponentAction(component, trigger), { plugin: true });
   })));
 }
 
@@ -113,6 +113,7 @@ function menuButton(label, icon, action, options = {}) {
   const iconNode = document.createElement("span");
   iconNode.className = "context-menu-icon";
   iconNode.textContent = icon;
+  iconNode.classList.toggle("empty", !icon);
   const labelNode = document.createElement("span");
   labelNode.className = "context-menu-label";
   labelNode.textContent = label;
@@ -334,8 +335,9 @@ function enterSelectionMode(initialPath = "") {
     state.selectedPaths.add(initialPath);
     state.selectionAnchorPath = initialPath;
   }
+  updateSelectionModeChrome();
   updateSelectionBar();
-  renderGrid();
+  updateAllSelectionTiles();
 }
 
 function exitSelectionMode() {
@@ -343,8 +345,9 @@ function exitSelectionMode() {
   state.selectedPaths.clear();
   state.selectionAnchorPath = "";
   cancelBoxSelection();
+  updateSelectionModeChrome();
   updateSelectionBar();
-  renderGrid();
+  updateAllSelectionTiles();
 }
 
 function invertSelection() {
@@ -358,7 +361,7 @@ function invertSelection() {
   state.selectedPaths = next;
   state.selectionAnchorPath = "";
   updateSelectionBar();
-  renderGrid();
+  updateAllSelectionTiles();
 }
 
 function handleSelectionClick(event, path, options = {}) {
@@ -373,6 +376,7 @@ function handleSelectionClick(event, path, options = {}) {
   if (!state.selectionMode) {
     state.selectionMode = true;
     closeAllContextMenus();
+    updateSelectionModeChrome();
   }
   if (range) {
     selectRangeTo(path, additive);
@@ -380,7 +384,6 @@ function handleSelectionClick(event, path, options = {}) {
     toggleSelectedPath(path);
     state.selectionAnchorPath = path;
   }
-  renderGrid();
   return true;
 }
 
@@ -415,6 +418,7 @@ function selectRangeTo(path, additive = false) {
   paths.slice(start, stop + 1).forEach((item) => state.selectedPaths.add(item));
   state.selectionAnchorPath = paths[anchor] || path;
   updateSelectionBar();
+  updateAllSelectionTiles();
 }
 
 function updateSelectionTile(path) {
@@ -460,6 +464,7 @@ function updateBoxSelection(event) {
     state.boxSelect.active = true;
     state.selectionMode = true;
     closeAllContextMenus();
+    updateSelectionModeChrome();
   }
   updateSelectionBox(event.clientX, event.clientY);
   const rect = selectionBox.getBoundingClientRect();
@@ -490,7 +495,7 @@ function finishBoxSelection(event) {
   const selected = Array.from(state.selectedPaths);
   state.selectionAnchorPath = selected[selected.length - 1] || state.selectionAnchorPath;
   cancelBoxSelection();
-  renderGrid();
+  updateAllSelectionTiles();
 }
 
 function cancelBoxSelection() {
@@ -527,6 +532,10 @@ function updateAllSelectionTiles() {
       checkbox.checked = selected;
     }
   });
+}
+
+function updateSelectionModeChrome() {
+  grid?.classList.toggle("selection-mode", state.selectionMode);
 }
 
 function updateSelectionBar() {

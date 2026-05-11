@@ -31,7 +31,7 @@ PLUGIN = {
                 },
             ],
             "triggers": [
-                {"type": "context_menu", "target": "folder", "label": "检测包围曝光", "action": "brackets.detect_folder"},
+                {"type": "context_menu", "target": "folder", "label": "检测包围曝光", "icon": "◈", "action": "brackets.detect_folder"},
                 {"type": "topbar_button", "label": "打开包围曝光项目", "action": "brackets.open_project"},
                 {"type": "project_open", "extension": ".prj"},
             ],

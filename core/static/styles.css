@@ -802,6 +802,7 @@ main {
   background: transparent;
   color: var(--text);
   text-align: left;
+  box-shadow: none;
 }
 
 .context-menu-icon {
@@ -828,6 +829,8 @@ main {
 }
 
 .context-menu-item.danger {
+  border: 0;
+  background: transparent;
   color: var(--danger);
 }
 
@@ -844,6 +847,10 @@ main {
 .context-menu-item.plugin-action .context-menu-icon {
   background: rgba(100, 113, 128, 0.12);
   color: var(--muted);
+}
+
+.context-menu-icon.empty {
+  visibility: hidden;
 }
 
 .selection-box {

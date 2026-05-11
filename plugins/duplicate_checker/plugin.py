@@ -32,7 +32,7 @@ PLUGIN = {
                 }
             ],
             "triggers": [
-                {"type": "context_menu", "target": "folder", "label": "检查重复照片", "action": "duplicate_checker.scan_folder"},
+                {"type": "context_menu", "target": "folder", "label": "检查重复照片", "icon": "≡", "action": "duplicate_checker.scan_folder"},
             ],
             "surfaces": [
                 {"type": "dialog", "id": "duplicateCheckerDialog"},
