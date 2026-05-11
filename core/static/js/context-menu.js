@@ -7,6 +7,15 @@ function openFolderContextMenu(event, entry) {
   closeAllContextMenus();
   state.contextFolder = entry;
   state.contextEntry = entry;
+  if (isVirtualRootEntry(entry)) {
+    renderContextMenu(folderContextMenu, [
+      menuSection("原生操作", [
+        menuButton("打开", "↵", () => navigateFolder(entry.path)),
+      ]),
+    ]);
+    openContextMenuAt(folderContextMenu, event.clientX, event.clientY);
+    return;
+  }
   renderContextMenu(folderContextMenu, [
     menuSection("原生操作", [
       menuButton("下载", "↓", () => downloadEntry(entry)),
@@ -70,6 +79,10 @@ function closeAllContextMenus() {
   folderContextMenu.hidden = true;
   blankContextMenu.hidden = true;
   itemContextMenu.hidden = true;
+}
+
+function isVirtualRootEntry(entry) {
+  return !state.rootId && entry?.type === "folder" && state.roots.some((root) => root.id === entry.path);
 }
 
 function renderContextMenu(menu, sections) {
