@@ -85,6 +85,11 @@ const state = {
   wheelZoomDelta: 0,
   wheelZoomCenter: null,
   contextFolder: null,
+  contextEntry: null,
+  selectionMode: false,
+  selectedPaths: new Set(),
+  longPress: null,
+  longPressTriggered: false,
   currentBracketResult: null,
   currentBracketProjectPath: null,
   currentBracketMergeResult: null,
@@ -164,6 +169,15 @@ const uploadStatus = document.querySelector("#uploadStatus");
 const createUploadFolderBtn = document.querySelector("#createUploadFolderBtn");
 const submitUploadBtn = document.querySelector("#submitUploadBtn");
 const folderContextMenu = document.querySelector("#folderContextMenu");
+const blankContextMenu = document.querySelector("#blankContextMenu");
+const itemContextMenu = document.querySelector("#itemContextMenu");
+const selectionBar = document.querySelector("#selectionBar");
+const selectionCount = document.querySelector("#selectionCount");
+const downloadSelectedBtn = document.querySelector("#downloadSelectedBtn");
+const copySelectedBtn = document.querySelector("#copySelectedBtn");
+const moveSelectedBtn = document.querySelector("#moveSelectedBtn");
+const deleteSelectedBtn = document.querySelector("#deleteSelectedBtn");
+const exitSelectionBtn = document.querySelector("#exitSelectionBtn");
 const pluginDialogs = document.querySelector("#pluginDialogs");
 const settingsDialog = document.querySelector("#settingsDialog");
 const closeSettingsBtn = document.querySelector("#closeSettingsBtn");

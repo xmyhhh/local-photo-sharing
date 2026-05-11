@@ -7,6 +7,7 @@ from werkzeug.serving import BaseWSGIServer, make_server
 
 from .config import (
     get_host,
+    get_default_save_folder,
     get_photo_folders,
     get_port,
     get_preview_quality,
@@ -58,6 +59,7 @@ def create_server_runtime(config_path: Path) -> ServerRuntime:
         plugin_specs=discover_plugin_specs(config),
         config=config,
         config_path=config_path,
+        default_save_folder=get_default_save_folder(config),
     )
     server = make_server(host, port, app, threaded=True)
     return ServerRuntime(

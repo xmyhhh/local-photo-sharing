@@ -27,6 +27,8 @@ class AppServices:
     config_path: Path | None
     config: dict[str, Any]
     roots: dict[str, Path]
+    default_save_root_id: str
+    default_save_folder: Path
     root_services: dict[str, RootServices]
     default_root_id: str
     bracket_tasks: dict[str, dict[str, Any]]

@@ -162,7 +162,8 @@ D:\codex_prj\photo\.venv\Scripts\python.exe platform_app\shell\app.py
 
 ```json
 {
-  "photo_folder": "D:/your/photo/folder",
+  "photo_folders": ["D:/your/photo/folder"],
+  "default_save_folder": "D:/your/photo/folder",
   "host": "0.0.0.0",
   "port": 8000,
   "thumbnail_modes": {

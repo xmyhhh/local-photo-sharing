@@ -59,12 +59,22 @@
         <button id="clearFiltersBtn" class="ghost" type="button">清除筛选</button>
       </section>
       <section id="grid" class="grid" aria-live="polite"></section>
+      <div id="selectionBar" class="selection-bar" hidden>
+        <span id="selectionCount">已选择 0 项</span>
+        <button id="downloadSelectedBtn" class="ghost" type="button">打包下载</button>
+        <button id="copySelectedBtn" class="ghost" type="button">复制到...</button>
+        <button id="moveSelectedBtn" class="ghost" type="button">移动到...</button>
+        <button id="deleteSelectedBtn" class="danger" type="button">删除</button>
+        <button id="exitSelectionBtn" class="ghost" type="button">退出多选</button>
+      </div>
       <div id="emptyState" class="empty" hidden>当前文件夹没有 JPG 图片或子文件夹。</div>
     </main>
 
     <button id="scrollTopBtn" class="scroll-top-btn" type="button" aria-label="回到顶部" hidden>↑</button>
 
     <div id="folderContextMenu" class="context-menu" hidden></div>
+    <div id="blankContextMenu" class="context-menu" hidden></div>
+    <div id="itemContextMenu" class="context-menu" hidden></div>
     <div id="pluginDialogs"></div>
 
     <dialog id="settingsDialog" class="settings-dialog">

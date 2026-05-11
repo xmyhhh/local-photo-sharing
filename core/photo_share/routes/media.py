@@ -260,7 +260,11 @@ def build_media_info(path: Path) -> dict:
         "lens": lens,
         "exposureTime": _format_exif_rational(exif_ifd.get(piexif.ExifIFD.ExposureTime), reciprocal=True),
         "fNumber": _format_f_number(exif_ifd.get(piexif.ExifIFD.FNumber)),
-        "iso": exif_ifd.get(piexif.ExifIFD.ISOSpeedRatings) or exif_ifd.get(piexif.ExifIFD.PhotographicSensitivity),
+        "iso": _first_exif_value(
+            exif_ifd,
+            piexif.ExifIFD.ISOSpeedRatings,
+            getattr(piexif.ExifIFD, "PhotographicSensitivity", 34855),
+        ),
         "focalLength": _format_mm(exif_ifd.get(piexif.ExifIFD.FocalLength)),
         "exposureBias": _format_ev(exif_ifd.get(piexif.ExifIFD.ExposureBiasValue)),
     })
@@ -273,6 +277,14 @@ def _decode_exif_text(value) -> str | None:
     if isinstance(value, bytes):
         return value.decode("utf-8", errors="ignore").strip("\x00 ")
     return str(value).strip()
+
+
+def _first_exif_value(values: dict, *tags: int):
+    for tag in tags:
+        value = values.get(tag)
+        if value is not None:
+            return value
+    return None
 
 
 def _rational_float(value) -> float | None:

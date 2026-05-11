@@ -44,12 +44,28 @@ document.addEventListener("click", (event) => {
   if (!folderContextMenu.hidden && !folderContextMenu.contains(event.target)) {
     closeFolderContextMenu();
   }
-});
-document.addEventListener("contextmenu", (event) => {
-  if (!event.target.closest(".tile-button")) {
-    closeFolderContextMenu();
+  if (!blankContextMenu.hidden && !blankContextMenu.contains(event.target)) {
+    blankContextMenu.hidden = true;
+  }
+  if (!itemContextMenu.hidden && !itemContextMenu.contains(event.target)) {
+    itemContextMenu.hidden = true;
   }
 });
+document.addEventListener("contextmenu", (event) => {
+  if (!event.target.closest(".tile-button") && !event.target.closest(".tile")) {
+    closeAllContextMenus();
+  }
+});
+grid.addEventListener("contextmenu", openBlankContextMenu);
+grid.addEventListener("pointerdown", scheduleBlankLongPress);
+grid.addEventListener("pointermove", cancelLongPressIfMoved);
+grid.addEventListener("pointerup", cancelLongPress);
+grid.addEventListener("pointercancel", cancelLongPress);
+downloadSelectedBtn.addEventListener("click", downloadSelectedEntries);
+copySelectedBtn.addEventListener("click", () => copyOrMoveSelected(false));
+moveSelectedBtn.addEventListener("click", () => copyOrMoveSelected(true));
+deleteSelectedBtn.addEventListener("click", () => deleteEntries(Array.from(state.selectedPaths)));
+exitSelectionBtn.addEventListener("click", exitSelectionMode);
 clearFiltersBtn.addEventListener("click", () => {
   ratingFilterInputs.forEach((input) => {
     input.checked = false;

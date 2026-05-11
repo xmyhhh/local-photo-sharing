@@ -56,6 +56,13 @@ def get_photo_folders(config: dict[str, Any]) -> list[Path]:
     return folders
 
 
+def get_default_save_folder(config: dict[str, Any]) -> Path:
+    value = config.get("default_save_folder")
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("Config field default_save_folder must be a non-empty string.")
+    return Path(value).expanduser()
+
+
 def get_host(config: dict[str, Any]) -> str:
     value = config.get("host", DEFAULT_CONFIG["host"])
     if not isinstance(value, str) or not value.strip():

@@ -41,6 +41,7 @@ BRACKET_SCAN_LIMIT = 500
 DEFAULT_CONFIG_FILE = APP_DIR / "config.json"
 DEFAULT_CONFIG = {
     "photo_folders": ["D:/your/photo/folder"],
+    "default_save_folder": "D:/your/photo/folder",
     "host": "0.0.0.0",
     "port": 8000,
     "thumbnail_modes": {

@@ -56,6 +56,9 @@ async function loadFolder(folder = state.folder, options = {}) {
     state.folder = data.folder;
     state.parent = data.parent;
     state.entries = data.entries;
+    if (!silent && !state.selectionMode) {
+      state.selectedPaths.clear();
+    }
     state.indexing = Boolean(data.indexing);
     state.loadingFolder = false;
     if (silent) {
@@ -236,8 +239,10 @@ function renderGrid() {
   resetThumbObserver();
   resetRatingObserver();
   grid.innerHTML = "";
+  updateSelectionBar();
   grid.className = `grid thumb-${state.thumbMode}`;
   grid.classList.toggle("compact-mode", state.compactMode);
+  grid.classList.toggle("selection-mode", state.selectionMode);
   compactToggleBtn.textContent = state.compactMode ? "展开" : "精简";
   updateEmptyState();
 
@@ -358,6 +363,12 @@ function createGridTile(entry) {
   }
   tile.classList.add(`${entry.type}-tile`);
   tile.dataset.path = entry.path;
+  tile.classList.toggle("selected", state.selectedPaths.has(entry.path));
+  tile.addEventListener("contextmenu", (event) => openItemContextMenu(event, entry));
+  tile.addEventListener("pointerdown", (event) => scheduleEntryLongPress(event, entry));
+  tile.addEventListener("pointermove", cancelLongPressIfMoved);
+  tile.addEventListener("pointerup", cancelLongPress);
+  tile.addEventListener("pointercancel", cancelLongPress);
   let thumbPayload = null;
   let ratingPayload = null;
 
@@ -376,8 +387,20 @@ function createGridTile(entry) {
       </svg>
     `;
     button.append(icon);
-    button.addEventListener("click", () => navigateFolder(entry.path));
-    button.addEventListener("contextmenu", (event) => openFolderContextMenu(event, entry));
+    button.addEventListener("click", () => {
+      if (consumeLongPressClick()) {
+        return;
+      }
+      if (state.selectionMode) {
+        toggleSelectedPath(entry.path);
+        return;
+      }
+      navigateFolder(entry.path);
+    });
+    button.addEventListener("contextmenu", (event) => {
+      event.stopPropagation();
+      openFolderContextMenu(event, entry);
+    });
   } else {
     const holder = document.createElement("div");
     holder.className = "thumb-holder";
@@ -412,8 +435,27 @@ function createGridTile(entry) {
     if (img) {
       thumbPayload = { entry, img, spinner };
     }
-    button.addEventListener("click", () => openViewer(entry));
+    button.addEventListener("click", () => {
+      if (consumeLongPressClick()) {
+        return;
+      }
+      if (state.selectionMode) {
+        toggleSelectedPath(entry.path);
+        return;
+      }
+      openViewer(entry);
+    });
   }
+
+  const select = document.createElement("input");
+  select.type = "checkbox";
+  select.className = "tile-select";
+  select.checked = state.selectedPaths.has(entry.path);
+  select.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleSelectedPath(entry.path);
+  });
+  tile.append(select);
 
   const meta = document.createElement("div");
   meta.className = "meta";
