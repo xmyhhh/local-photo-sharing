@@ -36,8 +36,8 @@ function updateServerMemoryPrefetch() {
   if (index < 0) {
     return;
   }
-  const start = Math.max(0, index - 20);
-  const end = Math.min(photos.length, index + 21);
+  const start = Math.max(0, index - state.memoryPrefetchWindowBefore);
+  const end = Math.min(photos.length, index + state.memoryPrefetchWindowAfter + 1);
   const paths = photos.slice(start, end).map((entry) => entry.path);
   fetch("/api/prefetch/originals", {
     method: "POST",

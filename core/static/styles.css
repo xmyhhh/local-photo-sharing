@@ -770,28 +770,83 @@ main {
 .context-menu {
   position: fixed;
   z-index: 30;
-  min-width: 180px;
-  padding: 6px;
+  min-width: 220px;
+  padding: 8px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 12px;
   background: #fff;
   box-shadow: 0 18px 42px rgba(22, 32, 46, 0.18);
   animation: menu-enter 120ms ease both;
 }
 
-.context-menu button {
-  display: block;
+.context-menu-section + .context-menu-section {
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(140, 161, 174, 0.16);
+}
+
+.context-menu-heading {
+  padding: 5px 10px 6px;
+  color: rgba(100, 113, 128, 0.72);
+  font-size: 12px;
+  font-weight: 820;
+  letter-spacing: 0.04em;
+}
+
+.context-menu-item {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
   width: 100%;
   border: 0;
-  border-radius: 6px;
+  border-radius: 8px;
+  padding: 0 11px;
   background: transparent;
   color: var(--text);
   text-align: left;
 }
 
-.context-menu button:hover {
+.context-menu-icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 8px;
   background: rgba(23, 107, 135, 0.1);
   color: var(--accent);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.context-menu-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.context-menu-item:hover {
+  background: rgba(23, 107, 135, 0.1);
+  color: var(--accent);
+}
+
+.context-menu-item.danger {
+  color: var(--danger);
+}
+
+.context-menu-item.danger .context-menu-icon {
+  background: rgba(180, 35, 24, 0.1);
+  color: var(--danger);
+}
+
+.context-menu-item.danger:hover {
+  background: rgba(180, 35, 24, 0.1);
+  color: var(--danger);
+}
+
+.context-menu-item.plugin-action .context-menu-icon {
+  background: rgba(100, 113, 128, 0.12);
+  color: var(--muted);
 }
 
 .settings-dialog {

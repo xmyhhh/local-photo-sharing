@@ -97,6 +97,8 @@ const state = {
   currentBracketFolder: null,
   currentBracketRoot: null,
   uploadPasswordRequired: false,
+  memoryPrefetchWindowBefore: 5,
+  memoryPrefetchWindowAfter: 35,
   enabledPlugins: new Set(),
   pluginAssets: [],
   pluginComponents: [],

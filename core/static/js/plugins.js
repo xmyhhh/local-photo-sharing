@@ -33,9 +33,7 @@ function renderPluginComponentTriggers() {
       if (trigger.status === "planned") {
         return;
       }
-      if (trigger.type === "context_menu" && trigger.target === "folder") {
-        folderContextMenu?.append(createPluginTriggerButton(component, trigger));
-      } else if (trigger.type === "topbar_button") {
+      if (trigger.type === "topbar_button") {
         const button = createPluginTriggerButton(component, trigger);
         button.classList.add("ghost");
         topbarActions?.append(button);
@@ -82,6 +80,26 @@ function dispatchPluginComponentAction(component, trigger) {
     trigger,
     contextFolder: state.contextFolder,
   });
+}
+
+function pluginContextMenuGroups(target) {
+  const groups = new Map();
+  enabledPluginComponents().forEach((component) => {
+    (component.triggers || []).forEach((trigger) => {
+      if (trigger.status === "planned" || trigger.type !== "context_menu" || trigger.target !== target) {
+        return;
+      }
+      const pluginName = component.plugin || component.id || "plugin";
+      if (!groups.has(pluginName)) {
+        groups.set(pluginName, {
+          title: component.pluginTitle || component.pluginName || pluginName,
+          items: [],
+        });
+      }
+      groups.get(pluginName).items.push({ component, trigger });
+    });
+  });
+  return Array.from(groups.values()).filter((group) => group.items.length);
 }
 
 function loadPluginStyle(href) {

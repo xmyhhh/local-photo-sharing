@@ -7,7 +7,7 @@ from typing import Any
 from flask import Flask, abort, jsonify, request
 
 from ..context import AppServices
-from ..memory_prefetch import MemoryPrefetchSettings
+from ..memory_prefetch import MemoryPrefetchSettings, system_prefetch_memory_limit_mb
 
 
 def register_settings_routes(app: Flask, services: AppServices) -> None:
@@ -21,13 +21,14 @@ def register_settings_routes(app: Flask, services: AppServices) -> None:
         prefetch = data.get("memoryPrefetch", {})
         if not isinstance(prefetch, dict):
             abort(400, "memoryPrefetch must be an object.")
+        max_mb = system_prefetch_memory_limit_mb()
         settings = MemoryPrefetchSettings(
             enabled=bool(prefetch.get("enabled", False)),
-            memory_limit_gb=parse_int_range(prefetch.get("memoryLimitGb", 2), 1, 16, "memoryLimitGb"),
+            memory_limit_mb=parse_int_range(prefetch.get("memoryLimitMb", 1024), 256, max_mb, "memoryLimitMb"),
         )
         services.config["memory_prefetch"] = {
             "enabled": settings.enabled,
-            "memory_limit_gb": settings.memory_limit_gb,
+            "memory_limit_mb": settings.memory_limit_mb,
         }
         services.memory_prefetch.configure(settings)
         write_config(services.config_path, services.config)
@@ -61,12 +62,13 @@ def build_component_settings(services: AppServices) -> dict[str, Any]:
 
 def build_general_settings(services: AppServices) -> dict[str, Any]:
     settings = services.memory_prefetch.settings
+    max_mb = system_prefetch_memory_limit_mb()
     return {
         "memoryPrefetch": {
             "enabled": settings.enabled,
-            "memoryLimitGb": settings.memory_limit_gb,
-            "minGb": 1,
-            "maxGb": 16,
+            "memoryLimitMb": settings.memory_limit_mb,
+            "minMb": 256,
+            "maxMb": max_mb,
             "windowBefore": settings.window_before,
             "windowAfter": settings.window_after,
         }

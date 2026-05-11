@@ -47,15 +47,19 @@ function setSettingsTab(tabName) {
 function renderGeneralSettings(settings) {
   const prefetch = settings.memoryPrefetch || {};
   memoryPrefetchEnabledInput.checked = Boolean(prefetch.enabled);
-  memoryPrefetchLimitInput.value = String(prefetch.memoryLimitGb || 2);
-  memoryPrefetchLimitInput.min = String(prefetch.minGb || 1);
-  memoryPrefetchLimitInput.max = String(prefetch.maxGb || 16);
+  memoryPrefetchLimitInput.value = String(prefetch.memoryLimitMb || 1024);
+  memoryPrefetchLimitInput.min = String(prefetch.minMb || 256);
+  memoryPrefetchLimitInput.max = String(prefetch.maxMb || 1024);
+  state.memoryPrefetchWindowBefore = Number.parseInt(prefetch.windowBefore, 10) || 5;
+  state.memoryPrefetchWindowAfter = Number.parseInt(prefetch.windowAfter, 10) || 35;
 }
 
 async function saveGeneralSettings() {
-  const memoryLimitGb = Number.parseInt(memoryPrefetchLimitInput.value, 10);
-  if (!Number.isFinite(memoryLimitGb) || memoryLimitGb < 1 || memoryLimitGb > 16) {
-    settingsStatus.textContent = "内存上限必须是 1 到 16 之间的整数 GB。";
+  const memoryLimitMb = Number.parseInt(memoryPrefetchLimitInput.value, 10);
+  const minMb = Number.parseInt(memoryPrefetchLimitInput.min, 10) || 256;
+  const maxMb = Number.parseInt(memoryPrefetchLimitInput.max, 10) || 1024;
+  if (!Number.isFinite(memoryLimitMb) || memoryLimitMb < minMb || memoryLimitMb > maxMb) {
+    settingsStatus.textContent = `内存上限必须是 ${minMb} 到 ${maxMb} 之间的整数 MB。`;
     return;
   }
   settingsStatus.textContent = "正在保存通用设置...";
@@ -66,7 +70,7 @@ async function saveGeneralSettings() {
       body: JSON.stringify({
         memoryPrefetch: {
           enabled: memoryPrefetchEnabledInput.checked,
-          memoryLimitGb,
+          memoryLimitMb,
         },
       }),
     });

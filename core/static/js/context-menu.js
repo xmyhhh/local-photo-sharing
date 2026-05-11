@@ -7,20 +7,15 @@ function openFolderContextMenu(event, entry) {
   closeAllContextMenus();
   state.contextFolder = entry;
   state.contextEntry = entry;
-  folderContextMenu.querySelectorAll("[data-core-file-action='1']").forEach((item) => item.remove());
-  folderContextMenu.prepend(
-    menuButton("下载", () => downloadEntry(entry)),
-    menuButton("重命名", () => renameEntry(entry)),
-    menuButton("删除", () => deleteEntries([entry.path])),
-    menuButton("多选", () => enterSelectionMode(entry.path)),
-  );
-  folderContextMenu.querySelectorAll("[data-core-file-action='1']").forEach((item) => {
-    item.hidden = false;
-  });
-  updatePluginContextMenuVisibility("folder");
-  if (!Array.from(folderContextMenu.children).some((item) => !item.hidden)) {
-    return;
-  }
+  renderContextMenu(folderContextMenu, [
+    menuSection("原生操作", [
+      menuButton("下载", "↓", () => downloadEntry(entry)),
+      menuButton("重命名", "✎", () => renameEntry(entry)),
+      menuButton("删除", "×", () => deleteEntries([entry.path]), { danger: true }),
+      menuButton("多选", "☑", () => enterSelectionMode(entry.path)),
+    ]),
+    ...pluginMenuSections("folder"),
+  ]);
   openContextMenuAt(folderContextMenu, event.clientX, event.clientY);
 }
 
@@ -34,13 +29,14 @@ function openItemContextMenu(event, entry) {
   closeAllContextMenus();
   state.contextEntry = entry;
   state.contextFolder = entry.type === "folder" ? entry : null;
-  itemContextMenu.innerHTML = "";
-  itemContextMenu.append(
-    menuButton("下载", () => downloadEntry(entry)),
-    menuButton("重命名", () => renameEntry(entry)),
-    menuButton("删除", () => deleteEntries([entry.path])),
-    menuButton("多选", () => enterSelectionMode(entry.path)),
-  );
+  renderContextMenu(itemContextMenu, [
+    menuSection("原生操作", [
+      menuButton("下载", "↓", () => downloadEntry(entry)),
+      menuButton("重命名", "✎", () => renameEntry(entry)),
+      menuButton("删除", "×", () => deleteEntries([entry.path]), { danger: true }),
+      menuButton("多选", "☑", () => enterSelectionMode(entry.path)),
+    ]),
+  ]);
   openContextMenuAt(itemContextMenu, event.clientX, event.clientY);
 }
 
@@ -55,11 +51,14 @@ function openBlankContextMenu(event) {
   }
   event.preventDefault();
   closeAllContextMenus();
-  blankContextMenu.innerHTML = "";
-  blankContextMenu.append(
-    menuButton("新建文件夹", createFolderInCurrentFolder),
-    menuButton("多选", () => enterSelectionMode()),
-  );
+  state.contextFolder = null;
+  state.contextEntry = null;
+  renderContextMenu(blankContextMenu, [
+    menuSection("原生操作", [
+      menuButton("新建文件夹", "+", createFolderInCurrentFolder),
+      menuButton("多选", "☑", () => enterSelectionMode()),
+    ]),
+  ]);
   openContextMenuAt(blankContextMenu, event.clientX, event.clientY);
 }
 
@@ -73,11 +72,51 @@ function closeAllContextMenus() {
   itemContextMenu.hidden = true;
 }
 
-function menuButton(label, action) {
+function renderContextMenu(menu, sections) {
+  menu.innerHTML = "";
+  sections.filter((section) => section.items.length).forEach((section) => {
+    menu.append(section.element);
+  });
+}
+
+function menuSection(title, items) {
+  const section = document.createElement("div");
+  section.className = "context-menu-section";
+  const heading = document.createElement("div");
+  heading.className = "context-menu-heading";
+  heading.textContent = title;
+  section.append(heading, ...items);
+  return { element: section, items };
+}
+
+function pluginMenuSections(target) {
+  if (typeof pluginContextMenuGroups !== "function") {
+    return [];
+  }
+  return pluginContextMenuGroups(target).map((group) => menuSection(group.title, group.items.map(({ component, trigger }) => {
+    const label = trigger.label || component.title || component.id;
+    return menuButton(label, "◆", () => dispatchPluginComponentAction(component, trigger), { plugin: true });
+  })));
+}
+
+function menuButton(label, icon, action, options = {}) {
   const button = document.createElement("button");
   button.type = "button";
-  button.textContent = label;
+  button.className = "context-menu-item";
+  if (options.danger) {
+    button.classList.add("danger");
+  }
+  if (options.plugin) {
+    button.classList.add("plugin-action");
+  }
   button.dataset.coreFileAction = "1";
+  const iconNode = document.createElement("span");
+  iconNode.className = "context-menu-icon";
+  iconNode.textContent = icon;
+  const labelNode = document.createElement("span");
+  labelNode.className = "context-menu-label";
+  labelNode.textContent = label;
+  button.append(iconNode, labelNode);
   button.addEventListener("click", () => {
     closeAllContextMenus();
     action();
@@ -92,12 +131,6 @@ function openContextMenuAt(menu, clientX, clientY) {
   const top = Math.min(clientY, window.innerHeight - rect.height - 8);
   menu.style.left = `${Math.max(8, left)}px`;
   menu.style.top = `${Math.max(8, top)}px`;
-}
-
-function updatePluginContextMenuVisibility(target) {
-  folderContextMenu.querySelectorAll("[data-plugin-trigger='1']").forEach((item) => {
-    item.hidden = item.dataset.triggerTarget && item.dataset.triggerTarget !== target;
-  });
 }
 
 async function createFolderInCurrentFolder() {

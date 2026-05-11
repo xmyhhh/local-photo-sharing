@@ -51,7 +51,7 @@ DEFAULT_CONFIG = {
     },
     "memory_prefetch": {
         "enabled": False,
-        "memory_limit_gb": 2,
+        "memory_limit_mb": 1024,
     },
     "upload_password": "",
     "plugins": [

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import mimetypes
+import os
 import threading
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
@@ -13,13 +14,44 @@ from .constants import PHOTO_EXTENSIONS
 @dataclass
 class MemoryPrefetchSettings:
     enabled: bool = False
-    memory_limit_gb: int = 2
-    window_before: int = 20
-    window_after: int = 20
+    memory_limit_mb: int = 1024
+    window_before: int = 5
+    window_after: int = 35
 
     @property
     def max_bytes(self) -> int:
-        return self.memory_limit_gb * 1024 * 1024 * 1024
+        return self.memory_limit_mb * 1024 * 1024
+
+
+def system_prefetch_memory_limit_mb() -> int:
+    try:
+        if os.name == "nt":
+            import ctypes
+
+            class MemoryStatusEx(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+
+            status = MemoryStatusEx()
+            status.dwLength = ctypes.sizeof(status)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(status))
+            total_mb = status.ullTotalPhys // (1024 * 1024)
+        else:
+            pages = os.sysconf("SC_PHYS_PAGES")
+            page_size = os.sysconf("SC_PAGE_SIZE")
+            total_mb = pages * page_size // (1024 * 1024)
+    except Exception:
+        total_mb = 20480
+    return max(256, int(total_mb) - 4096)
 
 
 @dataclass

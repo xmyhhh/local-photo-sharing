@@ -10,7 +10,7 @@ from .constants import (
     DEFAULT_CONFIG_FILE,
     THUMBNAIL_MODES,
 )
-from .memory_prefetch import MemoryPrefetchSettings
+from .memory_prefetch import MemoryPrefetchSettings, system_prefetch_memory_limit_mb
 
 
 def create_default_config(config_path: Path) -> None:
@@ -142,7 +142,12 @@ def get_memory_prefetch_settings(config: dict[str, Any]) -> MemoryPrefetchSettin
         raise ValueError("Config field memory_prefetch must be an object.")
     return MemoryPrefetchSettings(
         enabled=bool(value.get("enabled", False)),
-        memory_limit_gb=_parse_int_range(value.get("memory_limit_gb", 2), "memory_prefetch.memory_limit_gb", 1, 16),
+        memory_limit_mb=_parse_int_range(
+            value.get("memory_limit_mb", 1024),
+            "memory_prefetch.memory_limit_mb",
+            256,
+            system_prefetch_memory_limit_mb(),
+        ),
     )
 
 
