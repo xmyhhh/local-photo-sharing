@@ -218,6 +218,12 @@ button.danger {
     #124350;
 }
 
+.login-backdrop.mosaic-grid {
+  background:
+    linear-gradient(135deg, rgba(8, 31, 39, 0.9), rgba(10, 44, 54, 0.94)),
+    #0f3540;
+}
+
 .login-bg-tile {
   position: absolute;
   left: var(--x);
@@ -239,6 +245,27 @@ button.danger {
   animation: login-tile-drift 26s ease-in-out infinite;
   animation-delay: var(--delay);
   will-change: transform;
+}
+
+.mosaic-grid .login-bg-tile {
+  border-radius: 14px;
+  opacity: 0;
+  filter: saturate(0.84) brightness(0.76) blur(0.4px);
+  transform: translateZ(0);
+  box-shadow: 0 16px 46px rgba(0, 0, 0, 0.16);
+  animation-duration: 34s;
+}
+
+.mosaic-grid .login-bg-tile.ready {
+  opacity: 0.32;
+}
+
+.mosaic-grid .login-bg-tile.depth-grid:nth-child(3n + 1).ready {
+  opacity: 0.4;
+}
+
+.mosaic-grid .login-bg-tile.depth-grid:nth-child(4n + 2) {
+  filter: saturate(0.72) brightness(0.68) blur(1.2px);
 }
 
 .login-bg-tile.ready {
@@ -266,6 +293,57 @@ button.danger {
 
 .login-bg-tile.depth-far.ready {
   opacity: 0.24;
+}
+
+.login-backdrop.solo-carousel {
+  overflow: hidden;
+  background: #081118;
+}
+
+.login-backdrop.solo-carousel::before {
+  background:
+    radial-gradient(circle at var(--spot-x, 50%) var(--spot-y, 50%), rgba(255, 255, 255, 0.03) 0 9rem, rgba(8, 14, 18, 0.26) 15rem, rgba(3, 7, 10, 0.62) 48rem),
+    linear-gradient(135deg, rgba(3, 8, 12, 0.38), rgba(3, 15, 20, 0.58));
+}
+
+.login-solo-layer {
+  position: absolute;
+  inset: -3vh -3vw;
+  z-index: 1;
+  background-position: center;
+  background-size: cover;
+  opacity: 0;
+  filter: grayscale(0.22) saturate(0.76) brightness(0.52);
+  transform: scale(1.06);
+  transition:
+    opacity 1200ms ease,
+    filter 260ms ease,
+    transform 6800ms ease;
+}
+
+.login-solo-layer.active {
+  opacity: 0.88;
+  transform: scale(1.01);
+}
+
+.login-backdrop.solo-carousel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: radial-gradient(circle at var(--spot-x, 50%) var(--spot-y, 50%), transparent 0 8rem, rgba(0, 0, 0, 0.38) 18rem, rgba(0, 0, 0, 0.62) 48rem);
+  mix-blend-mode: saturation;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease;
+}
+
+.login-backdrop.solo-carousel.pointer-active::after {
+  opacity: 1;
+}
+
+.login-backdrop.solo-carousel.pointer-active .login-solo-layer.active {
+  filter: grayscale(0.06) saturate(0.96) brightness(0.64);
 }
 
 @keyframes login-tile-drift {
@@ -998,6 +1076,9 @@ main {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 16px;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .grid.thumb-small {
@@ -1127,6 +1208,9 @@ main {
   color: inherit;
   text-align: left;
   touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .tile-button:hover,

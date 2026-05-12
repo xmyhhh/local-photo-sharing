@@ -20,11 +20,11 @@ from ..auth import (
     require_admin,
     verify_admin_password,
 )
+from ..config import write_config
 from ..constants import PHOTO_EXTENSIONS
 from ..context import AppServices
 from ..paths import resolve_media, resolve_photo, send_cached_file
 from .media import _split_rooted
-from .settings import write_config
 
 
 def register_auth_routes(app: Flask, services: AppServices) -> None:
@@ -157,6 +157,12 @@ def register_auth_routes(app: Flask, services: AppServices) -> None:
                 abort(400, "loginBackgroundFolder must be a string.")
             services.auth.login_background_folder = normalize_rooted_path(folder)
             auth["login_background_folder"] = services.auth.login_background_folder
+        if "loginBackgroundLayout" in data:
+            layout = data["loginBackgroundLayout"]
+            if layout not in {"grid", "stack", "solo"}:
+                abort(400, "loginBackgroundLayout must be one of grid, stack, solo.")
+            services.auth.login_background_layout = layout
+            auth["login_background_layout"] = layout
         auth.setdefault("session_secret", services.auth.session_secret)
         write_config(services.config_path, services.config)
         if any(field in data for field in ("loginBackgrounds", "loginBackgroundMode", "loginBackgroundFolder", "publicAlbums")):

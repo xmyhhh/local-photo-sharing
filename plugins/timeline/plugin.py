@@ -22,7 +22,7 @@ from core.photo_share.paths import image_url, join_rooted_path, root_cache_key, 
 PLUGIN_NAME = "timeline"
 MAX_TIMELINE_ITEMS = 300_000
 MAX_PAGE_SIZE = 1000
-INDEX_CACHE_VERSION = 3
+INDEX_CACHE_VERSION = 4
 INDEX_CACHE_FILE = "timeline_index_v1.json"
 INDEX_WORKERS = min(32, max(4, CPU_COUNT * 2))
 INDEX_INFLIGHT_LIMIT = INDEX_WORKERS * 16
@@ -251,7 +251,7 @@ class TimelineIndex:
                 raw = json.loads(cache_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 continue
-            if raw.get("version") not in {1, INDEX_CACHE_VERSION}:
+            if raw.get("version") != INDEX_CACHE_VERSION:
                 continue
             for item in raw.get("entries", []):
                 entry = timeline_entry_from_cache(root_id, item)
@@ -436,7 +436,7 @@ def load_root_cache(root_id: str, root: Path) -> dict[str, TimelineEntry]:
         raw = json.loads(cache_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
-    if raw.get("version") not in {1, INDEX_CACHE_VERSION}:
+    if raw.get("version") != INDEX_CACHE_VERSION:
         return {}
     result: dict[str, TimelineEntry] = {}
     for item in raw.get("entries", []):
@@ -543,7 +543,8 @@ def build_timeline_entry(root_id: str, root_services, path: Path, stat: os.stat_
         return None
     rel = to_relative(root_services.root, path)
     is_photo = suffix in PHOTO_EXTENSIONS
-    rating = photo_rating_fast(rel, root_services, 0) if is_photo else 0
+    rating = photo_rating(rel, path, root_services) if is_photo else 0
+    taken_ts = photo_taken_timestamp(path, stat) if is_photo else int(stat.st_mtime)
     return TimelineEntry(
         root_id=root_id,
         rel=rel,
@@ -551,7 +552,7 @@ def build_timeline_entry(root_id: str, root_services, path: Path, stat: os.stat_
         type="photo" if is_photo else "video",
         size=stat.st_size,
         mtime=int(stat.st_mtime),
-        taken_ts=int(stat.st_mtime),
+        taken_ts=taken_ts,
         rating=rating,
         width=0,
         height=0,
@@ -586,7 +587,7 @@ def photo_rating(rel: str, path: Path, root_services) -> int:
     try:
         if root_services.metadata.is_ready(path):
             return root_services.metadata.get_rating_ready(path)
-        return root_services.rating_index.ensure_photo_quick(path)
+        return root_services.rating_index.ensure_photo(path)
     except Exception:
         return root_services.metadata.get_rating_ready(path)
 

@@ -15,6 +15,12 @@ loginBackgroundModeButtons().forEach((button) => {
     saveAuthSettings({ loginBackgroundMode: button.dataset.loginBackgroundMode });
   });
 });
+loginBackgroundLayoutButtons().forEach((button) => {
+  button.addEventListener("click", () => {
+    loginBackgroundLayoutButtons().forEach((item) => item.classList.toggle("active", item === button));
+    saveAuthSettings({ loginBackgroundLayout: button.dataset.loginBackgroundLayout });
+  });
+});
 loginBackgroundFolderInput.addEventListener("change", () => saveAuthSettings({ loginBackgroundFolder: loginBackgroundFolderInput.value.trim() }));
 useCurrentLoginBackgroundFolderBtn.addEventListener("click", useCurrentLoginBackgroundFolder);
 document.querySelectorAll(".settings-help").forEach((button) => {
@@ -106,6 +112,7 @@ function renderGeneralSettings(settings) {
     hasPassword: state.authHasPassword,
     loginBackgroundMode: state.loginBackgroundMode,
     loginBackgroundFolder: state.loginBackgroundFolder,
+    loginBackgroundLayout: state.loginBackgroundLayout,
   });
 }
 
@@ -115,8 +122,13 @@ function renderAuthSettings(settings) {
   authPasswordInput.value = "";
   authPasswordInput.placeholder = settings.hasPassword ? "已设置，留空则不修改" : "启用登录页前必须设置";
   const mode = ["none", "rated", "folder"].includes(settings.loginBackgroundMode) ? settings.loginBackgroundMode : "none";
+  const layout = ["grid", "stack", "solo"].includes(settings.loginBackgroundLayout) ? settings.loginBackgroundLayout : "grid";
   loginBackgroundModeButtons().forEach((button) => {
     button.classList.toggle("active", button.dataset.loginBackgroundMode === mode);
+  });
+  loginBackgroundLayoutButtons().forEach((button) => {
+    button.classList.toggle("active", button.dataset.loginBackgroundLayout === layout);
+    button.disabled = mode === "none";
   });
   loginBackgroundFolderInput.value = settings.loginBackgroundFolder || "";
   loginBackgroundFolderInput.disabled = mode !== "folder";
@@ -175,6 +187,7 @@ async function saveAuthSettings(overrides = null) {
     enabled: authEnabledInput.checked,
     loginBackgroundMode: selectedLoginBackgroundMode(),
     loginBackgroundFolder: loginBackgroundFolderInput.value.trim(),
+    loginBackgroundLayout: selectedLoginBackgroundLayout(),
   };
   if (authPasswordInput.value.trim() && (!overrides || Object.prototype.hasOwnProperty.call(overrides, "enabled"))) {
     payload.password = authPasswordInput.value.trim();
@@ -200,12 +213,17 @@ async function saveAuthSettings(overrides = null) {
       hasPassword: state.authHasPassword,
       loginBackgroundMode: state.loginBackgroundMode,
       loginBackgroundFolder: state.loginBackgroundFolder,
+      loginBackgroundLayout: state.loginBackgroundLayout,
     });
   }
 }
 
 function selectedLoginBackgroundMode() {
   return loginBackgroundModeButtons().find((button) => button.classList.contains("active"))?.dataset.loginBackgroundMode || "none";
+}
+
+function selectedLoginBackgroundLayout() {
+  return loginBackgroundLayoutButtons().find((button) => button.classList.contains("active"))?.dataset.loginBackgroundLayout || "grid";
 }
 
 function payloadTouchesLoginBackground(payload) {

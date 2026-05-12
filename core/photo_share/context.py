@@ -33,6 +33,7 @@ class AuthSettings:
     login_backgrounds: list[str]
     login_background_mode: str
     login_background_folder: str
+    login_background_layout: str
 
 
 @dataclass

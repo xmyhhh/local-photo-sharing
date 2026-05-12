@@ -52,8 +52,23 @@ document.addEventListener("click", (event) => {
   }
 });
 document.addEventListener("contextmenu", (event) => {
+  if (shouldSuppressNativeTouchMenu(event)) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
   if (!event.target.closest(".tile-button") && !event.target.closest(".tile")) {
     closeAllContextMenus();
+  }
+});
+document.addEventListener("selectstart", (event) => {
+  if (shouldSuppressNativeTouchMenu(event)) {
+    event.preventDefault();
+  }
+});
+document.addEventListener("dragstart", (event) => {
+  if (shouldSuppressNativeTouchMenu(event)) {
+    event.preventDefault();
   }
 });
 grid.addEventListener("click", handleGridTileClick);
@@ -295,25 +310,19 @@ document.addEventListener("keydown", (event) => {
   if (!viewer.open) {
     return;
   }
+  const navDirection = viewerKeyboardNavigationDirection(event);
   if (isViewerLocked()) {
-    if (["ArrowLeft", "ArrowRight", "Escape", "Delete"].includes(event.key)) {
+    if (navDirection || ["Escape", "Delete"].includes(event.key)) {
       event.preventDefault();
     }
     return;
   }
-  if (event.key === "ArrowLeft") {
+  if (navDirection) {
     event.preventDefault();
     if (event.repeat) {
-      startRapidNavigation(-1);
+      startRapidNavigation(navDirection);
     } else {
-      showAdjacentPhoto(-1);
-    }
-  } else if (event.key === "ArrowRight") {
-    event.preventDefault();
-    if (event.repeat) {
-      startRapidNavigation(1);
-    } else {
-      showAdjacentPhoto(1);
+      showAdjacentPhoto(navDirection);
     }
   } else if (event.key === "Escape") {
     event.preventDefault();
@@ -328,7 +337,7 @@ document.addEventListener("keyup", (event) => {
     stopRapidNavigation(false);
     return;
   }
-  if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+  if (viewerKeyboardNavigationDirection(event)) {
     stopRapidNavigation();
   }
 });
@@ -374,6 +383,23 @@ function bindPageButton(button, direction) {
       stopRapidNavigation();
     }
   });
+}
+
+function viewerKeyboardNavigationDirection(event) {
+  if (event.altKey || event.ctrlKey || event.metaKey) {
+    return 0;
+  }
+  const target = event.target;
+  if (target?.closest?.("input, textarea, select, [contenteditable='true']")) {
+    return 0;
+  }
+  if (event.key === "ArrowLeft" || event.key.toLowerCase() === "a") {
+    return -1;
+  }
+  if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") {
+    return 1;
+  }
+  return 0;
 }
 
 function clearEndedTouches(event) {

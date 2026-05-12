@@ -545,13 +545,14 @@
     const visibleItems = isCollapsible && !isExpanded ? visibleItemsForCollapsedRows(group.items) : group.items;
     const totalCount = group.totalCount || group.items.length;
     const hiddenCount = totalCount - visibleItems.length;
+    const showToggle = isCollapsible && (hiddenCount > 0 || isExpanded);
     section.innerHTML = `
       <div class="timeline-group-head">
         <div>
           <div class="timeline-group-title">${escapeHtml(group.title)}</div>
           <div class="timeline-group-subtitle">${totalCount} 项${hiddenCount > 0 ? `，已折叠 ${hiddenCount} 项` : ""}</div>
         </div>
-        ${isCollapsible ? `<button class="timeline-fold-toggle" type="button">${isExpanded ? "收起" : `展开剩余 ${hiddenCount} 项`}</button>` : ""}
+        ${showToggle ? `<button class="timeline-fold-toggle" type="button">${isExpanded ? "收起" : `展开剩余 ${hiddenCount} 项`}</button>` : ""}
       </div>
       <div class="timeline-mosaic"></div>
     `;
@@ -602,6 +603,7 @@
           card.remove();
         }
       });
+      restoreCollapsedMoreCard(mosaic, group, visibleItems);
       return;
     }
 
@@ -616,6 +618,22 @@
     appendTimelineCardsChunked(mosaic, missingItems, groupId, token);
   }
 
+  function restoreCollapsedMoreCard(mosaic, group, visibleItems) {
+    const hiddenCount = Math.max(0, group.items.length - visibleItems.length);
+    if (!hiddenCount || !visibleItems.length) {
+      return;
+    }
+    const lastIndex = visibleItems.length - 1;
+    const lastItem = visibleItems[lastIndex];
+    const current = mosaic.querySelector(`.timeline-card[data-path="${CSS.escape(lastItem.path)}"]`);
+    const moreCard = createTimelineCard(lastItem, lastIndex, hiddenCount, group.id);
+    if (current) {
+      current.replaceWith(moreCard);
+    } else {
+      mosaic.append(moreCard);
+    }
+  }
+
   function updateTimelineGroupChrome(section, group, visibleCount, isExpanded) {
     const subtitle = section.querySelector(".timeline-group-subtitle");
     const toggle = section.querySelector(".timeline-fold-toggle");
@@ -624,6 +642,7 @@
       subtitle.textContent = `${group.items.length} 项${hiddenCount > 0 ? `，已折叠 ${hiddenCount} 项` : ""}`;
     }
     if (toggle) {
+      toggle.hidden = hiddenCount <= 0 && !isExpanded;
       toggle.textContent = isExpanded ? "收起" : `展开剩余 ${hiddenCount} 项`;
     }
   }

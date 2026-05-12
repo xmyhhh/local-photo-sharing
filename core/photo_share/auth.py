@@ -169,6 +169,7 @@ def auth_status_payload(services: AppServices) -> dict:
         "loginBackgroundUrls": [background_url(item) for item in services.auth.login_backgrounds],
         "loginBackgroundMode": services.auth.login_background_mode,
         "loginBackgroundFolder": services.auth.login_background_folder,
+        "loginBackgroundLayout": services.auth.login_background_layout,
     }
 
 

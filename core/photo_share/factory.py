@@ -8,6 +8,7 @@ from flask import Flask
 
 from .constants import (
     CACHE_DIR,
+    DEFAULT_SAMPLE_GALLERY_DIR,
     DEFAULT_THUMBNAIL_MODE,
     RATINGS_FILE,
     STATIC_DIR,
@@ -17,6 +18,7 @@ from .memory_prefetch import MemoryPrefetchPool, MemoryPrefetchSettings
 from .paths import build_thumbnail_modes, root_cache_key
 from .plugins import PluginSpec, register_plugins
 from .routes import register_routes
+from .sample_gallery import install_sample_gallery_if_available
 from .services import FolderCountIndex, ImageCacheStore, MetadataStore, RatingIndex, RatingStore
 from .image_formats import register_image_formats
 
@@ -57,6 +59,7 @@ def create_app(
         config_path,
         default_save,
     )
+    install_sample_gallery_if_available(services, DEFAULT_SAMPLE_GALLERY_DIR)
     app.config["photo_share_services"] = services
     register_routes(app, services)
     register_plugins(app, services, plugin_specs or [])
@@ -138,6 +141,7 @@ def _build_auth_settings(config: dict) -> AuthSettings:
         login_backgrounds=[item.strip() for item in auth.get("login_backgrounds", []) if isinstance(item, str) and item.strip()],
         login_background_mode=_login_background_mode(auth.get("login_background_mode")),
         login_background_folder=_normalize_config_path(str(auth.get("login_background_folder") or "")),
+        login_background_layout=_login_background_layout(auth.get("login_background_layout")),
     )
 
 
@@ -147,6 +151,10 @@ def _normalize_config_path(value: str) -> str:
 
 def _login_background_mode(value: object) -> str:
     return value if value in {"none", "rated", "folder"} else "none"
+
+
+def _login_background_layout(value: object) -> str:
+    return value if value in {"grid", "stack", "solo"} else "grid"
 
 
 def _session_secret(config: dict, config_path: Path | None) -> str:

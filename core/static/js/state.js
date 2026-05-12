@@ -122,6 +122,7 @@ const state = {
   loginBackgroundUrls: [],
   loginBackgroundMode: "none",
   loginBackgroundFolder: "",
+  loginBackgroundLayout: "grid",
   memoryPrefetchWindowBefore: 5,
   memoryPrefetchWindowAfter: 35,
   enabledPlugins: new Set(),
@@ -253,6 +254,7 @@ const authEnabledInput = document.querySelector("#authEnabledInput");
 const authPasswordInput = document.querySelector("#authPasswordInput");
 const saveAuthPasswordBtn = document.querySelector("#saveAuthPasswordBtn");
 const loginBackgroundModeButtons = () => Array.from(document.querySelectorAll("[data-login-background-mode]"));
+const loginBackgroundLayoutButtons = () => Array.from(document.querySelectorAll("[data-login-background-layout]"));
 const loginBackgroundFolderInput = document.querySelector("#loginBackgroundFolderInput");
 const useCurrentLoginBackgroundFolderBtn = document.querySelector("#useCurrentLoginBackgroundFolderBtn");
 const pluginComponentList = document.querySelector("#pluginComponentList");

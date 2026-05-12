@@ -17,6 +17,12 @@ def create_default_config(config_path: Path) -> None:
     config_path.write_text(json.dumps(DEFAULT_CONFIG, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def write_config(config_path: Path | None, config: dict[str, Any]) -> None:
+    if config_path is None:
+        return
+    config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def load_config(config_path: Path) -> dict[str, Any] | None:
     if not config_path.exists():
         create_default_config(config_path)
@@ -170,7 +176,7 @@ def get_auth_config(config: dict[str, Any]) -> dict[str, Any]:
             result[field] = ""
         if not isinstance(result.get(field), str):
             raise ValueError(f"Config field auth.{field} must be a string.")
-    for field in ("login_background_mode", "login_background_folder"):
+    for field in ("login_background_mode", "login_background_folder", "login_background_layout"):
         if result.get(field) is None:
             result[field] = ""
         if not isinstance(result.get(field), str):
@@ -185,6 +191,8 @@ def get_auth_config(config: dict[str, Any]) -> dict[str, Any]:
     result["enabled"] = bool(result.get("enabled", False))
     if result["login_background_mode"] not in {"none", "rated", "folder"}:
         result["login_background_mode"] = "none"
+    if result["login_background_layout"] not in {"grid", "stack", "solo"}:
+        result["login_background_layout"] = "grid"
     return result
 
 

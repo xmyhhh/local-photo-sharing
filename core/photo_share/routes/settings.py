@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
 from flask import Flask, abort, jsonify, request
 
 from ..auth import require_admin
+from ..config import write_config
 from ..context import AppServices
 from ..memory_prefetch import MemoryPrefetchSettings, system_prefetch_memory_limit_mb
 from ..plugins import call_plugin_lifecycle
@@ -117,12 +117,6 @@ def serialize_plugin_config(plugin: dict[str, Any], enabled: bool) -> dict[str, 
     if plugin.get("module"):
         item["module"] = plugin["module"]
     return item
-
-
-def write_config(config_path: Path | None, config: dict[str, Any]) -> None:
-    if config_path is None:
-        return
-    config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def apply_runtime_component_state(services: AppServices, enabled_plugins: set[str]) -> None:

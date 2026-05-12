@@ -20,6 +20,7 @@ TRASH_DIR = APP_DIR / ".photo_share_trash"
 BRACKET_OUTPUT_DIR = APP_DIR / ".photo_share_bracket_results"
 BRACKET_CACHE_FILE = CACHE_DIR / "bracket_detection_cache.json"
 DEFAULT_BRACKET_PROJECT_FILE = RESOURCE_DIR / "assets" / "bracket_project.prj"
+DEFAULT_SAMPLE_GALLERY_DIR = RESOURCE_DIR / "assets" / "sample_gallery"
 CPU_COUNT = os.cpu_count() or 1
 THUMBNAIL_WORKERS = min(16, max(2, CPU_COUNT))
 METADATA_WORKERS = min(4, max(2, CPU_COUNT // 2))
@@ -63,6 +64,7 @@ DEFAULT_CONFIG = {
         "login_backgrounds": [],
         "login_background_mode": "none",
         "login_background_folder": "",
+        "login_background_layout": "grid",
     },
     "plugins": [
         {

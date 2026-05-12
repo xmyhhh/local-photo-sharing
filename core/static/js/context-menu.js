@@ -451,6 +451,9 @@ function scheduleBlankLongPress(event) {
 
 function startLongPress(event, action) {
   cancelLongPress();
+  if (event.cancelable) {
+    event.preventDefault();
+  }
   state.longPress = {
     pointerId: event.pointerId,
     x: event.clientX,
@@ -491,6 +494,17 @@ function consumeLongPressClick() {
 
 function isContextLongPressPointer(event) {
   return event.pointerType === "touch" || event.pointerType === "pen";
+}
+
+function shouldSuppressNativeTouchMenu(event) {
+  const target = event.target;
+  if (!target?.closest?.(".grid, .tile, .tile-button")) {
+    return false;
+  }
+  if (target.closest("input, textarea, select, .rating, .tile-select, button:not(.tile-button)")) {
+    return false;
+  }
+  return true;
 }
 
 function longPressMenuEvent(event) {
