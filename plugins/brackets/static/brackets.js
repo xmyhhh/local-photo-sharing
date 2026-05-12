@@ -614,7 +614,8 @@ function setAllBracketGroups(checked) {
 
 function splitRootedFolder(path) {
   const parts = (path || "").split("/");
-  if (parts[0] === state.rootId) {
+  const rootIds = (state.roots || []).map((root) => root.id).filter(Boolean);
+  if (parts[0] === state.rootId || rootIds.includes(parts[0])) {
     return { root: parts[0], folderPath: parts.slice(1).join("/") };
   }
   return { root: state.rootId || "root1", folderPath: path || "" };

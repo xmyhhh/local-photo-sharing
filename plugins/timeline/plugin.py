@@ -22,11 +22,11 @@ from core.photo_share.paths import image_url, join_rooted_path, root_cache_key, 
 PLUGIN_NAME = "timeline"
 MAX_TIMELINE_ITEMS = 300_000
 MAX_PAGE_SIZE = 1000
-INDEX_CACHE_VERSION = 2
+INDEX_CACHE_VERSION = 3
 INDEX_CACHE_FILE = "timeline_index_v1.json"
 INDEX_WORKERS = min(32, max(4, CPU_COUNT * 2))
 INDEX_INFLIGHT_LIMIT = INDEX_WORKERS * 16
-REFRESH_INTERVAL_SECONDS = 45
+REFRESH_AFTER_SECONDS = 30 * 60
 IGNORED_DIR_NAMES = {
     ".git",
     ".photo_share_cache",
@@ -92,6 +92,7 @@ class TimelineIndex:
         self._error = ""
         self._generation = 0
         self._scanned_count = 0
+        self._changed_since = 0.0
 
     def start(self, services: AppServices) -> None:
         with self._lock:
@@ -121,6 +122,7 @@ class TimelineIndex:
             self._error = ""
             self._generation = 0
             self._scanned_count = 0
+            self._changed_since = 0.0
 
     def request_refresh(self) -> None:
         self._wake.set()
@@ -128,6 +130,16 @@ class TimelineIndex:
     def request_refresh_if_empty(self) -> None:
         with self._lock:
             should_refresh = self._services is not None and not self._entries and not self._indexing
+        if should_refresh:
+            self.request_refresh()
+
+    def request_refresh_if_stale(self) -> None:
+        with self._lock:
+            should_refresh = (
+                self._services is not None
+                and not self._indexing
+                and (not self._entries or time.time() - self._indexed_at > REFRESH_AFTER_SECONDS)
+            )
         if should_refresh:
             self.request_refresh()
 
@@ -143,9 +155,25 @@ class TimelineIndex:
                 "indexedAt": int(self._indexed_at),
                 "error": self._error,
                 "generation": self._generation,
+                "changedSince": int(self._changed_since),
                 "scanned": self._scanned_count,
                 "estimatedTotal": estimated_total,
                 "progress": min(1.0, self._scanned_count / estimated_total) if estimated_total else None,
+            }
+
+    def changes(self, since: int, featured: bool, limit: int) -> dict[str, Any]:
+        limit = max(1, min(limit, MAX_PAGE_SIZE))
+        with self._lock:
+            source = [entry for entry in self._entries if entry.rating > 0] if featured else self._entries
+            items = [
+                entry
+                for entry in source
+                if entry.mtime >= since
+            ][:limit]
+            return {
+                "items": [serialize_entry(entry) for entry in items],
+                "status": self.status(),
+                "truncated": len(items) >= limit,
             }
 
     def page(self, featured: bool, cursor: int, limit: int) -> dict[str, Any]:
@@ -163,7 +191,7 @@ class TimelineIndex:
 
     def _run(self) -> None:
         while not self._stop.is_set():
-            self._wake.wait(timeout=REFRESH_INTERVAL_SECONDS)
+            self._wake.wait()
             self._wake.clear()
             if self._stop.is_set():
                 break
@@ -177,6 +205,7 @@ class TimelineIndex:
             self._error = ""
             self._scanned_count = 0
         entries: list[TimelineEntry] = []
+        changed_since = 0
         last_publish_at = time.monotonic()
         try:
             for root_id, root_services in services.root_services.items():
@@ -186,6 +215,9 @@ class TimelineIndex:
                 cache = load_root_cache(root_id, root_services.root)
                 for entry in iter_root_media(root_id, root_services, self._stop, budget, cache):
                     entries.append(entry)
+                    cached = cache.get(entry.rel)
+                    if cached is None or cached.mtime != entry.mtime or cached.size != entry.size:
+                        changed_since = int(entry.mtime) if not changed_since else min(changed_since, int(entry.mtime))
                     now = time.monotonic()
                     if should_publish_partial(len(entries)) or now - last_publish_at >= 0.6:
                         self._publish_partial(entries)
@@ -196,6 +228,7 @@ class TimelineIndex:
                 self._indexed_at = time.time()
                 self._generation += 1
                 self._scanned_count = len(entries)
+                self._changed_since = changed_since or self._indexed_at
             self._save_cache(services, entries)
         except Exception as exc:  # noqa: BLE001 - background plugin must not crash Flask.
             with self._lock:
@@ -205,9 +238,8 @@ class TimelineIndex:
                 self._indexing = False
 
     def _publish_partial(self, entries: list[TimelineEntry]) -> None:
-        partial = sorted(entries, key=lambda entry: (-entry.taken_ts, entry.root_id, entry.rel.lower()))
         with self._lock:
-            self._entries = partial
+            self._entries = list(entries)
             self._scanned_count = len(entries)
 
     def _load_cache(self, services: AppServices) -> None:
@@ -275,7 +307,7 @@ def register(app: Flask, services: AppServices) -> None:
     @app.get("/api/timeline/status")
     def timeline_status():
         if request.args.get("prepare") in {"1", "true", "yes"}:
-            INDEX.request_refresh_if_empty()
+            INDEX.request_refresh_if_stale()
         return jsonify(INDEX.status())
 
     @app.post("/api/timeline/refresh")
@@ -294,6 +326,15 @@ def register(app: Flask, services: AppServices) -> None:
         limit = parse_int(request.args.get("limit"), 160)
         INDEX.request_refresh_if_empty()
         return jsonify(INDEX.page(featured, cursor, limit))
+
+    @app.get("/api/timeline/changes")
+    def timeline_changes():
+        if PLUGIN_NAME not in services.enabled_plugins:
+            abort(404)
+        featured = request.args.get("featured") in {"1", "true", "yes"}
+        since = parse_int(request.args.get("since"), 0)
+        limit = parse_int(request.args.get("limit"), 240)
+        return jsonify(INDEX.changes(since, featured, limit))
 
 
 def on_enable(services: AppServices) -> None:
@@ -334,11 +375,9 @@ def parse_int(value: str | None, fallback: int) -> int:
 
 
 def should_publish_partial(count: int) -> bool:
-    if count <= 60:
-        return count % 12 == 0
-    if count <= 600:
-        return count % 80 == 0
-    return count % 400 == 0
+    if count <= 1000:
+        return count % 250 == 0
+    return count % 2000 == 0
 
 
 def estimate_total_media(services: AppServices | None) -> int:
@@ -443,6 +482,12 @@ def iter_root_media_parallel(root_id: str, root_services, stop: threading.Event,
                 break
             rel = to_relative(root, path)
             cached = cache.get(rel)
+            if cached and cached.mtime == int(stat.st_mtime) and cached.size == stat.st_size:
+                yield refresh_cached_timeline_entry(root_id, root_services, cached)
+                emitted += 1
+                if emitted >= budget:
+                    return
+                continue
             futures.add(executor.submit(build_timeline_entry, root_id, root_services, path, stat, cached))
             if len(futures) >= INDEX_INFLIGHT_LIMIT:
                 for entry in drain_completed_entries(futures, stop, wait_for_one=True):
@@ -498,11 +543,7 @@ def build_timeline_entry(root_id: str, root_services, path: Path, stat: os.stat_
         return None
     rel = to_relative(root_services.root, path)
     is_photo = suffix in PHOTO_EXTENSIONS
-    if cached and cached.mtime == int(stat.st_mtime) and cached.size == stat.st_size:
-        rating = photo_rating_cached(rel, root_services, cached.rating) if is_photo else 0
-        return replace(cached, root_id=root_id, rating=rating, is_live=False, live_video_path=None)
-    width, height = media_dimensions(path) if is_photo else (0, 0)
-    rating = photo_rating(rel, path, root_services) if is_photo else 0
+    rating = photo_rating_fast(rel, root_services, 0) if is_photo else 0
     return TimelineEntry(
         root_id=root_id,
         rel=rel,
@@ -510,17 +551,22 @@ def build_timeline_entry(root_id: str, root_services, path: Path, stat: os.stat_
         type="photo" if is_photo else "video",
         size=stat.st_size,
         mtime=int(stat.st_mtime),
-        taken_ts=photo_taken_timestamp(path, stat) if is_photo else int(stat.st_mtime),
+        taken_ts=int(stat.st_mtime),
         rating=rating,
-        width=width,
-        height=height,
+        width=0,
+        height=0,
         browser_renderable=suffix in {".jpg", ".jpeg"},
         is_live=False,
         live_video_path=None,
     )
 
 
-def photo_rating_cached(rel: str, root_services, cached_rating: int) -> int:
+def refresh_cached_timeline_entry(root_id: str, root_services, cached: TimelineEntry) -> TimelineEntry:
+    rating = photo_rating_fast(cached.rel, root_services, cached.rating) if cached.type == "photo" else 0
+    return replace(cached, root_id=root_id, rating=rating, is_live=False, live_video_path=None)
+
+
+def photo_rating_fast(rel: str, root_services, cached_rating: int) -> int:
     override = root_services.ratings.get_override(rel)
     if override is not None:
         return override

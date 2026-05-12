@@ -437,6 +437,53 @@
   opacity: 1;
 }
 
+.timeline-more-card .timeline-thumb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background:
+    radial-gradient(circle at 50% 34%, rgba(255, 255, 255, 0.22), transparent 32%),
+    linear-gradient(180deg, rgba(12, 25, 32, 0.26), rgba(12, 25, 32, 0.68));
+}
+
+.timeline-more-card .timeline-thumb img.loaded {
+  filter: blur(7px) saturate(0.78) brightness(0.72);
+  transform: scale(1.08);
+}
+
+.timeline-more-card:hover .timeline-thumb img.loaded {
+  transform: scale(1.1);
+}
+
+.timeline-more-badge {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  gap: 5px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 850;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.timeline-more-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow:
+    -7px 6px 0 rgba(255, 255, 255, 0.16),
+    7px -6px 0 rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  font-size: 20px;
+  line-height: 1;
+}
+
 .timeline-rating {
   position: absolute;
   left: 7px;

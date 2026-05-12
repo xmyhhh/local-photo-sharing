@@ -1,7 +1,5 @@
 let loginBackgroundTimer = 0;
 let loginBackgroundIndex = 0;
-let loginBackgroundSparkTimer = 0;
-let loginBackgroundPointerTimer = 0;
 
 async function initializeAuth() {
   const status = await fetchJson("/api/auth/status", { cache: "no-store" });
@@ -46,14 +44,6 @@ function hideLoginScreen() {
     window.clearInterval(loginBackgroundTimer);
     loginBackgroundTimer = 0;
   }
-  if (loginBackgroundSparkTimer) {
-    window.clearInterval(loginBackgroundSparkTimer);
-    loginBackgroundSparkTimer = 0;
-  }
-  if (loginBackgroundPointerTimer) {
-    window.clearTimeout(loginBackgroundPointerTimer);
-    loginBackgroundPointerTimer = 0;
-  }
   loginBackdrop.onpointermove = null;
 }
 
@@ -68,28 +58,19 @@ async function renderLoginBackgrounds() {
   loginBackdrop.classList.add("mosaic");
   items.forEach((item, index) => {
     const tile = document.createElement("div");
-    tile.className = "login-bg-tile";
+    tile.className = `login-bg-tile depth-${item.depth}`;
     tile.style.setProperty("--x", `${item.x}%`);
     tile.style.setProperty("--y", `${item.y}%`);
     tile.style.setProperty("--w", `${item.w}%`);
     tile.style.setProperty("--h", `${item.h}%`);
     tile.style.setProperty("--r", `${item.rotate}deg`);
     tile.style.setProperty("--delay", `${item.delay}ms`);
+    tile.style.setProperty("--float-x", `${item.floatX}px`);
+    tile.style.setProperty("--float-y", `${item.floatY}px`);
     tile.dataset.url = item.url;
     setLoginTileImage(tile, item.url);
-    tile.classList.toggle("awake", index % 11 === 0);
     loginBackdrop.append(tile);
   });
-  loginBackdrop.onpointermove = awakenLoginTilesNearPointer;
-  loginBackgroundSparkTimer = window.setInterval(() => {
-    const nodes = Array.from(loginBackdrop.querySelectorAll(".login-bg-tile"));
-    if (!nodes.length) {
-      return;
-    }
-    const node = nodes[Math.floor(Math.random() * nodes.length)];
-    node.classList.add("awake");
-    window.setTimeout(() => node.classList.remove("awake"), 2600 + Math.random() * 1800);
-  }, 700);
 }
 
 function setLoginTileImage(tile, url, attempt = 0) {
@@ -111,50 +92,25 @@ function buildLoginMosaicItems(photos) {
   if (!urls.length) {
     return [];
   }
-  const cols = 9;
-  const rows = 6;
-  const count = cols * rows;
+  const count = Math.min(14, Math.max(7, urls.length));
   return Array.from({ length: count }, (_, index) => {
-    const col = index % cols;
-    const row = Math.floor(index / cols);
-    const jitterX = (pseudoRandom(index, 7) - 0.5) * 7.5;
-    const jitterY = (pseudoRandom(index, 13) - 0.5) * 8.5;
-    const rowShift = row % 2 ? 5 : 0;
+    const depth = index % 5 === 0 ? "far" : index % 3 === 0 ? "near" : "mid";
+    const lane = index / Math.max(1, count - 1);
+    const x = -8 + lane * 108 + (pseudoRandom(index, 7) - 0.5) * 16;
+    const y = 4 + pseudoRandom(index, 13) * 78;
+    const size = depth === "near" ? 28 : depth === "far" ? 20 : 24;
     return {
       url: urls[index % urls.length],
-      x: -7 + col * 13.9 + rowShift + jitterX,
-      y: -10 + row * 23.2 + jitterY,
-      w: 15 + pseudoRandom(index, 19) * 8,
-      h: 20 + pseudoRandom(index, 23) * 12,
-      rotate: -4.5 + pseudoRandom(index, 29) * 9,
-      delay: Math.floor(pseudoRandom(index, 31) * 4200),
+      depth,
+      x,
+      y,
+      w: size + pseudoRandom(index, 19) * 7,
+      h: size * 1.22 + pseudoRandom(index, 23) * 9,
+      rotate: -2.2 + pseudoRandom(index, 29) * 4.4,
+      delay: Math.floor(pseudoRandom(index, 31) * 5200),
+      floatX: Math.round((pseudoRandom(index, 37) - 0.5) * 26),
+      floatY: Math.round((pseudoRandom(index, 41) - 0.5) * 20),
     };
-  });
-}
-
-function awakenLoginTilesNearPointer(event) {
-  if (loginBackgroundPointerTimer) {
-    return;
-  }
-  loginBackgroundPointerTimer = window.setTimeout(() => {
-    loginBackgroundPointerTimer = 0;
-  }, 90);
-  const nodes = Array.from(loginBackdrop.querySelectorAll(".login-bg-tile.ready"));
-  if (!nodes.length) {
-    return;
-  }
-  const ranked = nodes
-    .map((node) => {
-      const rect = node.getBoundingClientRect();
-      const x = rect.left + rect.width / 2;
-      const y = rect.top + rect.height / 2;
-      return { node, distance: Math.hypot(event.clientX - x, event.clientY - y) };
-    })
-    .sort((a, b) => a.distance - b.distance)
-    .slice(0, 4);
-  ranked.forEach(({ node }, index) => {
-    node.classList.add("awake");
-    window.setTimeout(() => node.classList.remove("awake"), 900 + index * 180);
   });
 }
 

@@ -189,6 +189,9 @@ async function saveAuthSettings(overrides = null) {
     applyAuthStatus(settings);
     renderAuthSettings(settings);
     renderGrid();
+    if (payloadTouchesLoginBackground(payload) && typeof notifyBackendTaskStarted === "function") {
+      notifyBackendTaskStarted();
+    }
     settingsStatus.textContent = "访问控制已保存。";
   } catch (error) {
     settingsStatus.textContent = error.message;
@@ -203,6 +206,15 @@ async function saveAuthSettings(overrides = null) {
 
 function selectedLoginBackgroundMode() {
   return loginBackgroundModeButtons().find((button) => button.classList.contains("active"))?.dataset.loginBackgroundMode || "none";
+}
+
+function payloadTouchesLoginBackground(payload) {
+  return Boolean(payload && (
+    Object.prototype.hasOwnProperty.call(payload, "publicAlbums")
+    || Object.prototype.hasOwnProperty.call(payload, "loginBackgrounds")
+    || Object.prototype.hasOwnProperty.call(payload, "loginBackgroundMode")
+    || Object.prototype.hasOwnProperty.call(payload, "loginBackgroundFolder")
+  ));
 }
 
 function useCurrentLoginBackgroundFolder() {

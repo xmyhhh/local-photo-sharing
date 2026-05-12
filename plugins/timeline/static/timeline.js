@@ -1,7 +1,7 @@
 (() => {
-  const PAGE_SIZE = 420;
-  const DAY_COLLAPSE_LIMIT = 100;
-  const RENDER_CHUNK_SIZE = 10;
+  const PAGE_SIZE = 180;
+  const COLLAPSE_ROWS = 5;
+  const RENDER_CHUNK_SIZE = 6;
   const TIMELINE_THUMB_MODES = ["small", "medium", "large", "xlarge"];
   const stateLocal = {
     featured: false,
@@ -17,13 +17,16 @@
     latestStatus: null,
     lastLoadedGeneration: -1,
     lastLoadedCount: -1,
+    applyingChanges: false,
     thumbObserver: null,
     thumbQueue: [],
     thumbQueued: new Set(),
     thumbActive: 0,
     renderToken: 0,
+    renderedCount: 0,
+    groupRenderTokens: new Map(),
   };
-  const TIMELINE_THUMB_CONCURRENCY = 4;
+  const TIMELINE_THUMB_CONCURRENCY = 3;
 
   const dialog = document.createElement("dialog");
   dialog.id = "timelineDialog";
@@ -150,6 +153,7 @@
     stateLocal.cursor = 0;
     stateLocal.done = false;
     stateLocal.items = [];
+    stateLocal.renderedCount = 0;
     stateLocal.expandedGroups.clear();
     stateLocal.lastLoadedGeneration = -1;
     stateLocal.lastLoadedCount = -1;
@@ -192,7 +196,7 @@
   }
 
   function maybeReloadForStatus(data) {
-    if (!dialog.open || stateLocal.loading) {
+    if (!dialog.open || stateLocal.loading || stateLocal.applyingChanges) {
       return;
     }
     const generation = Number(data.generation || 0);
@@ -202,13 +206,57 @@
     const hasNewGeneration = generation > loadedGeneration && !data.indexing;
     const hasNewPartialResults = data.indexing && count > loadedCount;
     const isEmptyWaitingForIndex = data.indexing && !stateLocal.items.length && !stateLocal.loading;
+    const looksLikeDeletion = loadedCount > 0 && count < loadedCount;
+    if (hasNewGeneration && !looksLikeDeletion && stateLocal.items.length) {
+      applyTimelineChanges(data);
+      return;
+    }
     if (!hasNewGeneration && !hasNewPartialResults && !isEmptyWaitingForIndex) {
+      return;
+    }
+    if (hasNewPartialResults && stateLocal.items.length) {
       return;
     }
     stateLocal.cursor = 0;
     stateLocal.done = false;
     stateLocal.items = [];
+    stateLocal.renderedCount = 0;
     loadNextPage();
+  }
+
+  async function applyTimelineChanges(statusData) {
+    const since = Number(statusData.changedSince || 0);
+    if (!since) {
+      resetAndLoad();
+      return;
+    }
+    stateLocal.applyingChanges = true;
+    try {
+      const params = new URLSearchParams({
+        since: String(since),
+        limit: "240",
+        featured: stateLocal.featured ? "1" : "0",
+      });
+      const data = await fetchJson(`/api/timeline/changes?${params.toString()}`, { cache: "no-store" });
+      if (data.truncated || !Array.isArray(data.items)) {
+        await resetAndLoad();
+        return;
+      }
+      const changedItems = dedupeTimelineItems(data.items);
+      if (changedItems.length) {
+        mergeTimelineItems(changedItems);
+        insertChangedTimelineItems(changedItems);
+      }
+      if (data.status) {
+        renderStatus(data.status);
+        stateLocal.lastLoadedGeneration = Number(data.status.generation || stateLocal.lastLoadedGeneration);
+        stateLocal.lastLoadedCount = Number(data.status.count || stateLocal.lastLoadedCount);
+      }
+    } catch {
+      await resetAndLoad();
+    } finally {
+      stateLocal.applyingChanges = false;
+    }
   }
 
   async function loadNextPage() {
@@ -224,7 +272,9 @@
         featured: stateLocal.featured ? "1" : "0",
       });
       const data = await fetchJson(`/api/timeline/items?${params.toString()}`, { cache: "no-store" });
-      stateLocal.items.push(...(data.items || []));
+      const previousCount = stateLocal.items.length;
+      const nextItems = data.items || [];
+      stateLocal.items.push(...nextItems);
       stateLocal.cursor = data.nextCursor || 0;
       if (data.status) {
         renderStatus(data.status);
@@ -238,7 +288,11 @@
         stateLocal.lastLoadedGeneration = Number(data.status.generation || 0);
         stateLocal.lastLoadedCount = Number(data.status.count || 0);
       }
-      renderTimeline();
+      if (previousCount && nextItems.length && stateLocal.scale === "day") {
+        appendTimelineItems(previousCount);
+      } else {
+        renderTimeline();
+      }
     } catch (error) {
       groups.innerHTML = `<div class="timeline-empty">${escapeHtml(error.message)}</div>`;
       stateLocal.done = true;
@@ -284,6 +338,7 @@
     groups.innerHTML = "";
     axisList.innerHTML = "";
     resetTimelineThumbnailQueue();
+    stateLocal.renderedCount = 0;
     if (!stateLocal.items.length) {
       const message = stateLocal.latestStatus?.indexing
         ? "正在建立索引，照片会陆续显示。"
@@ -297,7 +352,20 @@
     renderTimelineGroupsChunked(grouped, token);
   }
 
-  function renderTimelineGroupsChunked(grouped, token) {
+  function appendTimelineItems(startIndex) {
+    const token = ++stateLocal.renderToken;
+    const nextItems = stateLocal.items.slice(startIndex);
+    if (!nextItems.length) {
+      return;
+    }
+    const allGrouped = groupItems(stateLocal.items, stateLocal.scale);
+    const grouped = groupItems(nextItems, stateLocal.scale);
+    const totals = new Map(allGrouped.map((group) => [group.id, group.items.length]));
+    renderAxis(allGrouped);
+    appendTimelineGroupsChunked(grouped, token, totals);
+  }
+
+  function appendTimelineGroupsChunked(grouped, token, totals) {
     let index = 0;
     const renderChunk = () => {
       if (token !== stateLocal.renderToken) {
@@ -306,7 +374,107 @@
       const fragment = document.createDocumentFragment();
       const end = Math.min(grouped.length, index + RENDER_CHUNK_SIZE);
       for (; index < end; index += 1) {
-        fragment.append(createTimelineGroup(grouped[index]));
+        const group = grouped[index];
+        const existing = groups.querySelector(`[data-timeline-group="${CSS.escape(group.id)}"]`);
+        if (existing) {
+          appendTimelineCardsToGroup(existing, group, totals.get(group.id) || group.items.length);
+        } else {
+          fragment.append(createTimelineGroup({ ...group, totalCount: totals.get(group.id) || group.items.length }));
+        }
+      }
+      groups.append(fragment);
+      if (index < grouped.length) {
+        window.requestAnimationFrame(renderChunk);
+      }
+    };
+    renderChunk();
+  }
+
+  function appendTimelineCardsToGroup(section, group, totalCount) {
+    const mosaic = section.querySelector(".timeline-mosaic");
+    const subtitle = section.querySelector(".timeline-group-subtitle");
+    if (!mosaic) {
+      return;
+    }
+    const fragment = document.createDocumentFragment();
+    group.items.forEach((item, index) => fragment.append(createTimelineCard(item, index)));
+    mosaic.append(fragment);
+    if (subtitle) {
+      subtitle.textContent = `${totalCount} 项`;
+    }
+  }
+
+  function insertChangedTimelineItems(items) {
+    if (!items.length) {
+      return;
+    }
+    const groupedAll = groupItems(stateLocal.items, stateLocal.scale);
+    const totals = new Map(groupedAll.map((group) => [group.id, group.items.length]));
+    renderAxis(groupedAll);
+    dedupeTimelineItems(items).forEach((item) => {
+      const key = groupKey(item.takenAt, stateLocal.scale);
+      const fullGroup = groupedAll.find((group) => group.id === key.id);
+      if (!fullGroup) {
+        return;
+      }
+      let section = groups.querySelector(`[data-timeline-group="${CSS.escape(key.id)}"]`);
+      if (!section) {
+        section = createTimelineGroup({ ...fullGroup, totalCount: totals.get(key.id) || fullGroup.items.length });
+        insertTimelineGroupElement(section, fullGroup);
+        return;
+      }
+      upsertTimelineCard(section, item, totals.get(key.id) || fullGroup.items.length);
+    });
+  }
+
+  function insertTimelineGroupElement(section, group) {
+    const groupedAll = groupItems(stateLocal.items, stateLocal.scale);
+    const byId = new Map(groupedAll.map((item) => [item.id, item]));
+    const existing = Array.from(groups.querySelectorAll(".timeline-group"));
+    const before = existing.find((node) => {
+      const current = byId.get(node.dataset.timelineGroup);
+      return current && compareTimelineGroups(group, current) < 0;
+    });
+    groups.insertBefore(section, before || null);
+  }
+
+  function compareTimelineGroups(left, right) {
+    const leftMax = left.items[0]?.takenAt || 0;
+    const rightMax = right.items[0]?.takenAt || 0;
+    return leftMax === rightMax ? left.id.localeCompare(right.id) : rightMax - leftMax;
+  }
+
+  function upsertTimelineCard(section, item, totalCount) {
+    const existing = section.querySelector(`.timeline-card[data-path="${CSS.escape(item.path)}"]`);
+    if (existing) {
+      existing.replaceWith(createTimelineCard(item, 0));
+    } else {
+      const mosaic = section.querySelector(".timeline-mosaic");
+      if (mosaic) {
+        const card = createTimelineCard(item, 0);
+        const before = Array.from(mosaic.querySelectorAll(".timeline-card")).find((node) => {
+          const current = stateLocal.items.find((entry) => entry.path === node.dataset.path);
+          return current && compareTimelineItems(item, current) < 0;
+        });
+        mosaic.insertBefore(card, before || null);
+      }
+    }
+    const subtitle = section.querySelector(".timeline-group-subtitle");
+    if (subtitle) {
+      subtitle.textContent = `${totalCount} 项`;
+    }
+  }
+
+  function renderTimelineGroupsChunked(grouped, token, options = {}) {
+    let index = 0;
+    const renderChunk = () => {
+      if (token !== stateLocal.renderToken) {
+        return;
+      }
+      const fragment = document.createDocumentFragment();
+      const end = Math.min(grouped.length, index + RENDER_CHUNK_SIZE);
+      for (; index < end; index += 1) {
+        fragment.append(createTimelineGroup(grouped[index], options));
       }
       groups.append(fragment);
       if (index < grouped.length) {
@@ -317,11 +485,12 @@
   }
 
   function renderAxis(grouped) {
+    axisList.innerHTML = "";
     const buckets = new Map();
     grouped.forEach((group) => {
       const key = group.axis.id;
       if (!buckets.has(key)) {
-        buckets.set(key, { ...group.axis, groupId: group.id, count: 0 });
+        buckets.set(key, { ...group.axis, count: 0 });
       }
       buckets.get(key).count += group.items.length;
     });
@@ -335,10 +504,18 @@
         <span class="timeline-axis-month">${escapeHtml(bucket.month)}</span>
         <span class="timeline-axis-count">${bucket.count}</span>
       `;
-      button.addEventListener("click", () => scrollToTimelineGroup(bucket.groupId));
+      button.addEventListener("click", () => scrollToTimelineAxis(bucket.id));
       fragment.append(button);
     });
     axisList.append(fragment);
+  }
+
+  function scrollToTimelineAxis(axisId) {
+    const target = groups.querySelector(`[data-timeline-axis="${CSS.escape(axisId)}"]`);
+    if (!target) {
+      return;
+    }
+    scrollTimelineTargetIntoView(target);
   }
 
   function scrollToTimelineGroup(groupId) {
@@ -346,8 +523,14 @@
     if (!target) {
       return;
     }
+    scrollTimelineTargetIntoView(target);
+  }
+
+  function scrollTimelineTargetIntoView(target) {
+    const targetRect = target.getBoundingClientRect();
+    const contentRect = content.getBoundingClientRect();
     content.scrollTo({
-      top: Math.max(0, target.offsetTop - 8),
+      top: Math.max(0, content.scrollTop + targetRect.top - contentRect.top - 8),
       behavior: "smooth",
     });
   }
@@ -356,15 +539,17 @@
     const section = document.createElement("section");
     section.className = "timeline-group";
     section.dataset.timelineGroup = group.id;
-    const isCollapsible = group.scale === "day" && group.items.length > DAY_COLLAPSE_LIMIT;
+    section.dataset.timelineAxis = group.axis.id;
+    const isCollapsible = group.scale === "day" && group.items.length > 0;
     const isExpanded = stateLocal.expandedGroups.has(group.id);
-    const visibleItems = isCollapsible && !isExpanded ? group.items.slice(0, DAY_COLLAPSE_LIMIT) : group.items;
-    const hiddenCount = group.items.length - visibleItems.length;
+    const visibleItems = isCollapsible && !isExpanded ? visibleItemsForCollapsedRows(group.items) : group.items;
+    const totalCount = group.totalCount || group.items.length;
+    const hiddenCount = totalCount - visibleItems.length;
     section.innerHTML = `
       <div class="timeline-group-head">
         <div>
           <div class="timeline-group-title">${escapeHtml(group.title)}</div>
-          <div class="timeline-group-subtitle">${group.items.length} 项${hiddenCount > 0 ? `，已折叠 ${hiddenCount} 项` : ""}</div>
+          <div class="timeline-group-subtitle">${totalCount} 项${hiddenCount > 0 ? `，已折叠 ${hiddenCount} 项` : ""}</div>
         </div>
         ${isCollapsible ? `<button class="timeline-fold-toggle" type="button">${isExpanded ? "收起" : `展开剩余 ${hiddenCount} 项`}</button>` : ""}
       </div>
@@ -372,29 +557,163 @@
     `;
     const mosaic = section.querySelector(".timeline-mosaic");
     visibleItems.forEach((item, index) => {
-      const card = createTimelineCard(item, index);
+      const card = createTimelineCard(item, index, index === visibleItems.length - 1 ? hiddenCount : 0, group.id);
       mosaic.append(card);
     });
     const toggle = section.querySelector(".timeline-fold-toggle");
     if (toggle) {
       toggle.addEventListener("click", () => {
-        if (isExpanded) {
+        if (stateLocal.expandedGroups.has(group.id)) {
           stateLocal.expandedGroups.delete(group.id);
         } else {
           stateLocal.expandedGroups.add(group.id);
         }
-        renderTimeline();
-        window.requestAnimationFrame(() => scrollToTimelineGroup(group.id));
+        updateTimelineGroupExpansion(group.id);
       });
     }
     return section;
   }
 
-  function createTimelineCard(item, index) {
+  function updateTimelineGroupExpansion(groupId) {
+    const section = groups.querySelector(`[data-timeline-group="${CSS.escape(groupId)}"]`);
+    if (!section) {
+      return;
+    }
+    const group = groupItems(stateLocal.items, stateLocal.scale).find((item) => item.id === groupId);
+    if (!group) {
+      section.remove();
+      renderAxis(groupItems(stateLocal.items, stateLocal.scale));
+      return;
+    }
+    const mosaic = section.querySelector(".timeline-mosaic");
+    if (!mosaic) {
+      return;
+    }
+    const token = (stateLocal.groupRenderTokens.get(groupId) || 0) + 1;
+    stateLocal.groupRenderTokens.set(groupId, token);
+    const isExpanded = stateLocal.expandedGroups.has(groupId);
+    const visibleItems = isExpanded ? group.items : visibleItemsForCollapsedRows(group.items);
+    const visiblePaths = new Set(visibleItems.map((item) => item.path));
+    updateTimelineGroupChrome(section, group, visibleItems.length, isExpanded);
+
+    if (!isExpanded) {
+      Array.from(mosaic.querySelectorAll(".timeline-card")).forEach((card) => {
+        if (!visiblePaths.has(card.dataset.path)) {
+          card.remove();
+        }
+      });
+      return;
+    }
+
+    mosaic.querySelectorAll(".timeline-more-card").forEach((card) => {
+      const item = group.items.find((entry) => entry.path === card.dataset.path);
+      if (item) {
+        card.replaceWith(createTimelineCard(item, 0));
+      }
+    });
+    const existingPaths = new Set(Array.from(mosaic.querySelectorAll(".timeline-card")).map((card) => card.dataset.path));
+    const missingItems = visibleItems.filter((item) => !existingPaths.has(item.path));
+    appendTimelineCardsChunked(mosaic, missingItems, groupId, token);
+  }
+
+  function updateTimelineGroupChrome(section, group, visibleCount, isExpanded) {
+    const subtitle = section.querySelector(".timeline-group-subtitle");
+    const toggle = section.querySelector(".timeline-fold-toggle");
+    const hiddenCount = Math.max(0, group.items.length - visibleCount);
+    if (subtitle) {
+      subtitle.textContent = `${group.items.length} 项${hiddenCount > 0 ? `，已折叠 ${hiddenCount} 项` : ""}`;
+    }
+    if (toggle) {
+      toggle.textContent = isExpanded ? "收起" : `展开剩余 ${hiddenCount} 项`;
+    }
+  }
+
+  function appendTimelineCardsChunked(mosaic, items, groupId, token) {
+    let index = 0;
+    const renderChunk = () => {
+      if (!mosaic.isConnected || stateLocal.groupRenderTokens.get(groupId) !== token || !stateLocal.expandedGroups.has(groupId)) {
+        return;
+      }
+      const fragment = document.createDocumentFragment();
+      const end = Math.min(items.length, index + 24);
+      for (; index < end; index += 1) {
+        fragment.append(createTimelineCard(items[index], index));
+      }
+      mosaic.append(fragment);
+      if (index < items.length) {
+        window.requestAnimationFrame(renderChunk);
+      }
+    };
+    renderChunk();
+  }
+
+  function visibleItemsForCollapsedRows(items) {
+    const columns = estimateTimelineColumns();
+    if (!items.length || columns <= 0) {
+      return items.slice(0, Math.min(items.length, 1));
+    }
+    const occupied = [];
+    const visible = [];
+    for (let index = 0; index < items.length; index += 1) {
+      const span = cardSpan(items[index], index);
+      const width = Math.max(1, Math.min(columns, span.x || 1));
+      const height = Math.max(1, span.y || 1);
+      const position = findTimelineGridSlot(occupied, columns, width, height);
+      if (position.row + height > COLLAPSE_ROWS) {
+        break;
+      }
+      occupyTimelineGridSlot(occupied, position.row, position.col, width, height);
+      visible.push(items[index]);
+    }
+    return visible.length ? visible : items.slice(0, 1);
+  }
+
+  function estimateTimelineColumns() {
+    const width = Math.max(0, groups.clientWidth || content.clientWidth || window.innerWidth);
+    const styles = window.getComputedStyle(shell);
+    const tile = Number.parseFloat(styles.getPropertyValue("--timeline-tile-size")) || 118;
+    const gap = window.matchMedia("(max-width: 720px)").matches ? 6 : 8;
+    return Math.max(1, Math.floor((width + gap) / (tile + gap)));
+  }
+
+  function findTimelineGridSlot(occupied, columns, width, height) {
+    for (let row = 0; row < COLLAPSE_ROWS; row += 1) {
+      for (let col = 0; col <= columns - width; col += 1) {
+        if (timelineGridSlotFree(occupied, row, col, width, height)) {
+          return { row, col };
+        }
+      }
+    }
+    return { row: COLLAPSE_ROWS, col: 0 };
+  }
+
+  function timelineGridSlotFree(occupied, row, col, width, height) {
+    for (let y = row; y < row + height; y += 1) {
+      for (let x = col; x < col + width; x += 1) {
+        if (occupied[y]?.[x]) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  function occupyTimelineGridSlot(occupied, row, col, width, height) {
+    for (let y = row; y < row + height; y += 1) {
+      if (!occupied[y]) {
+        occupied[y] = [];
+      }
+      for (let x = col; x < col + width; x += 1) {
+        occupied[y][x] = true;
+      }
+    }
+  }
+
+  function createTimelineCard(item, index, hiddenCount = 0, groupId = "") {
     item.path = item.path;
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `timeline-card ${item.type === "video" ? "video" : ""}`;
+    button.className = `timeline-card ${item.type === "video" ? "video" : ""} ${hiddenCount > 0 ? "timeline-more-card" : ""}`;
     button.dataset.path = item.path;
     const span = cardSpan(item, index);
     button.style.setProperty("--span-x", String(span.x));
@@ -402,9 +721,10 @@
     const rating = item.rating > 0 ? `<span class="timeline-rating">${"★".repeat(item.rating)}</span>` : "";
     button.innerHTML = `
       <span class="timeline-thumb">
-        ${item.type === "video" ? `<span class="timeline-video-badge">VIDEO</span><span class="timeline-video-icon">▶</span>` : `<img alt="${escapeHtml(item.name)}" loading="eager" decoding="async" fetchpriority="high" />`}
+        ${item.type === "video" ? `<span class="timeline-video-badge">VIDEO</span><span class="timeline-video-icon">▶</span>` : `<img alt="${escapeHtml(item.name)}" loading="lazy" decoding="async" fetchpriority="low" />`}
         ${rating}
       </span>
+      ${hiddenCount > 0 ? `<span class="timeline-more-badge" aria-hidden="true"><span class="timeline-more-icon">▦</span><span>还有 ${hiddenCount} 张</span></span>` : ""}
       <span class="timeline-card-meta">
         <span>${escapeHtml(timeLabel(item.takenAt))}</span>
       </span>
@@ -415,7 +735,17 @@
       button._timelineThumbPayload = { item, img };
       stateLocal.thumbObserver.observe(button);
     }
-    button.addEventListener("click", () => openTimelineItem(item, button));
+    if (hiddenCount > 0 && groupId) {
+      button.setAttribute("aria-label", `展开剩余 ${hiddenCount} 张照片`);
+      button.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        stateLocal.expandedGroups.add(groupId);
+        updateTimelineGroupExpansion(groupId);
+      });
+    } else {
+      button.addEventListener("click", () => openTimelineItem(item, button));
+    }
     return button;
   }
 
@@ -580,6 +910,28 @@
       map.get(key.id).items.push(item);
     });
     return Array.from(map.values());
+  }
+
+  function mergeTimelineItems(items) {
+    const byPath = new Map(stateLocal.items.map((item) => [item.path, item]));
+    items.forEach((item) => byPath.set(item.path, item));
+    stateLocal.items = Array.from(byPath.values()).sort(compareTimelineItems);
+  }
+
+  function dedupeTimelineItems(items) {
+    const byPath = new Map();
+    items.forEach((item) => {
+      if (item?.path) {
+        byPath.set(item.path, item);
+      }
+    });
+    return Array.from(byPath.values()).sort(compareTimelineItems);
+  }
+
+  function compareTimelineItems(left, right) {
+    return (Number(right.takenAt || 0) - Number(left.takenAt || 0))
+      || String(left.root || "").localeCompare(String(right.root || ""))
+      || String(left.rel || left.path || "").localeCompare(String(right.rel || right.path || ""));
   }
 
   function groupKey(timestamp, scale) {

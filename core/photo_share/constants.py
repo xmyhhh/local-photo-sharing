@@ -70,6 +70,10 @@ DEFAULT_CONFIG = {
             "path": "plugins/duplicate_checker/plugin.py",
         },
         {
+            "name": "removable_sync",
+            "path": "plugins/removable_sync/plugin.py",
+        },
+        {
             "name": "global_search",
             "path": "plugins/global_search/plugin.py",
             "enabled": False,

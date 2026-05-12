@@ -11,8 +11,10 @@ function openFolderContextMenu(event, entry) {
     renderContextMenu(folderContextMenu, [
       menuSection("原生操作", [
         menuButton("打开", "↵", () => navigateFolder(entry.path)),
+        menuButton("多选", "☑", () => enterSelectionMode(entry.path)),
       ]),
       menuSection("访问控制", publicAlbumMenuItems(entry)),
+      ...pluginMenuSections("folder"),
     ]);
     openContextMenuAt(folderContextMenu, event.clientX, event.clientY);
     return;
@@ -221,6 +223,57 @@ async function copyOrMoveSelected(move) {
   loadFolder(state.folder);
 }
 
+function selectedEntries() {
+  return Array.from(state.selectedPaths)
+    .map((path) => state.entryByPath.get(path))
+    .filter(Boolean);
+}
+
+function selectedEntriesAreAllPhotos(entries = selectedEntries()) {
+  return entries.length === state.selectedPaths.size && entries.length > 0 && entries.every((entry) => entry.type === "photo");
+}
+
+async function rateSelectedPhotos(rating) {
+  const entries = selectedEntries();
+  if (!selectedEntriesAreAllPhotos(entries)) {
+    return;
+  }
+  const previousBusy = batchRatingButtons.some((button) => button.disabled);
+  batchRatingButtons.forEach((button) => {
+    button.disabled = true;
+  });
+  try {
+    const result = await fetchJson("/api/ratings/batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paths: entries.map((entry) => entry.path), rating }),
+    });
+    (result.updated || []).forEach((item) => {
+      const entry = state.entryByPath.get(item.path);
+      if (!entry) {
+        return;
+      }
+      entry.rating = item.rating;
+      entry.ratingPending = false;
+      if (!entryMatchesActiveRatingFilter(entry)) {
+        state.selectedPaths.delete(entry.path);
+        removeGridEntry(entry);
+      } else {
+        updateGridRating(entry);
+      }
+    });
+    const failed = result.failed || [];
+    if (failed.length) {
+      window.alert(`有 ${failed.length} 张照片评分写入失败，其余照片已完成。`);
+    }
+  } finally {
+    batchRatingButtons.forEach((button) => {
+      button.disabled = previousBusy ? button.disabled : false;
+    });
+    updateSelectionBar();
+  }
+}
+
 function currentRootedFolderPath() {
   if (!state.rootId) {
     return "";
@@ -242,6 +295,9 @@ async function setPublicAlbum(path, publicAlbum) {
     body: JSON.stringify({ publicAlbums: albums }),
   });
   applyAuthStatus(settings);
+  if (typeof notifyBackendTaskStarted === "function") {
+    notifyBackendTaskStarted();
+  }
   renderGrid();
 }
 
@@ -695,6 +751,13 @@ function updateSelectionBar() {
   compactToggleBtn.hidden = state.selectionMode;
   selectionCount.textContent = `已选择 ${state.selectedPaths.size} 项`;
   const hasSelection = state.selectedPaths.size > 0;
+  const canBatchRate = selectedEntriesAreAllPhotos();
+  if (batchRatingControl) {
+    batchRatingControl.hidden = !canBatchRate;
+  }
+  batchRatingButtons.forEach((button) => {
+    button.disabled = !canBatchRate;
+  });
   [copySelectedBtn, cutSelectedBtn, downloadSelectedBtn, deleteSelectedBtn, moveSelectedBtn].forEach((button) => {
     if (button) {
       button.disabled = !hasSelection;

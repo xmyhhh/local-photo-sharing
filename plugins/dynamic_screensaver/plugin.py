@@ -19,6 +19,7 @@ MAX_RESULTS = 800
 MAX_SCAN_FILES = 300_000
 WARMUP_MODE = "xlarge"
 WARMUP_WORKERS = min(8, max(2, CPU_COUNT))
+READY_CACHE_SECONDS = 6 * 60 * 60
 
 _warmup_lock = Lock()
 _warmup_executor = ThreadPoolExecutor(max_workers=WARMUP_WORKERS, thread_name_prefix="dynamic-screensaver-warmup")
@@ -157,7 +158,7 @@ def ensure_warmup_task(
             state = existing.get("state")
             if state in {"running", "queued"}:
                 return existing
-            if state == "ready" and now - float(existing.get("finishedAt") or 0) < 1800:
+            if state == "ready" and now - float(existing.get("finishedAt") or 0) < READY_CACHE_SECONDS:
                 return existing
         task = {
             "key": key,

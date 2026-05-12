@@ -35,7 +35,7 @@
     ensureScreensaverDom();
     bindActivityListeners();
     scheduleScreensaver();
-    requestScreensaverWarmup();
+    requestScreensaverWarmup({ startup: true });
   }
 
   function ensureScreensaverDom() {
@@ -122,7 +122,7 @@
       });
       panel.querySelector("#dynamicScreensaverSave").addEventListener("click", () => {
         saveFromPanel(panel);
-        statusText.textContent = "已保存到本机，正在准备屏保缓存。";
+        statusText.textContent = "已保存到本机。屏保会在启动前按需准备缓存。";
       });
       ["#dynamicScreensaverEnabled", "#dynamicScreensaverIdle", "#dynamicScreensaverSlideSeconds", "#dynamicScreensaverMinRating", "#dynamicScreensaverFolder"].forEach((selector) => {
         panel.querySelector(selector).addEventListener("change", () => saveFromPanel(panel));
@@ -155,7 +155,9 @@
     };
     saveScreensaverSettings(settings);
     scheduleScreensaver();
-    requestScreensaverWarmup();
+    if (settings.enabled && statusText) {
+      requestScreensaverWarmup({ startup: false });
+    }
   }
 
   function useCurrentFolder() {
@@ -205,8 +207,11 @@
     idleTimer = window.setTimeout(() => startScreensaver({ manual: false }), settings.idleMinutes * 60 * 1000);
   }
 
-  async function requestScreensaverWarmup({ force = false } = {}) {
+  async function requestScreensaverWarmup({ force = false, startup = false } = {}) {
     if (!settings.enabled || !state.enabledPlugins.has("dynamic_screensaver")) {
+      return;
+    }
+    if (!startup && document.hidden && !force) {
       return;
     }
     const nextKey = `${settings.folder}|${settings.minRating}`;
@@ -226,7 +231,9 @@
         }),
       });
       updateWarmupStatus(data);
-      pollWarmupStatus();
+      if (!startup || document.visibilityState === "visible") {
+        pollWarmupStatus();
+      }
     } catch (error) {
       if (statusText) {
         statusText.textContent = error.message || "屏保缓存准备失败。";
@@ -237,6 +244,9 @@
   function pollWarmupStatus() {
     window.clearTimeout(warmupTimer);
     if (!settings.enabled || !state.enabledPlugins.has("dynamic_screensaver")) {
+      return;
+    }
+    if (document.hidden && !active) {
       return;
     }
     warmupTimer = window.setTimeout(async () => {

@@ -204,16 +204,17 @@ button.danger {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(135deg, rgba(8, 21, 31, 0.44), rgba(10, 52, 65, 0.3)),
-    radial-gradient(circle at 12% 18%, rgba(235, 245, 248, 0.2), transparent 26%),
-    radial-gradient(circle at 80% 72%, rgba(121, 182, 187, 0.2), transparent 32%);
+    linear-gradient(135deg, rgba(8, 21, 31, 0.62), rgba(10, 52, 65, 0.42)),
+    radial-gradient(circle at 18% 22%, rgba(235, 245, 248, 0.16), transparent 28%),
+    radial-gradient(circle at 78% 72%, rgba(121, 182, 187, 0.18), transparent 34%);
   z-index: 2;
   pointer-events: none;
 }
 
 .login-backdrop.mosaic {
   background:
-    radial-gradient(circle at 48% 48%, rgba(255, 255, 255, 0.1), transparent 25%),
+    radial-gradient(circle at 48% 42%, rgba(255, 255, 255, 0.12), transparent 30%),
+    linear-gradient(135deg, rgba(14, 45, 56, 0.92), rgba(8, 28, 37, 0.96)),
     #124350;
 }
 
@@ -226,31 +227,45 @@ button.danger {
   height: var(--h);
   background-position: center;
   background-size: cover;
-  border-radius: 14px;
+  border-radius: 22px;
   opacity: 0;
-  filter: grayscale(0.36) saturate(0.72) brightness(0.82);
+  filter: grayscale(0.18) saturate(0.82) brightness(0.82) blur(1px);
   transform: rotate(var(--r)) scale(1);
-  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 28px 86px rgba(0, 0, 0, 0.22);
   transition:
-    opacity 360ms ease,
-    filter 360ms ease,
-    transform 360ms ease,
-    box-shadow 360ms ease;
-  animation: login-tile-drift 18s ease-in-out infinite;
+    opacity 900ms ease,
+    filter 900ms ease,
+    transform 900ms ease;
+  animation: login-tile-drift 26s ease-in-out infinite;
   animation-delay: var(--delay);
+  will-change: transform;
 }
 
 .login-bg-tile.ready {
-  opacity: 0.42;
+  opacity: 0.34;
 }
 
-.login-bg-tile:hover,
-.login-bg-tile.awake {
+.login-bg-tile.depth-near {
   z-index: 2;
-  opacity: 0.94;
-  filter: grayscale(0) saturate(1.12) brightness(1.06);
-  transform: rotate(var(--r)) scale(1.075) translateY(-4px);
-  box-shadow: 0 24px 68px rgba(0, 0, 0, 0.28);
+  opacity: 0;
+  filter: grayscale(0.08) saturate(0.92) brightness(0.9) blur(0.4px);
+}
+
+.login-bg-tile.depth-near.ready {
+  opacity: 0.48;
+}
+
+.login-bg-tile.depth-mid {
+  z-index: 1;
+}
+
+.login-bg-tile.depth-far {
+  z-index: 0;
+  filter: grayscale(0.32) saturate(0.62) brightness(0.74) blur(3px);
+}
+
+.login-bg-tile.depth-far.ready {
+  opacity: 0.24;
 }
 
 @keyframes login-tile-drift {
@@ -259,7 +274,7 @@ button.danger {
   }
 
   50% {
-    translate: 0 -10px;
+    translate: var(--float-x) var(--float-y);
   }
 }
 
@@ -1063,6 +1078,30 @@ main {
   white-space: nowrap;
 }
 
+.batch-rating-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.54);
+}
+
+.batch-rating-control[hidden] {
+  display: none;
+}
+
+.batch-rating-control span {
+  padding: 0 2px;
+  font-size: 0.84rem;
+}
+
+.batch-rating-control button {
+  min-height: 28px;
+  padding: 5px 7px;
+}
+
 .selection-bar[hidden] {
   display: none;
 }
@@ -1161,6 +1200,7 @@ main {
 
 :root[data-theme="dark"] .warmup-banner,
 :root[data-theme="dark"] .selection-bar,
+:root[data-theme="dark"] .batch-rating-control,
 :root[data-theme="dark"] .thumb-mode-control,
 :root[data-theme="dark"] .folder-icon,
 :root[data-theme="dark"] .rating-filter-menu {
@@ -1171,6 +1211,7 @@ main {
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .warmup-banner,
   :root:not([data-theme="light"]) .selection-bar,
+  :root:not([data-theme="light"]) .batch-rating-control,
   :root:not([data-theme="light"]) .thumb-mode-control,
   :root:not([data-theme="light"]) .folder-icon,
   :root:not([data-theme="light"]) .rating-filter-menu {

@@ -73,6 +73,14 @@ moveSelectedBtn.addEventListener("click", () => copyOrMoveSelected(true));
 deleteSelectedBtn.addEventListener("click", () => deleteEntries(Array.from(state.selectedPaths)));
 invertSelectionBtn.addEventListener("click", invertSelection);
 exitSelectionBtn.addEventListener("click", exitSelectionMode);
+batchRatingButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const rating = Number.parseInt(button.dataset.batchRating, 10);
+    if (Number.isFinite(rating)) {
+      rateSelectedPhotos(rating);
+    }
+  });
+});
 clearFiltersBtn.addEventListener("click", () => {
   ratingFilterInputs.forEach((input) => {
     input.checked = false;
