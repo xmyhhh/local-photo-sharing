@@ -4,9 +4,10 @@ from pathlib import Path
 from threading import Condition, Lock, Thread, get_ident
 from time import monotonic, monotonic_ns
 
-from PIL import Image, ImageOps
+from PIL import Image
 
 from .constants import THUMBNAIL_WORKERS
+from .image_decode import load_photo_image
 from .paths import hash_text, to_relative
 class ImageCacheStore:
     def __init__(
@@ -145,9 +146,8 @@ class ImageCacheStore:
         if not self.needs_warmup(photo_path, rel):
             return
 
-        with Image.open(photo_path) as image:
-            prepared = ImageOps.exif_transpose(image)
-            self._generate_from_prepared_image(photo_path, rel, prepared)
+        prepared = load_photo_image(photo_path)
+        self._generate_from_prepared_image(photo_path, rel, prepared)
 
     def _generate_from_prepared_image(self, photo_path: Path, rel: str, image: Image.Image) -> None:
         cache_path = self.cache_path_for_rel(rel)

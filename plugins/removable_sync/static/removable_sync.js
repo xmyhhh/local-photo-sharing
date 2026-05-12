@@ -9,7 +9,7 @@ const removableSyncState = {
 };
 
 const REMOVABLE_SYNC_EXTENSIONS = new Set([
-  ".jpg", ".jpeg", ".heic", ".heif", ".mp4", ".mov", ".m4v", ".webm",
+  ".jpg", ".jpeg", ".png", ".hdr", ".heic", ".heif", ".mp4", ".mov", ".m4v", ".webm",
 ]);
 
 initRemovableSyncPlugin();
@@ -36,8 +36,8 @@ function createRemovableSyncDialog() {
           <div class="removable-sync-source-actions">
             <button id="chooseRemovableFolderBtn" type="button">选择文件夹</button>
             <button id="chooseRemovableFilesBtn" class="ghost" type="button">选择文件</button>
-            <input id="removableFileInput" type="file" multiple accept="image/*,video/*,.jpg,.jpeg,.heic,.heif,.mov,.m4v,.mp4,.webm" hidden />
-            <input id="removableDirectoryInput" type="file" multiple webkitdirectory accept="image/*,video/*,.jpg,.jpeg,.heic,.heif,.mov,.m4v,.mp4,.webm" hidden />
+            <input id="removableFileInput" type="file" multiple accept="image/*,video/*,.jpg,.jpeg,.png,.hdr,.heic,.heif,.mov,.m4v,.mp4,.webm" hidden />
+            <input id="removableDirectoryInput" type="file" multiple webkitdirectory accept="image/*,video/*,.jpg,.jpeg,.png,.hdr,.heic,.heif,.mov,.m4v,.mp4,.webm" hidden />
           </div>
           <div id="removableSyncSource" class="removable-sync-source">尚未选择来源。</div>
           <div class="removable-sync-stats" aria-live="polite">

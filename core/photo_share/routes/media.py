@@ -13,6 +13,7 @@ from ..auth import require_admin, require_guest_delete_access, require_path_acce
 from ..constants import PHOTO_EXTENSIONS
 from ..context import AppServices
 from ..delete_service import delete_media
+from ..image_decode import load_photo_image
 from ..live_photos import find_live_video
 from ..paths import (
     get_thumbnail_mode,
@@ -233,8 +234,8 @@ def build_media_info(path: Path) -> dict:
     if path.suffix.lower() not in PHOTO_EXTENSIONS:
         return info
     try:
-        with Image.open(path) as image:
-            info["width"], info["height"] = image.size
+        image = load_photo_image(path)
+        info["width"], info["height"] = image.size
     except Exception:
         pass
     try:

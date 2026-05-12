@@ -44,9 +44,14 @@ let authSettingsLoaded = false;
 
 async function openSettingsDialog() {
   setSettingsTab("general");
-  settingsStatus.textContent = "正在读取设置...";
+  settingsStatus.textContent = state.authEnabled && state.authRole !== "admin" ? "" : "正在读取设置...";
   pluginComponentList.innerHTML = "";
   settingsDialog.showModal();
+  if (state.authEnabled && state.authRole !== "admin") {
+    renderGuestSettings();
+    return;
+  }
+  restoreAdminSettingsChrome();
   try {
     const [general, components] = await Promise.all([
       fetchJson("/api/settings/general", { cache: "no-store" }),
@@ -63,6 +68,9 @@ async function openSettingsDialog() {
 }
 
 function setSettingsTab(tabName) {
+  if (state.authEnabled && state.authRole !== "admin") {
+    tabName = "general";
+  }
   const pluginPage = getPluginSettingsPage(tabName);
   const name = pluginPage ? tabName : (["general", "auth", "plugins"].includes(tabName) ? tabName : "general");
   settingsTabs().forEach((tab) => {
@@ -93,6 +101,32 @@ function setSettingsTab(tabName) {
   if (pluginPage) {
     pluginPage.render?.();
   }
+}
+
+function renderGuestSettings() {
+  generalSettingsLoaded = false;
+  authSettingsLoaded = false;
+  settingsTabs().forEach((tab) => {
+    const isGeneral = tab.dataset.settingsTab === "general";
+    tab.hidden = !isGeneral;
+    tab.disabled = !isGeneral;
+  });
+  pluginSettingsTabs.innerHTML = "";
+  themeModeSelect.value = state.themeMode;
+  memoryPrefetchEnabledInput.closest(".settings-card").hidden = true;
+  authSettingsPanel.hidden = true;
+  pluginsSettingsPanel.hidden = true;
+  pluginSettingsPages.innerHTML = "";
+  setSettingsTab("general");
+  generalSettingsLoaded = true;
+}
+
+function restoreAdminSettingsChrome() {
+  settingsTabs().forEach((tab) => {
+    tab.hidden = false;
+    tab.disabled = false;
+  });
+  memoryPrefetchEnabledInput.closest(".settings-card").hidden = false;
 }
 
 function renderGeneralSettings(settings) {
@@ -264,6 +298,10 @@ async function saveGeneralSettings() {
     return;
   }
   window.clearTimeout(generalSettingsSaveTimer);
+  if (state.authEnabled && state.authRole !== "admin") {
+    settingsStatus.textContent = "";
+    return;
+  }
   const memoryLimitMb = Number.parseInt(memoryPrefetchLimitInput.value, 10);
   const minMb = Number.parseInt(memoryPrefetchLimitInput.min, 10) || 256;
   const maxMb = Number.parseInt(memoryPrefetchLimitInput.max, 10) || 1024;

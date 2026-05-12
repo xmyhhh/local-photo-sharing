@@ -17,8 +17,8 @@ from ..auth import (
     visible_roots,
 )
 from ..constants import (
+    BROWSER_RENDERABLE_PHOTO_EXTENSIONS,
     FILTER_WAIT_SECONDS,
-    JPG_EXTENSIONS,
     PHOTO_EXTENSIONS,
     DEFAULT_ENTRY_PLACEHOLDER_LIMIT,
     RATINGS_FILE,
@@ -260,7 +260,7 @@ def _build_entry(
         "mtime": int(stat.st_mtime),
         "rating": rating,
         "ratingPending": rating_pending,
-        "browserRenderable": suffix in JPG_EXTENSIONS,
+        "browserRenderable": suffix in BROWSER_RENDERABLE_PHOTO_EXTENSIONS,
         "isLive": live_video is not None,
         "liveVideoPath": join_rooted_path(root_id, to_relative(root_services.root, live_video)) if live_video else None,
     }

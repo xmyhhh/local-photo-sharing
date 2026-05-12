@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 from flask import Flask, abort, jsonify, redirect, request
 
 from ..auth import auth_enabled, is_admin
-from ..constants import PHOTO_EXTENSIONS, MEDIA_EXTENSIONS
+from ..constants import LIVE_PHOTO_STILL_EXTENSIONS, MEDIA_EXTENSIONS
 from ..context import AppServices
 from ..live_photos import find_live_video
 from ..paths import join_rooted_path, normalize_rel_path, to_relative
@@ -114,7 +114,7 @@ def save_uploaded_files(services: AppServices, folder: str) -> tuple[dict, int]:
             "path": join_rooted_path(services.default_root_id, to_relative(root, path)),
         }
         for path in saved_paths
-        if path.suffix.lower() in PHOTO_EXTENSIONS and find_live_video(path) is None
+        if path.suffix.lower() in LIVE_PHOTO_STILL_EXTENSIONS and find_live_video(path) is None
     ]
     return {
         "root": services.default_root_id,

@@ -7,10 +7,9 @@ from threading import Lock, Thread
 from time import monotonic
 from typing import Any
 
-from PIL import Image, ImageOps
-
 from .constants import PHOTO_EXTENSIONS, THUMBNAIL_WORKERS
 from .context import AppServices
+from .image_decode import load_photo_image
 from .paths import to_relative
 
 
@@ -176,18 +175,16 @@ def _warmup_photo_task(services: AppServices, root_id: str, photo: Path, rel: st
     generated = 0
     failed = 0
     try:
-        with Image.open(photo) as image:
-            prepared = ImageOps.exif_transpose(image)
-            prepared.load()
-            for mode in modes:
-                store = root_services.thumbnails[mode]
-                try:
-                    if store.warmup_from_prepared_image(photo, rel, prepared):
-                        generated += 1
-                except Exception as exc:
-                    failed += 1
-                    print()
-                    print(f"Warmup failed: {root_id} {mode} {photo} ({exc})")
+        prepared = load_photo_image(photo)
+        for mode in modes:
+            store = root_services.thumbnails[mode]
+            try:
+                if store.warmup_from_prepared_image(photo, rel, prepared):
+                    generated += 1
+            except Exception as exc:
+                failed += 1
+                print()
+                print(f"Warmup failed: {root_id} {mode} {photo} ({exc})")
     except Exception as exc:
         print()
         print(f"Warmup failed: {root_id} {photo} ({exc})")

@@ -24,7 +24,7 @@ function applyAuthStatus(status) {
   state.loginBackgroundFolder = status.loginBackgroundFolder || "";
   state.loginBackgroundLayout = ["grid", "stack", "solo"].includes(status.loginBackgroundLayout) ? status.loginBackgroundLayout : "grid";
   if (openSettingsBtn) {
-    openSettingsBtn.hidden = state.authEnabled && state.authRole !== "admin";
+    openSettingsBtn.hidden = state.authEnabled && state.authRole === "none";
   }
   if (openUploadBtn) {
     openUploadBtn.hidden = state.authEnabled && state.authRole !== "admin";

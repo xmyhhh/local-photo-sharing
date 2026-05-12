@@ -15,7 +15,15 @@ import piexif
 from flask import Flask, abort, jsonify, request
 from PIL import Image
 
-from core.photo_share.constants import CACHE_DIR, MEDIA_EXTENSIONS, PHOTO_EXTENSIONS, RATINGS_FILE, THUMBNAIL_DIR, CPU_COUNT
+from core.photo_share.constants import (
+    BROWSER_RENDERABLE_PHOTO_EXTENSIONS,
+    CACHE_DIR,
+    MEDIA_EXTENSIONS,
+    PHOTO_EXTENSIONS,
+    RATINGS_FILE,
+    THUMBNAIL_DIR,
+    CPU_COUNT,
+)
 from core.photo_share.context import AppServices
 from core.photo_share.paths import image_url, join_rooted_path, root_cache_key, thumb_url, to_relative
 
@@ -556,7 +564,7 @@ def build_timeline_entry(root_id: str, root_services, path: Path, stat: os.stat_
         rating=rating,
         width=0,
         height=0,
-        browser_renderable=suffix in {".jpg", ".jpeg"},
+        browser_renderable=suffix in BROWSER_RENDERABLE_PHOTO_EXTENSIONS,
         is_live=False,
         live_video_path=None,
     )

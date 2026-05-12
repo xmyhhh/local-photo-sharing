@@ -22,6 +22,8 @@
             "video/*",
             ".jpg",
             ".jpeg",
+            ".png",
+            ".hdr",
             ".heic",
             ".heif",
             ".mov",

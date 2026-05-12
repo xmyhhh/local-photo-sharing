@@ -9,7 +9,7 @@ from typing import Any
 
 from flask import Flask, abort, jsonify, request
 
-from core.photo_share.constants import CPU_COUNT, PHOTO_EXTENSIONS, RATINGS_FILE, THUMBNAIL_DIR
+from core.photo_share.constants import BROWSER_RENDERABLE_PHOTO_EXTENSIONS, CPU_COUNT, PHOTO_EXTENSIONS, RATINGS_FILE, THUMBNAIL_DIR
 from core.photo_share.context import AppServices, RootServices
 from core.photo_share.paths import image_url, join_rooted_path, parse_rooted_path, preview_url, resolve_folder, thumb_url, to_relative
 from core.photo_share.routes.gallery import _root_services
@@ -282,7 +282,7 @@ def run_warmup_task(services: AppServices, task: dict[str, Any]) -> None:
                     "previewUrl": preview_url(rooted),
                     "thumbUrl": thumb_url(rooted, WARMUP_MODE),
                     "preparedUrl": thumb_url(rooted, WARMUP_MODE),
-                    "browserRenderable": path.suffix.lower() in {".jpg", ".jpeg"},
+                    "browserRenderable": path.suffix.lower() in BROWSER_RENDERABLE_PHOTO_EXTENSIONS,
                     "prepared": prepared,
                 }
                 photos.append(photo)
