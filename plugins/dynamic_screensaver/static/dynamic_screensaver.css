@@ -95,10 +95,9 @@
 }
 
 .dynamic-screensaver-actions {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .dynamic-screensaver-status {
@@ -150,9 +149,11 @@
   min-height: 0;
 }
 
-.dynamic-screensaver-actions {
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.dynamic-screensaver-actions button {
+  width: 100%;
+  min-width: 0;
+  padding: 0 12px;
+  white-space: nowrap;
 }
 
 @media (max-width: 620px) {
@@ -160,9 +161,19 @@
     grid-template-columns: 1fr;
   }
 
+  .dynamic-screensaver-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .dynamic-screensaver-caption {
     right: max(18px, env(safe-area-inset-right));
     max-width: none;
     white-space: normal;
+  }
+}
+
+@media (max-width: 380px) {
+  .dynamic-screensaver-actions {
+    grid-template-columns: 1fr;
   }
 }

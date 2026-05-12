@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 
 from core.photo_share.constants import (
@@ -15,7 +16,19 @@ from core.photo_share.image_cache import ImageCacheStore
 from core.photo_share.image_decode import load_photo_image
 
 
-HDR_SAMPLE_DIR = Path(r"C:\Users\xmyci\Desktop\Enjon\Assets\Textures\HDR")
+def write_hdr_sample(path: Path) -> Path:
+    import cv2
+
+    data = np.array(
+        [
+            [[0.12, 0.25, 0.5], [0.8, 0.45, 0.22]],
+            [[1.6, 1.1, 0.7], [3.2, 2.0, 1.2]],
+        ],
+        dtype=np.float32,
+    )
+    if not cv2.imwrite(str(path), data):
+        raise AssertionError(f"failed to write HDR sample: {path}")
+    return path
 
 
 def test_png_and_hdr_are_supported_photo_formats() -> None:
@@ -27,8 +40,8 @@ def test_png_and_hdr_are_supported_photo_formats() -> None:
     assert not HDR_EXTENSIONS & BROWSER_RENDERABLE_PHOTO_EXTENSIONS
 
 
-def test_hdr_sample_can_be_decoded_for_preview() -> None:
-    sample = next(HDR_SAMPLE_DIR.glob("*.hdr"))
+def test_hdr_sample_can_be_decoded_for_preview(tmp_path: Path) -> None:
+    sample = write_hdr_sample(tmp_path / "sample.hdr")
 
     image = load_photo_image(sample)
 
@@ -40,7 +53,7 @@ def test_hdr_sample_can_be_decoded_for_preview() -> None:
 def test_png_and_hdr_thumbnail_generation(tmp_path: Path) -> None:
     png = tmp_path / "sample.png"
     Image.new("RGBA", (16, 12), (255, 0, 0, 128)).save(png)
-    hdr = next(HDR_SAMPLE_DIR.glob("*.hdr"))
+    hdr = write_hdr_sample(tmp_path / "sample.hdr")
     store = ImageCacheStore(
         root=tmp_path,
         cache_root=tmp_path / ".thumbs",

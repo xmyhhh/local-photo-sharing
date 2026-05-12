@@ -3,18 +3,22 @@ from __future__ import annotations
 import argparse
 import re
 import shutil
+import sys
 from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from core.photo_share.brackets import detect_exposure_brackets
 
 
-DEFAULT_SOURCE = Path(r"D:\新疆照片\卡1\DCIM\101_PANA")
-DEFAULT_OUTPUT = Path(r"D:\codex_prj\photo\test_out")
+DEFAULT_OUTPUT = Path("test_out")
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Scan a folder for exposure bracket groups and copy matches.")
-    parser.add_argument("--source", type=Path, default=DEFAULT_SOURCE, help="Source photo folder to scan.")
+    parser.add_argument("--source", type=Path, required=True, help="Source photo folder to scan.")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help="Output directory for copied groups.")
     return parser.parse_args()
 

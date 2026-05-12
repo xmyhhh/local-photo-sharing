@@ -20,6 +20,8 @@ MAX_SCAN_FILES = 300_000
 WARMUP_MODE = "xlarge"
 WARMUP_WORKERS = min(8, max(2, CPU_COUNT))
 READY_CACHE_SECONDS = 6 * 60 * 60
+TASK_HISTORY_SECONDS = READY_CACHE_SECONDS
+MAX_TASK_HISTORY = 24
 
 _warmup_lock = Lock()
 _warmup_executor = ThreadPoolExecutor(max_workers=WARMUP_WORKERS, thread_name_prefix="dynamic-screensaver-warmup")
@@ -153,6 +155,7 @@ def ensure_warmup_task(
     key = warmup_key(folder, min_rating, limit)
     now = time.time()
     with _warmup_lock:
+        prune_warmup_tasks_locked(now)
         existing = _warmup_tasks.get(key)
         if existing and not force:
             state = existing.get("state")
@@ -179,6 +182,34 @@ def ensure_warmup_task(
         _warmup_tasks[key] = task
         _warmup_futures[key] = _warmup_executor.submit(run_warmup_task, services, task)
         return task
+
+
+def prune_warmup_tasks_locked(now: float | None = None) -> None:
+    if now is None:
+        now = time.time()
+    stale_keys = [
+        key
+        for key, task in _warmup_tasks.items()
+        if task.get("state") in {"ready", "error"} and now - float(task.get("finishedAt") or 0) > TASK_HISTORY_SECONDS
+    ]
+    for key in stale_keys:
+        _warmup_tasks.pop(key, None)
+        _warmup_futures.pop(key, None)
+
+    completed_keys = [
+        (
+            float(task.get("finishedAt") or task.get("startedAt") or 0),
+            key,
+        )
+        for key, task in _warmup_tasks.items()
+        if task.get("state") in {"ready", "error"}
+    ]
+    overflow = len(_warmup_tasks) - MAX_TASK_HISTORY
+    if overflow <= 0:
+        return
+    for _, key in sorted(completed_keys)[:overflow]:
+        _warmup_tasks.pop(key, None)
+        _warmup_futures.pop(key, None)
 
 
 def cached_task_photos(task: dict[str, Any], limit: int) -> list[dict[str, Any]]:
@@ -214,6 +245,7 @@ def task_status_payload(task: dict[str, Any]) -> dict[str, Any]:
 def get_backend_tasks(services: AppServices) -> list[dict[str, Any]]:
     tasks: list[dict[str, Any]] = []
     with _warmup_lock:
+        prune_warmup_tasks_locked()
         snapshots = [dict(task) for task in _warmup_tasks.values()]
     for task in snapshots:
         state = str(task.get("state") or "")
