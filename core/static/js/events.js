@@ -159,6 +159,9 @@ document.addEventListener("wheel", handleViewerWheel, { capture: true, passive: 
 document.addEventListener("mousewheel", handleViewerWheel, { capture: true, passive: false });
 document.addEventListener("DOMMouseScroll", handleViewerWheel, { capture: true, passive: false });
 imageStage.addEventListener("pointerdown", (event) => {
+  if (event.pointerType === "mouse") {
+    state.viewerPointerMoved = false;
+  }
   if (isViewerLocked() || event.pointerType !== "mouse" || state.zoom <= 1) {
     return;
   }
@@ -168,17 +171,35 @@ imageStage.addEventListener("pointerdown", (event) => {
   state.dragStart = { x: event.clientX, y: event.clientY, panX: state.panX, panY: state.panY };
 });
 imageStage.addEventListener("pointermove", (event) => {
-  if (viewer.open && state.zoom <= 1 && !isCoarsePointer() && !isViewerLocked()) {
-    showViewerControls({ autoHide: true });
-  }
   if (isViewerLocked() || !state.isDragging || !state.dragStart) {
     return;
   }
   event.preventDefault();
+  state.viewerPointerMoved = true;
   state.panX = state.dragStart.panX + event.clientX - state.dragStart.x;
   state.panY = state.dragStart.panY + event.clientY - state.dragStart.y;
   clampPan();
   updateZoom();
+});
+imageStage.addEventListener("click", () => {
+  if (!viewer.open || isViewerLocked()) {
+    return;
+  }
+  if (state.viewerPointerMoved) {
+    state.viewerPointerMoved = false;
+    return;
+  }
+  if (state.viewerClickTimer) {
+    window.clearTimeout(state.viewerClickTimer);
+    state.viewerClickTimer = null;
+    return;
+  }
+  state.viewerClickTimer = window.setTimeout(() => {
+    state.viewerClickTimer = null;
+    if (viewer.open && !isViewerLocked()) {
+      toggleViewerControls();
+    }
+  }, 280);
 });
 imageStage.addEventListener("pointerup", () => {
   state.isDragging = false;
@@ -193,6 +214,11 @@ imageStage.addEventListener("dblclick", (event) => {
     return;
   }
   event.preventDefault();
+  if (state.viewerClickTimer) {
+    window.clearTimeout(state.viewerClickTimer);
+    state.viewerClickTimer = null;
+  }
+  state.viewerPointerMoved = false;
   setZoom(state.zoom > 1 ? 1 : 2, event.clientX, event.clientY);
 });
 imageStage.addEventListener("touchstart", (event) => {
@@ -204,6 +230,8 @@ imageStage.addEventListener("touchstart", (event) => {
     state.activeTouches.set(touch.identifier, { x: touch.clientX, y: touch.clientY });
   }
   if (state.activeTouches.size >= 2) {
+    state.lastTapTime = 0;
+    state.swipeMoved = true;
     state.pinchDistance = distanceBetweenTouches();
     state.pinchZoom = state.zoom;
     const middle = midpointBetweenTouches();
@@ -226,6 +254,7 @@ imageStage.addEventListener(
       state.activeTouches.set(touch.identifier, { x: touch.clientX, y: touch.clientY });
     }
     if (state.activeTouches.size >= 2 && state.pinchDistance > 0) {
+      state.swipeMoved = true;
       const nextDistance = distanceBetweenTouches();
       const middle = midpointBetweenTouches();
       state.zoom = Math.max(1, Math.min(6, state.pinchZoom * (nextDistance / state.pinchDistance)));
@@ -237,6 +266,7 @@ imageStage.addEventListener(
       updateZoom();
     } else if (state.zoom > 1 && state.dragStart && event.changedTouches.length === 1) {
       const touch = event.changedTouches[0];
+      state.swipeMoved = true;
       state.panX = state.dragStart.panX + touch.clientX - state.dragStart.x;
       state.panY = state.dragStart.panY + touch.clientY - state.dragStart.y;
       clampPan();
@@ -245,6 +275,9 @@ imageStage.addEventListener(
       const touch = event.changedTouches[0];
       const dx = touch.clientX - state.swipeStart.x;
       const dy = touch.clientY - state.swipeStart.y;
+      if (Math.abs(dx) > 12 || Math.abs(dy) > 12) {
+        state.swipeMoved = true;
+      }
       if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.4) {
         state.swipeMoved = true;
       }
@@ -290,12 +323,6 @@ imageStage.addEventListener("touchend", (event) => {
   state.dragStart = null;
 });
 imageStage.addEventListener("touchcancel", clearEndedTouches);
-viewer.addEventListener("mousemove", () => {
-  if (!viewer.open || state.zoom > 1 || isCoarsePointer() || isViewerLocked()) {
-    return;
-  }
-  showViewerControls({ autoHide: true });
-});
 window.addEventListener("resize", () => {
   if (!viewerRatingMenu.hidden) {
     positionViewerRatingMenu();

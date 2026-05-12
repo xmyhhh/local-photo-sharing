@@ -133,10 +133,7 @@ function syncViewerZoomUi() {
     }
     return;
   }
-  if (state.viewerControlsAutoHiddenForZoom && !isViewerLocked()) {
-    state.viewerControlsAutoHiddenForZoom = false;
-    showViewerControls({ autoHide: !isCoarsePointer() });
-  }
+  state.viewerControlsAutoHiddenForZoom = false;
 }
 
 function isCoarsePointer() {
@@ -156,6 +153,11 @@ function showPhoto(entry) {
   state.panX = 0;
   state.panY = 0;
   state.viewerControlsAutoHiddenForZoom = false;
+  if (state.viewerClickTimer) {
+    window.clearTimeout(state.viewerClickTimer);
+    state.viewerClickTimer = null;
+  }
+  state.viewerPointerMoved = false;
   state.isDragging = false;
   state.dragStart = null;
   state.activeTouches.clear();
