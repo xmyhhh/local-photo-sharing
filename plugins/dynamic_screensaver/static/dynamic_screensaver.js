@@ -22,6 +22,7 @@
   let warmupTimer = 0;
   let warmupKey = "";
   let requestedFullscreen = false;
+  let activityIgnoreUntil = 0;
 
   registerPluginAction("dynamic_screensaver.open", openScreensaverSettings);
   registerPluginSettingsPage("dynamic_screensaver.settings", renderScreensaverSettingsPage);
@@ -192,6 +193,9 @@
   }
 
   function handleActivity() {
+    if (Date.now() < activityIgnoreUntil) {
+      return;
+    }
     if (active) {
       stopScreensaver();
       return;
@@ -286,6 +290,9 @@
     if (!state.enabledPlugins.has("dynamic_screensaver") || active || viewer?.open || uploadDialog?.open || blockingDialog) {
       scheduleScreensaver();
       return;
+    }
+    if (manual) {
+      activityIgnoreUntil = Date.now() + 1200;
     }
     ensureScreensaverDom();
     active = true;
@@ -384,14 +391,14 @@
   }
 
   async function resolveSlideUrls(photo) {
-    if (photo.preparedUrl) {
-      return [photo.preparedUrl, photo.thumbUrl, photo.imageUrl];
+    if (photo.prepared && photo.preparedUrl) {
+      return [photo.preparedUrl, photo.browserRenderable ? photo.imageUrl : photo.previewUrl, photo.thumbUrl];
     }
     if (photo.browserRenderable) {
-      return [photo.thumbUrl, photo.imageUrl];
+      return [photo.imageUrl, photo.thumbUrl];
     }
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const response = await fetch(`/api/preview-status/${encodePath(photo.path)}`, { cache: "no-store" });
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const response = await fetch(`/api/thumb-status/${encodePath(photo.path)}?mode=xlarge`, { cache: "no-store" });
       const data = await response.json().catch(() => ({}));
       if (response.ok && data.url) {
         return [data.url, photo.thumbUrl, photo.imageUrl];
@@ -405,7 +412,7 @@
     for (let offset = 1; offset <= 5 && offset < photos.length; offset += 1) {
       const photo = photos[(index + offset) % photos.length];
       const image = new Image();
-      image.src = photo.preparedUrl || photo.thumbUrl || photo.imageUrl;
+      image.src = (photo.prepared && photo.preparedUrl) || (photo.browserRenderable ? photo.imageUrl : photo.thumbUrl) || photo.imageUrl;
     }
   }
 
@@ -414,6 +421,7 @@
       return;
     }
     active = false;
+    activityIgnoreUntil = 0;
     window.clearTimeout(slideTimer);
     exitScreensaverFullscreen();
     overlay.classList.remove("active");
