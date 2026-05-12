@@ -190,6 +190,9 @@
         requestedFullscreen = false;
       }
     });
+    document.addEventListener("visibilitychange", handleForegroundStateChange);
+    window.addEventListener("focus", handleForegroundStateChange);
+    window.addEventListener("blur", handleForegroundStateChange);
   }
 
   function handleActivity() {
@@ -203,9 +206,26 @@
     scheduleScreensaver();
   }
 
+  function handleForegroundStateChange() {
+    if (!isPageForeground()) {
+      window.clearTimeout(idleTimer);
+      idleTimer = 0;
+      if (active) {
+        stopScreensaver();
+      }
+      return;
+    }
+    scheduleScreensaver();
+  }
+
+  function isPageForeground() {
+    const focused = typeof document.hasFocus === "function" ? document.hasFocus() : true;
+    return document.visibilityState === "visible" && focused;
+  }
+
   function scheduleScreensaver() {
     window.clearTimeout(idleTimer);
-    if (!settings.enabled || !state.enabledPlugins.has("dynamic_screensaver")) {
+    if (!settings.enabled || !state.enabledPlugins.has("dynamic_screensaver") || !isPageForeground()) {
       return;
     }
     idleTimer = window.setTimeout(() => startScreensaver({ manual: false }), settings.idleMinutes * 60 * 1000);
@@ -215,7 +235,7 @@
     if (!settings.enabled || !state.enabledPlugins.has("dynamic_screensaver")) {
       return;
     }
-    if (!startup && document.hidden && !force) {
+    if (!startup && !isPageForeground() && !force) {
       return;
     }
     const nextKey = `${settings.folder}|${settings.minRating}`;
@@ -235,7 +255,7 @@
         }),
       });
       updateWarmupStatus(data);
-      if (!startup || document.visibilityState === "visible") {
+      if (!startup || isPageForeground()) {
         pollWarmupStatus();
       }
     } catch (error) {
@@ -250,7 +270,7 @@
     if (!settings.enabled || !state.enabledPlugins.has("dynamic_screensaver")) {
       return;
     }
-    if (document.hidden && !active) {
+    if (!isPageForeground() && !active) {
       return;
     }
     warmupTimer = window.setTimeout(async () => {
@@ -287,7 +307,7 @@
 
   async function startScreensaver({ manual }) {
     const blockingDialog = document.querySelector("#pluginDialogs dialog[open]") || settingsDialog?.open;
-    if (!state.enabledPlugins.has("dynamic_screensaver") || active || viewer?.open || uploadDialog?.open || blockingDialog) {
+    if (!state.enabledPlugins.has("dynamic_screensaver") || !isPageForeground() || active || viewer?.open || uploadDialog?.open || blockingDialog) {
       scheduleScreensaver();
       return;
     }
