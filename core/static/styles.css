@@ -3531,20 +3531,6 @@ main {
     font-size: 12px;
   }
 
-  .photo-info-panel {
-    right: 8px;
-    left: 8px;
-    top: auto;
-    bottom: calc(max(var(--viewer-mobile-bottom-clearance), env(safe-area-inset-bottom)) + 56px);
-    width: auto;
-    max-height: min(48vh, 360px);
-    border-radius: 18px;
-  }
-
-  .photo-info-body {
-    max-height: calc(min(48vh, 360px) - 55px);
-  }
-
   .page-btn {
     width: 38px;
     height: 96px;
@@ -3597,6 +3583,20 @@ main {
 
   .viewer-rating-menu {
     min-width: 104px;
+  }
+
+  .photo-info-panel {
+    right: 8px;
+    left: 8px;
+    top: auto;
+    bottom: calc(max(var(--viewer-mobile-bottom-clearance), env(safe-area-inset-bottom)) + 56px);
+    width: auto;
+    max-height: min(48vh, 360px);
+    border-radius: 18px;
+  }
+
+  .photo-info-body {
+    max-height: calc(min(48vh, 360px) - 55px);
   }
 
   .image-stage {
