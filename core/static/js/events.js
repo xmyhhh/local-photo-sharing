@@ -168,7 +168,7 @@ imageStage.addEventListener("pointerdown", (event) => {
   state.dragStart = { x: event.clientX, y: event.clientY, panX: state.panX, panY: state.panY };
 });
 imageStage.addEventListener("pointermove", (event) => {
-  if (viewer.open && !isCoarsePointer() && !isViewerLocked()) {
+  if (viewer.open && state.zoom <= 1 && !isCoarsePointer() && !isViewerLocked()) {
     showViewerControls({ autoHide: true });
   }
   if (isViewerLocked() || !state.isDragging || !state.dragStart) {
@@ -291,7 +291,7 @@ imageStage.addEventListener("touchend", (event) => {
 });
 imageStage.addEventListener("touchcancel", clearEndedTouches);
 viewer.addEventListener("mousemove", () => {
-  if (!viewer.open || isCoarsePointer() || isViewerLocked()) {
+  if (!viewer.open || state.zoom > 1 || isCoarsePointer() || isViewerLocked()) {
     return;
   }
   showViewerControls({ autoHide: true });

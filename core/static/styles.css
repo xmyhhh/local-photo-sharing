@@ -2651,7 +2651,9 @@ main {
 }
 
 .viewer.controls-hidden .page-btn {
+  visibility: hidden;
   opacity: 0;
+  pointer-events: none;
 }
 
 .viewer.controls-hidden .viewer-toolbar {
@@ -3492,16 +3494,10 @@ main {
 
   .viewer-control-bar {
     justify-content: center;
-    overflow-x: auto;
-    overflow-y: visible;
+    overflow: visible;
     bottom: max(var(--viewer-mobile-bottom-clearance), env(safe-area-inset-bottom));
-    max-width: calc(100vw - 16px);
+    max-width: none;
     padding: 5px;
-    scrollbar-width: none;
-  }
-
-  .viewer-control-bar::-webkit-scrollbar {
-    display: none;
   }
 
   .viewer-actions {
@@ -3577,7 +3573,7 @@ main {
 
   .viewer-control-bar {
     left: 50%;
-    width: calc(100vw - 20px);
+    width: auto;
     bottom: max(var(--viewer-mobile-bottom-clearance), env(safe-area-inset-bottom));
   }
 
@@ -3619,12 +3615,12 @@ main {
 
 @media (max-width: 460px) {
   .viewer-control-bar {
-    width: min(320px, calc(100vw - 16px));
+    width: auto;
     border-radius: 24px;
   }
 
   .viewer-actions {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: center;
   }
 }
@@ -3756,7 +3752,7 @@ main {
   }
 
   .viewer-control-bar {
-    max-width: calc(100vw - 10px);
+    max-width: none;
   }
 
 }

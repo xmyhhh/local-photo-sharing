@@ -9,16 +9,6 @@ memoryPrefetchLimitInput.addEventListener("change", saveGeneralSettings);
 memoryPrefetchLimitInput.addEventListener("blur", saveGeneralSettings);
 clientPrefetchEnabledInput.addEventListener("change", saveClientPrefetchSettings);
 originalPreviewEnabledInput.addEventListener("change", saveClientPrefetchSettings);
-[
-  clientPrefetchThumbRadiusInput,
-  clientPrefetchOriginalForwardInput,
-  clientPrefetchOriginalBackwardInput,
-  clientPrefetchOriginalConcurrencyInput,
-  clientPrefetchOriginalQueueLimitInput,
-].forEach((input) => {
-  input.addEventListener("change", saveClientPrefetchSettings);
-  input.addEventListener("blur", saveClientPrefetchSettings);
-});
 authEnabledInput.addEventListener("change", () => saveAuthSettings());
 saveAuthPasswordBtn.addEventListener("click", saveAuthPassword);
 loginBackgroundModeButtons().forEach((button) => {
@@ -311,20 +301,6 @@ function renderClientPrefetchSettings() {
   const settings = state.clientPrefetch;
   clientPrefetchEnabledInput.checked = settings.enabled;
   originalPreviewEnabledInput.checked = settings.originalPreviewEnabled;
-  clientPrefetchThumbRadiusInput.value = String(settings.thumbNeighborRadius);
-  clientPrefetchOriginalForwardInput.value = String(settings.originalForward);
-  clientPrefetchOriginalBackwardInput.value = String(settings.originalBackward);
-  clientPrefetchOriginalConcurrencyInput.value = String(settings.originalConcurrency);
-  clientPrefetchOriginalQueueLimitInput.value = String(settings.originalQueueLimit);
-  [
-    clientPrefetchThumbRadiusInput,
-    clientPrefetchOriginalForwardInput,
-    clientPrefetchOriginalBackwardInput,
-    clientPrefetchOriginalConcurrencyInput,
-    clientPrefetchOriginalQueueLimitInput,
-  ].forEach((input) => {
-    input.disabled = !settings.enabled;
-  });
 }
 
 function saveClientPrefetchSettings() {
@@ -333,11 +309,11 @@ function saveClientPrefetchSettings() {
   state.clientPrefetch = normalizeClientPrefetchSettings({
     enabled: clientPrefetchEnabledInput.checked,
     originalPreviewEnabled: originalPreviewEnabledInput.checked,
-    thumbNeighborRadius: clientPrefetchThumbRadiusInput.value,
-    originalForward: clientPrefetchOriginalForwardInput.value,
-    originalBackward: clientPrefetchOriginalBackwardInput.value,
-    originalConcurrency: clientPrefetchOriginalConcurrencyInput.value,
-    originalQueueLimit: clientPrefetchOriginalQueueLimitInput.value,
+    thumbNeighborRadius: state.clientPrefetch.thumbNeighborRadius,
+    originalForward: state.clientPrefetch.originalForward,
+    originalBackward: state.clientPrefetch.originalBackward,
+    originalConcurrency: state.clientPrefetch.originalConcurrency,
+    originalQueueLimit: state.clientPrefetch.originalQueueLimit,
   });
   window.localStorage.setItem(CLIENT_PREFETCH_STORAGE_KEY, JSON.stringify(state.clientPrefetch));
   renderClientPrefetchSettings();
@@ -348,7 +324,7 @@ function saveClientPrefetchSettings() {
     disableOriginalPreviewWork();
   }
   if (generalSettingsLoaded) {
-    settingsStatus.textContent = "本机预下载设置已保存。";
+    settingsStatus.textContent = "图片浏览设置已保存。";
   }
 }
 

@@ -2,6 +2,7 @@
   const PAGE_SIZE = 180;
   const COLLAPSE_ROWS = 5;
   const RENDER_CHUNK_SIZE = 6;
+  const PAGE_LOAD_ROOT_MARGIN = window.matchMedia("(max-width: 720px)").matches ? "180px 0px" : "260px 0px";
   const TIMELINE_THUMB_MODES = ["small", "medium", "large", "xlarge"];
   const stateLocal = {
     featured: false,
@@ -24,7 +25,6 @@
     thumbActive: 0,
     renderToken: 0,
     renderedCount: 0,
-    groupRenderTokens: new Map(),
   };
   const TIMELINE_THUMB_CONCURRENCY = 3;
 
@@ -90,7 +90,7 @@
     if (items.some((item) => item.isIntersecting)) {
       loadNextPage();
     }
-  }, { root: content, rootMargin: "900px 0px" });
+  }, { root: content, rootMargin: PAGE_LOAD_ROOT_MARGIN });
   stateLocal.thumbObserver = new IntersectionObserver((items) => {
     items.forEach((item) => {
       if (item.isIntersecting) {
@@ -377,7 +377,7 @@
         const group = grouped[index];
         const existing = groups.querySelector(`[data-timeline-group="${CSS.escape(group.id)}"]`);
         if (existing) {
-          appendTimelineCardsToGroup(existing, group, totals.get(group.id) || group.items.length);
+          refreshTimelineGroup(existing, group.id, totals.get(group.id) || group.items.length);
         } else {
           fragment.append(createTimelineGroup({ ...group, totalCount: totals.get(group.id) || group.items.length }));
         }
@@ -390,18 +390,18 @@
     renderChunk();
   }
 
-  function appendTimelineCardsToGroup(section, group, totalCount) {
-    const mosaic = section.querySelector(".timeline-mosaic");
-    const subtitle = section.querySelector(".timeline-group-subtitle");
-    if (!mosaic) {
+  function refreshTimelineGroup(section, groupId, totalCount = 0) {
+    if (!section?.isConnected) {
       return;
     }
-    const fragment = document.createDocumentFragment();
-    group.items.forEach((item, index) => fragment.append(createTimelineCard(item, index)));
-    mosaic.append(fragment);
-    if (subtitle) {
-      subtitle.textContent = `${totalCount} 项`;
+    const groupedAll = groupItems(stateLocal.items, stateLocal.scale);
+    const group = groupedAll.find((item) => item.id === groupId);
+    if (!group) {
+      section.remove();
+      renderAxis(groupedAll);
+      return;
     }
+    section.replaceWith(createTimelineGroup({ ...group, totalCount: totalCount || group.items.length }));
   }
 
   function insertChangedTimelineItems(items) {
@@ -411,19 +411,25 @@
     const groupedAll = groupItems(stateLocal.items, stateLocal.scale);
     const totals = new Map(groupedAll.map((group) => [group.id, group.items.length]));
     renderAxis(groupedAll);
+    const changedGroups = new Set();
     dedupeTimelineItems(items).forEach((item) => {
       const key = groupKey(item.takenAt, stateLocal.scale);
-      const fullGroup = groupedAll.find((group) => group.id === key.id);
+      if (key.id) {
+        changedGroups.add(key.id);
+      }
+    });
+    changedGroups.forEach((groupId) => {
+      const fullGroup = groupedAll.find((group) => group.id === groupId);
       if (!fullGroup) {
         return;
       }
-      let section = groups.querySelector(`[data-timeline-group="${CSS.escape(key.id)}"]`);
+      let section = groups.querySelector(`[data-timeline-group="${CSS.escape(groupId)}"]`);
       if (!section) {
-        section = createTimelineGroup({ ...fullGroup, totalCount: totals.get(key.id) || fullGroup.items.length });
+        section = createTimelineGroup({ ...fullGroup, totalCount: totals.get(groupId) || fullGroup.items.length });
         insertTimelineGroupElement(section, fullGroup);
         return;
       }
-      upsertTimelineCard(section, item, totals.get(key.id) || fullGroup.items.length);
+      refreshTimelineGroup(section, groupId, totals.get(groupId) || fullGroup.items.length);
     });
   }
 
@@ -442,27 +448,6 @@
     const leftMax = left.items[0]?.takenAt || 0;
     const rightMax = right.items[0]?.takenAt || 0;
     return leftMax === rightMax ? left.id.localeCompare(right.id) : rightMax - leftMax;
-  }
-
-  function upsertTimelineCard(section, item, totalCount) {
-    const existing = section.querySelector(`.timeline-card[data-path="${CSS.escape(item.path)}"]`);
-    if (existing) {
-      existing.replaceWith(createTimelineCard(item, 0));
-    } else {
-      const mosaic = section.querySelector(".timeline-mosaic");
-      if (mosaic) {
-        const card = createTimelineCard(item, 0);
-        const before = Array.from(mosaic.querySelectorAll(".timeline-card")).find((node) => {
-          const current = stateLocal.items.find((entry) => entry.path === node.dataset.path);
-          return current && compareTimelineItems(item, current) < 0;
-        });
-        mosaic.insertBefore(card, before || null);
-      }
-    }
-    const subtitle = section.querySelector(".timeline-group-subtitle");
-    if (subtitle) {
-      subtitle.textContent = `${totalCount} 项`;
-    }
   }
 
   function renderTimelineGroupsChunked(grouped, token, options = {}) {
@@ -580,90 +565,7 @@
     if (!section) {
       return;
     }
-    const group = groupItems(stateLocal.items, stateLocal.scale).find((item) => item.id === groupId);
-    if (!group) {
-      section.remove();
-      renderAxis(groupItems(stateLocal.items, stateLocal.scale));
-      return;
-    }
-    const mosaic = section.querySelector(".timeline-mosaic");
-    if (!mosaic) {
-      return;
-    }
-    const token = (stateLocal.groupRenderTokens.get(groupId) || 0) + 1;
-    stateLocal.groupRenderTokens.set(groupId, token);
-    const isExpanded = stateLocal.expandedGroups.has(groupId);
-    const visibleItems = isExpanded ? group.items : visibleItemsForCollapsedRows(group.items);
-    const visiblePaths = new Set(visibleItems.map((item) => item.path));
-    updateTimelineGroupChrome(section, group, visibleItems.length, isExpanded);
-
-    if (!isExpanded) {
-      Array.from(mosaic.querySelectorAll(".timeline-card")).forEach((card) => {
-        if (!visiblePaths.has(card.dataset.path)) {
-          card.remove();
-        }
-      });
-      restoreCollapsedMoreCard(mosaic, group, visibleItems);
-      return;
-    }
-
-    mosaic.querySelectorAll(".timeline-more-card").forEach((card) => {
-      const item = group.items.find((entry) => entry.path === card.dataset.path);
-      if (item) {
-        card.replaceWith(createTimelineCard(item, 0));
-      }
-    });
-    const existingPaths = new Set(Array.from(mosaic.querySelectorAll(".timeline-card")).map((card) => card.dataset.path));
-    const missingItems = visibleItems.filter((item) => !existingPaths.has(item.path));
-    appendTimelineCardsChunked(mosaic, missingItems, groupId, token);
-  }
-
-  function restoreCollapsedMoreCard(mosaic, group, visibleItems) {
-    const hiddenCount = Math.max(0, group.items.length - visibleItems.length);
-    if (!hiddenCount || !visibleItems.length) {
-      return;
-    }
-    const lastIndex = visibleItems.length - 1;
-    const lastItem = visibleItems[lastIndex];
-    const current = mosaic.querySelector(`.timeline-card[data-path="${CSS.escape(lastItem.path)}"]`);
-    const moreCard = createTimelineCard(lastItem, lastIndex, hiddenCount, group.id);
-    if (current) {
-      current.replaceWith(moreCard);
-    } else {
-      mosaic.append(moreCard);
-    }
-  }
-
-  function updateTimelineGroupChrome(section, group, visibleCount, isExpanded) {
-    const subtitle = section.querySelector(".timeline-group-subtitle");
-    const toggle = section.querySelector(".timeline-fold-toggle");
-    const hiddenCount = Math.max(0, group.items.length - visibleCount);
-    if (subtitle) {
-      subtitle.textContent = `${group.items.length} 项${hiddenCount > 0 ? `，已折叠 ${hiddenCount} 项` : ""}`;
-    }
-    if (toggle) {
-      toggle.hidden = hiddenCount <= 0 && !isExpanded;
-      toggle.textContent = isExpanded ? "收起" : `展开剩余 ${hiddenCount} 项`;
-    }
-  }
-
-  function appendTimelineCardsChunked(mosaic, items, groupId, token) {
-    let index = 0;
-    const renderChunk = () => {
-      if (!mosaic.isConnected || stateLocal.groupRenderTokens.get(groupId) !== token || !stateLocal.expandedGroups.has(groupId)) {
-        return;
-      }
-      const fragment = document.createDocumentFragment();
-      const end = Math.min(items.length, index + 24);
-      for (; index < end; index += 1) {
-        fragment.append(createTimelineCard(items[index], index));
-      }
-      mosaic.append(fragment);
-      if (index < items.length) {
-        window.requestAnimationFrame(renderChunk);
-      }
-    };
-    renderChunk();
+    refreshTimelineGroup(section, groupId);
   }
 
   function visibleItemsForCollapsedRows(items) {

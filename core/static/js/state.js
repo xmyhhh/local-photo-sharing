@@ -72,6 +72,7 @@ const state = {
   currentPhoto: null,
   viewerLiveMode: false,
   viewerControlsVisible: true,
+  viewerControlsAutoHiddenForZoom: false,
   viewerControlsTimer: null,
   viewerRequestedFullscreen: false,
   lastViewerTapTime: 0,
@@ -290,11 +291,6 @@ const memoryPrefetchEnabledInput = document.querySelector("#memoryPrefetchEnable
 const memoryPrefetchLimitInput = document.querySelector("#memoryPrefetchLimitInput");
 const clientPrefetchEnabledInput = document.querySelector("#clientPrefetchEnabledInput");
 const originalPreviewEnabledInput = document.querySelector("#originalPreviewEnabledInput");
-const clientPrefetchThumbRadiusInput = document.querySelector("#clientPrefetchThumbRadiusInput");
-const clientPrefetchOriginalForwardInput = document.querySelector("#clientPrefetchOriginalForwardInput");
-const clientPrefetchOriginalBackwardInput = document.querySelector("#clientPrefetchOriginalBackwardInput");
-const clientPrefetchOriginalConcurrencyInput = document.querySelector("#clientPrefetchOriginalConcurrencyInput");
-const clientPrefetchOriginalQueueLimitInput = document.querySelector("#clientPrefetchOriginalQueueLimitInput");
 const authEnabledInput = document.querySelector("#authEnabledInput");
 const authPasswordInput = document.querySelector("#authPasswordInput");
 const saveAuthPasswordBtn = document.querySelector("#saveAuthPasswordBtn");

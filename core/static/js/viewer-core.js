@@ -80,6 +80,7 @@ function showViewerControls({ autoHide = false } = {}) {
   if (!viewer.open && !state.currentPhoto) {
     return;
   }
+  state.viewerControlsAutoHiddenForZoom = false;
   setViewerControlsVisible(true);
   scheduleViewerControlsAutoHide(autoHide);
 }
@@ -116,6 +117,28 @@ function scheduleViewerControlsAutoHide(enabled = true) {
   }, 2600);
 }
 
+function syncViewerZoomUi() {
+  const isZoomed = state.zoom > 1;
+  imageStage.classList.toggle("is-zoomed", isZoomed);
+  if (state.currentPhoto?.type !== "photo" || state.viewerLiveMode) {
+    state.viewerControlsAutoHiddenForZoom = false;
+    return;
+  }
+  if (isZoomed) {
+    closePhotoInfoPanel();
+    setViewerRatingMenuOpen(false);
+    if (state.viewerControlsVisible && !isViewerLocked()) {
+      state.viewerControlsAutoHiddenForZoom = true;
+      hideViewerControls();
+    }
+    return;
+  }
+  if (state.viewerControlsAutoHiddenForZoom && !isViewerLocked()) {
+    state.viewerControlsAutoHiddenForZoom = false;
+    showViewerControls({ autoHide: !isCoarsePointer() });
+  }
+}
+
 function isCoarsePointer() {
   return window.matchMedia("(pointer: coarse)").matches;
 }
@@ -132,6 +155,7 @@ function showPhoto(entry) {
   state.zoom = 1;
   state.panX = 0;
   state.panY = 0;
+  state.viewerControlsAutoHiddenForZoom = false;
   state.isDragging = false;
   state.dragStart = null;
   state.activeTouches.clear();
@@ -451,7 +475,7 @@ async function loadPreviewImage(entry, attempt = 0) {
       viewerImage.classList.remove("ready");
       viewerImage.classList.remove("loading");
       viewerImage.onload = () => viewerImage.classList.add("ready");
-      viewerImage.src = withVersion(data.url, entry.mtime);
+      viewerImage.src = withVersion(data.url, `${entry.mtime}-xlarge`);
       entry.previewUrl = viewerImage.src;
       return;
     }
@@ -595,13 +619,14 @@ function updateGridRating(entry) {
 function updateZoom() {
   if (state.currentPhoto?.type === "video" || state.viewerLiveMode) {
     zoomResetBtn.textContent = "100%";
+    state.viewerControlsAutoHiddenForZoom = false;
     imageStage.classList.remove("is-zoomed");
     viewerVideo.style.transform = "";
     return;
   }
   viewerImage.style.transform = `translate3d(${state.panX}px, ${state.panY}px, 0) scale(${state.zoom})`;
   zoomResetBtn.textContent = `${Math.round(state.zoom * 100)}%`;
-  imageStage.classList.toggle("is-zoomed", state.zoom > 1);
+  syncViewerZoomUi();
 }
 
 function currentPhotoIndex() {

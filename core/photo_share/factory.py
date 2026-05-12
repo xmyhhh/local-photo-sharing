@@ -194,5 +194,5 @@ def _create_root_services(
         folder_counts=folder_counts,
         thumbnails=thumbnails,
         default_thumbnails=thumbnails[DEFAULT_THUMBNAIL_MODE],
-        previews=thumbnails[DEFAULT_THUMBNAIL_MODE],
+        previews=thumbnails["xlarge"],
     )
