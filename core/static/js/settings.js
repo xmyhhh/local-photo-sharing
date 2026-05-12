@@ -7,6 +7,17 @@ memoryPrefetchEnabledInput.addEventListener("change", saveGeneralSettings);
 memoryPrefetchLimitInput.addEventListener("input", scheduleGeneralSettingsSave);
 memoryPrefetchLimitInput.addEventListener("change", saveGeneralSettings);
 memoryPrefetchLimitInput.addEventListener("blur", saveGeneralSettings);
+clientPrefetchEnabledInput.addEventListener("change", saveClientPrefetchSettings);
+[
+  clientPrefetchThumbRadiusInput,
+  clientPrefetchOriginalForwardInput,
+  clientPrefetchOriginalBackwardInput,
+  clientPrefetchOriginalConcurrencyInput,
+  clientPrefetchOriginalQueueLimitInput,
+].forEach((input) => {
+  input.addEventListener("change", saveClientPrefetchSettings);
+  input.addEventListener("blur", saveClientPrefetchSettings);
+});
 authEnabledInput.addEventListener("change", () => saveAuthSettings());
 saveAuthPasswordBtn.addEventListener("click", saveAuthPassword);
 loginBackgroundModeButtons().forEach((button) => {
@@ -113,6 +124,7 @@ function renderGuestSettings() {
   });
   pluginSettingsTabs.innerHTML = "";
   themeModeSelect.value = state.themeMode;
+  renderClientPrefetchSettings();
   memoryPrefetchEnabledInput.closest(".settings-card").hidden = true;
   authSettingsPanel.hidden = true;
   pluginsSettingsPanel.hidden = true;
@@ -140,6 +152,7 @@ function renderGeneralSettings(settings) {
   memoryPrefetchLimitInput.max = String(prefetch.maxMb || 1024);
   state.memoryPrefetchWindowBefore = Number.parseInt(prefetch.windowBefore, 10) || 5;
   state.memoryPrefetchWindowAfter = Number.parseInt(prefetch.windowAfter, 10) || 35;
+  renderClientPrefetchSettings();
   generalSettingsLoaded = true;
   renderAuthSettings({
     enabled: state.authEnabled,
@@ -291,6 +304,51 @@ function closeSettingsHelp() {
   document.querySelectorAll(".settings-card-head.help-open").forEach((item) => {
     item.classList.remove("help-open");
   });
+}
+
+function renderClientPrefetchSettings() {
+  const settings = state.clientPrefetch;
+  clientPrefetchEnabledInput.checked = settings.enabled;
+  clientPrefetchThumbRadiusInput.value = String(settings.thumbNeighborRadius);
+  clientPrefetchOriginalForwardInput.value = String(settings.originalForward);
+  clientPrefetchOriginalBackwardInput.value = String(settings.originalBackward);
+  clientPrefetchOriginalConcurrencyInput.value = String(settings.originalConcurrency);
+  clientPrefetchOriginalQueueLimitInput.value = String(settings.originalQueueLimit);
+  [
+    clientPrefetchThumbRadiusInput,
+    clientPrefetchOriginalForwardInput,
+    clientPrefetchOriginalBackwardInput,
+    clientPrefetchOriginalConcurrencyInput,
+    clientPrefetchOriginalQueueLimitInput,
+  ].forEach((input) => {
+    input.disabled = !settings.enabled;
+  });
+}
+
+function saveClientPrefetchSettings() {
+  const wasEnabled = state.clientPrefetch.enabled;
+  state.clientPrefetch = normalizeClientPrefetchSettings({
+    enabled: clientPrefetchEnabledInput.checked,
+    thumbNeighborRadius: clientPrefetchThumbRadiusInput.value,
+    originalForward: clientPrefetchOriginalForwardInput.value,
+    originalBackward: clientPrefetchOriginalBackwardInput.value,
+    originalConcurrency: clientPrefetchOriginalConcurrencyInput.value,
+    originalQueueLimit: clientPrefetchOriginalQueueLimitInput.value,
+  });
+  window.localStorage.setItem(CLIENT_PREFETCH_STORAGE_KEY, JSON.stringify(state.clientPrefetch));
+  renderClientPrefetchSettings();
+  if (wasEnabled && !state.clientPrefetch.enabled) {
+    disableClientPrefetchWork();
+  }
+  if (generalSettingsLoaded) {
+    settingsStatus.textContent = "本机预下载设置已保存。";
+  }
+}
+
+function disableClientPrefetchWork() {
+  dropQueuedNeighborThumbnails();
+  state.thumbNeighborPrefetchKey = "";
+  cancelClientOriginalPrefetches();
 }
 
 async function saveGeneralSettings() {

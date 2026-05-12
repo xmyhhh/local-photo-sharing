@@ -12,12 +12,49 @@ function getStoredThemeMode() {
   return ["system", "light", "dark"].includes(value) ? value : "system";
 }
 
+function getStoredClientPrefetchSettings() {
+  try {
+    return normalizeClientPrefetchSettings(JSON.parse(window.localStorage.getItem(CLIENT_PREFETCH_STORAGE_KEY) || "{}"));
+  } catch {
+    return normalizeClientPrefetchSettings({});
+  }
+}
+
+function normalizeClientPrefetchSettings(value) {
+  const settings = value && typeof value === "object" ? value : {};
+  return {
+    enabled: settings.enabled !== false,
+    thumbNeighborRadius: clampClientPrefetchInt(settings.thumbNeighborRadius, 0, 100, DEFAULT_CLIENT_PREFETCH.thumbNeighborRadius),
+    originalForward: clampClientPrefetchInt(settings.originalForward, 0, 30, DEFAULT_CLIENT_PREFETCH.originalForward),
+    originalBackward: clampClientPrefetchInt(settings.originalBackward, 0, 30, DEFAULT_CLIENT_PREFETCH.originalBackward),
+    originalConcurrency: clampClientPrefetchInt(settings.originalConcurrency, 1, 6, DEFAULT_CLIENT_PREFETCH.originalConcurrency),
+    originalQueueLimit: clampClientPrefetchInt(settings.originalQueueLimit, 0, 100, DEFAULT_CLIENT_PREFETCH.originalQueueLimit),
+  };
+}
+
+function clampClientPrefetchInt(value, min, max, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.max(min, Math.min(max, parsed));
+}
+
 const THUMB_MODES = ["small", "medium", "large", "xlarge"];
 const THUMB_QUEUE_LIMITS = {
   small: 100,
   medium: 70,
   large: 40,
   xlarge: 30,
+};
+const CLIENT_PREFETCH_STORAGE_KEY = "clientPrefetchSettings.v1";
+const DEFAULT_CLIENT_PREFETCH = {
+  enabled: true,
+  thumbNeighborRadius: 20,
+  originalForward: 5,
+  originalBackward: 1,
+  originalConcurrency: 2,
+  originalQueueLimit: 25,
 };
 
 const state = {
@@ -123,6 +160,7 @@ const state = {
   loginBackgroundMode: "none",
   loginBackgroundFolder: "",
   loginBackgroundLayout: "grid",
+  clientPrefetch: getStoredClientPrefetchSettings(),
   memoryPrefetchWindowBefore: 5,
   memoryPrefetchWindowAfter: 35,
   enabledPlugins: new Set(),
@@ -141,8 +179,6 @@ const state = {
 
 const ORIGINAL_CACHE_BYTES_LIMIT = 2 * 1024 * 1024 * 1024;
 const ORIGINAL_CACHE_COUNT_LIMIT = 200;
-const ORIGINAL_PREFETCH_CONCURRENCY = 2;
-const ORIGINAL_PREFETCH_QUEUE_LIMIT = 25;
 const THUMB_LOAD_CONCURRENCY = 6;
 const RATING_STATUS_CONCURRENCY = 3;
 const RATING_QUEUE_LIMIT = 50;
@@ -250,6 +286,12 @@ const pluginsSettingsPanel = document.querySelector("#pluginsSettingsPanel");
 const themeModeSelect = document.querySelector("#themeModeSelect");
 const memoryPrefetchEnabledInput = document.querySelector("#memoryPrefetchEnabledInput");
 const memoryPrefetchLimitInput = document.querySelector("#memoryPrefetchLimitInput");
+const clientPrefetchEnabledInput = document.querySelector("#clientPrefetchEnabledInput");
+const clientPrefetchThumbRadiusInput = document.querySelector("#clientPrefetchThumbRadiusInput");
+const clientPrefetchOriginalForwardInput = document.querySelector("#clientPrefetchOriginalForwardInput");
+const clientPrefetchOriginalBackwardInput = document.querySelector("#clientPrefetchOriginalBackwardInput");
+const clientPrefetchOriginalConcurrencyInput = document.querySelector("#clientPrefetchOriginalConcurrencyInput");
+const clientPrefetchOriginalQueueLimitInput = document.querySelector("#clientPrefetchOriginalQueueLimitInput");
 const authEnabledInput = document.querySelector("#authEnabledInput");
 const authPasswordInput = document.querySelector("#authPasswordInput");
 const saveAuthPasswordBtn = document.querySelector("#saveAuthPasswordBtn");

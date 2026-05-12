@@ -310,6 +310,11 @@ function runThumbQueue() {
 }
 
 function scheduleNeighborThumbnailPrefetch() {
+  if (!state.clientPrefetch.enabled || state.clientPrefetch.thumbNeighborRadius <= 0) {
+    dropQueuedNeighborThumbnails();
+    state.thumbNeighborPrefetchKey = "";
+    return;
+  }
   if (state.thumbNeighborPrefetchTimer) {
     return;
   }
@@ -320,6 +325,11 @@ function scheduleNeighborThumbnailPrefetch() {
 }
 
 function prefetchNeighborThumbnails() {
+  if (!state.clientPrefetch.enabled || state.clientPrefetch.thumbNeighborRadius <= 0) {
+    dropQueuedNeighborThumbnails();
+    state.thumbNeighborPrefetchKey = "";
+    return;
+  }
   const visible = visibleLoadedThumbnailRange();
   if (!visible) {
     state.thumbNeighborPrefetchKey = "";
@@ -331,7 +341,7 @@ function prefetchNeighborThumbnails() {
     state.thumbNeighborPrefetchKey = key;
     dropQueuedNeighborThumbnails();
   }
-  const paths = neighborThumbnailPaths(visible.first, visible.last, 20);
+  const paths = neighborThumbnailPaths(visible.first, visible.last, state.clientPrefetch.thumbNeighborRadius);
   paths.forEach((path) => {
     const payload = state.thumbPayloads.get(path);
     if (!payload || payload.img.classList.contains("loaded")) {

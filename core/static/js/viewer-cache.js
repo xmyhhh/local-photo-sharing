@@ -3,15 +3,15 @@
   if (state.rapidNavDirection) {
     return;
   }
+  if (!state.clientPrefetch.enabled) {
+    updateServerMemoryPrefetch();
+    return;
+  }
   const photos = photosOnly();
   const index = currentPhotoIndex();
   const candidates = [
-    photos[index + 1],
-    photos[index + 2],
-    photos[index + 3],
-    photos[index + 4],
-    photos[index + 5],
-    photos[index - 1],
+    ...Array.from({ length: state.clientPrefetch.originalForward }, (_, offset) => photos[index + offset + 1]),
+    ...Array.from({ length: state.clientPrefetch.originalBackward }, (_, offset) => photos[index - offset - 1]),
   ].filter(Boolean);
 
   candidates.forEach((entry) => queueOriginalPrefetch(entry));
@@ -64,6 +64,9 @@ function releaseServerMemoryPrefetch(useBeacon = false) {
 }
 
 function queueOriginalPrefetch(entry) {
+  if (!state.clientPrefetch.enabled || state.clientPrefetch.originalQueueLimit <= 0) {
+    return;
+  }
   if (entry.browserRenderable === false) {
     return;
   }
@@ -74,17 +77,17 @@ function queueOriginalPrefetch(entry) {
     return;
   }
   state.originalPrefetchQueue.push(entry);
-  while (state.originalPrefetchQueue.length > ORIGINAL_PREFETCH_QUEUE_LIMIT) {
+  while (state.originalPrefetchQueue.length > state.clientPrefetch.originalQueueLimit) {
     state.originalPrefetchQueue.pop();
   }
 }
 
 function runOriginalPrefetchQueue() {
-  if (!viewer.open || state.rapidNavDirection) {
+  if (!viewer.open || state.rapidNavDirection || !state.clientPrefetch.enabled) {
     return;
   }
   while (
-    state.originalPrefetchActive < ORIGINAL_PREFETCH_CONCURRENCY
+    state.originalPrefetchActive < state.clientPrefetch.originalConcurrency
     && state.originalPrefetchQueue.length > 0
   ) {
     const entry = state.originalPrefetchQueue.shift();
@@ -129,6 +132,16 @@ function cancelStaleOriginalLoads(keepPath = null) {
 function cancelViewerOriginalLoads() {
   state.viewerGeneration += 1;
   cancelStaleOriginalLoads();
+}
+
+function cancelClientOriginalPrefetches() {
+  const keepPath = state.currentPhoto?.path || null;
+  state.originalPrefetchQueue = [];
+  for (const [path, controller] of state.originalControllers.entries()) {
+    if (path !== keepPath) {
+      controller.abort();
+    }
+  }
 }
 
 async function loadOriginalImage(entry, forceDisplay = false, generation = state.viewerGeneration) {

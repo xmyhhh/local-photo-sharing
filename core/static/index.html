@@ -231,6 +231,41 @@
                 </label>
               </div>
             </section>
+            <section class="settings-card">
+              <div class="settings-card-head">
+                <h3>本机预下载</h3>
+                <button class="settings-help" type="button" aria-label="查看本机预下载说明">?</button>
+                <div class="settings-help-popover" role="tooltip">
+                  仅影响当前浏览器：提前加载邻近缩略图和查看器相邻原图。关闭后不再做这些前端预下载，适合移动数据流量。
+                </div>
+              </div>
+              <div class="settings-control-grid">
+                <label class="switch-row">
+                  <span>启用</span>
+                  <input id="clientPrefetchEnabledInput" type="checkbox" />
+                </label>
+                <label class="settings-field">
+                  <span>邻近小图半径</span>
+                  <input id="clientPrefetchThumbRadiusInput" type="number" min="0" max="100" step="1" />
+                </label>
+                <label class="settings-field">
+                  <span>大图向后</span>
+                  <input id="clientPrefetchOriginalForwardInput" type="number" min="0" max="30" step="1" />
+                </label>
+                <label class="settings-field">
+                  <span>大图向前</span>
+                  <input id="clientPrefetchOriginalBackwardInput" type="number" min="0" max="30" step="1" />
+                </label>
+                <label class="settings-field">
+                  <span>原图并发</span>
+                  <input id="clientPrefetchOriginalConcurrencyInput" type="number" min="1" max="6" step="1" />
+                </label>
+                <label class="settings-field">
+                  <span>原图队列上限</span>
+                  <input id="clientPrefetchOriginalQueueLimitInput" type="number" min="0" max="100" step="1" />
+                </label>
+              </div>
+            </section>
           </div>
           <div id="authSettingsPanel" class="settings-page" hidden>
             <section class="settings-card auth-settings-card">
