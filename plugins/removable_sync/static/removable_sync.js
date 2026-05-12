@@ -6,6 +6,7 @@ const removableSyncState = {
   destinationHashes: new Set(),
   cancelled: false,
   running: false,
+  prepareToken: null,
 };
 
 const REMOVABLE_SYNC_EXTENSIONS = new Set([
@@ -90,8 +91,16 @@ function bindRemovableSyncEvents() {
   });
   removableSyncUi.chooseFolderButton.addEventListener("click", chooseRemovableFolderSource);
   removableSyncUi.chooseFilesButton.addEventListener("click", () => removableSyncUi.fileInput.click());
-  removableSyncUi.fileInput.addEventListener("change", () => prepareRemovableFiles(Array.from(removableSyncUi.fileInput.files || []), "已选择文件"));
-  removableSyncUi.directoryInput.addEventListener("change", () => prepareRemovableFiles(Array.from(removableSyncUi.directoryInput.files || []), "已选择文件夹"));
+  removableSyncUi.fileInput.addEventListener("change", () => {
+    const files = Array.from(removableSyncUi.fileInput.files || []);
+    removableSyncUi.fileInput.value = "";
+    prepareRemovableFiles(files, "已选择文件");
+  });
+  removableSyncUi.directoryInput.addEventListener("change", () => {
+    const files = Array.from(removableSyncUi.directoryInput.files || []);
+    removableSyncUi.directoryInput.value = "";
+    prepareRemovableFiles(files, "已选择文件夹");
+  });
   removableSyncUi.startButton.addEventListener("click", startRemovableSync);
 }
 
@@ -118,10 +127,12 @@ function closeRemovableSyncDialog() {
 }
 
 function resetRemovableSyncState() {
+  releaseRemovableSyncItems(removableSyncState.files);
   removableSyncState.files = [];
   removableSyncState.destinationHashes = new Set();
   removableSyncState.cancelled = false;
   removableSyncState.running = false;
+  removableSyncState.prepareToken = null;
   removableSyncUi.source.textContent = "尚未选择来源。";
   removableSyncUi.status.textContent = "";
   removableSyncUi.list.innerHTML = "";
@@ -156,43 +167,106 @@ async function prepareRemovableDirectoryHandle(handle) {
   try {
     const files = [];
     await collectFilesFromDirectoryHandle(handle, files);
-    prepareRemovableFiles(files, handle.name || "所选文件夹");
+    await prepareRemovableFiles(files, handle.name || "所选文件夹");
   } catch (error) {
     removableSyncUi.status.textContent = error.message || "扫描来源文件夹失败。";
-  } finally {
     setRemovableSyncBusy(false);
+    updateRemovableSyncStats();
+  } finally {
+    if (!removableSyncState.files.length) {
+      setRemovableSyncBusy(false);
+    }
   }
 }
 
 async function collectFilesFromDirectoryHandle(directoryHandle, files) {
   for await (const entry of directoryHandle.values()) {
     if (entry.kind === "file") {
-      const file = await entry.getFile();
-      files.push(file);
+      files.push({
+        handle: entry,
+        name: entry.name,
+        size: 0,
+      });
+      if (files.length % 100 === 0) {
+        removableSyncUi.status.textContent = `已读取 ${files.length} 个来源文件...`;
+        await waitRemovableSyncFrame();
+      }
     } else if (entry.kind === "directory") {
       await collectFilesFromDirectoryHandle(entry, files);
     }
   }
 }
 
-function prepareRemovableFiles(files, sourceLabel) {
-  const items = files
-    .filter((file) => isRemovableSyncMedia(file.name))
-    .map((file, index) => ({
-      id: `${Date.now()}-${index}`,
-      file,
-      name: file.name,
-      size: file.size,
-      status: "pending",
-      hash: "",
-      message: "",
-    }));
-  removableSyncState.files = items;
-  removableSyncUi.source.textContent = `${sourceLabel}：${files.length} 个文件，${items.length} 个照片/视频可同步。`;
-  removableSyncUi.status.textContent = items.length ? "准备就绪。同步时会先计算 SHA-256 并自动跳过已导入文件。" : "没有找到支持的照片或视频。";
-  removableSyncUi.startButton.disabled = !items.length;
-  renderRemovableSyncList();
+async function prepareRemovableFiles(files, sourceLabel) {
+  if (removableSyncState.running) {
+    return;
+  }
+  const token = Symbol("removable-sync-prepare");
+  removableSyncState.prepareToken = token;
+  releaseRemovableSyncItems(removableSyncState.files);
+  removableSyncState.files = [];
+  removableSyncState.destinationHashes = new Set();
+  removableSyncUi.list.innerHTML = "";
+  removableSyncUi.progressFill.style.width = "0%";
+  removableSyncUi.source.textContent = `${sourceLabel}：正在读取文件列表...`;
+  removableSyncUi.status.textContent = "正在整理来源文件...";
+  setRemovableSyncBusy(true);
   updateRemovableSyncStats();
+  await waitRemovableSyncFrame();
+
+  const totalFiles = Number(files?.length) || 0;
+  const batchSize = 100;
+  const items = [];
+  const runId = Date.now();
+  try {
+    for (let index = 0; index < totalFiles; index += 1) {
+      const source = files[index];
+      const name = removableSyncSourceName(source);
+      if (name && isRemovableSyncMedia(name)) {
+        items.push({
+          id: `${runId}-${index}`,
+          file: source instanceof File ? source : null,
+          handle: source instanceof File ? null : source.handle || null,
+          name,
+          size: Number(source?.size) || 0,
+          status: "pending",
+          hash: "",
+          message: "",
+          finalized: false,
+          uploadFile: null,
+        });
+      }
+      const processed = index + 1;
+      if (processed % batchSize === 0 || processed === totalFiles) {
+        if (removableSyncState.prepareToken !== token) {
+          return;
+        }
+        removableSyncUi.total.textContent = String(items.length);
+        removableSyncUi.source.textContent = `${sourceLabel}：正在整理 ${processed}/${totalFiles} 个文件...`;
+        removableSyncUi.status.textContent = `已找到 ${items.length} 个照片/视频。`;
+        updateRemovableSyncProgress(processed, totalFiles);
+        await waitRemovableSyncFrame();
+      }
+    }
+
+    if (removableSyncState.prepareToken !== token) {
+      return;
+    }
+    removableSyncState.files = items;
+    removableSyncUi.source.textContent = `${sourceLabel}：${totalFiles} 个文件，${items.length} 个照片/视频可同步。`;
+    removableSyncUi.status.textContent = items.length ? "准备就绪。同步时会边计算 SHA-256 边导入新文件。" : "没有找到支持的照片或视频。";
+    renderRemovableSyncList();
+    updateRemovableSyncStats();
+    updateRemovableSyncProgress(0, items.length || 1);
+  } catch (error) {
+    removableSyncUi.status.textContent = error.message || "整理来源文件失败。";
+    releaseRemovableSyncItems(items);
+  } finally {
+    if (removableSyncState.prepareToken === token) {
+      removableSyncState.prepareToken = null;
+      setRemovableSyncBusy(false);
+    }
+  }
 }
 
 async function startRemovableSync() {
@@ -204,8 +278,7 @@ async function startRemovableSync() {
   setRemovableSyncBusy(true);
   try {
     await loadRemovableDestinationIndex();
-    await hashRemovableFiles();
-    await uploadRemovableFiles();
+    await syncRemovableFiles();
     const saved = removableSyncState.files.filter((item) => item.status === "saved").length;
     const duplicate = removableSyncState.files.filter((item) => item.status === "duplicate").length;
     const failed = removableSyncState.files.filter((item) => item.status === "error" || item.status === "rejected").length;
@@ -219,6 +292,7 @@ async function startRemovableSync() {
     removableSyncState.running = false;
     setRemovableSyncBusy(false);
     updateRemovableSyncStats();
+    releaseRemovableSyncItems(removableSyncState.files);
   }
 }
 
@@ -229,9 +303,13 @@ async function loadRemovableDestinationIndex() {
   removableSyncState.destinationHashes = new Set(result.hashes || []);
 }
 
-async function hashRemovableFiles() {
+async function syncRemovableFiles() {
   const nativeHash = hasNativeSha256();
-  let completed = 0;
+  const progress = {
+    hashed: 0,
+    finalized: 0,
+    total: removableSyncState.files.length,
+  };
   for (const item of removableSyncState.files) {
     if (removableSyncState.cancelled) {
       throw new Error("同步已取消。");
@@ -239,56 +317,117 @@ async function hashRemovableFiles() {
     item.status = "hashing";
     item.message = nativeHash ? "计算指纹" : "计算指纹（兼容模式）";
     updateRemovableSyncRow(item);
-    removableSyncUi.status.textContent = `正在计算指纹：${completed + 1}/${removableSyncState.files.length}`;
-    item.hash = await sha256BrowserFile(item.file);
+    removableSyncUi.status.textContent = `正在计算指纹：${progress.hashed + 1}/${progress.total}`;
+    try {
+      item.hash = await sha256RemovableItem(item);
+    } catch (error) {
+      if (removableSyncState.cancelled) {
+        item.status = "pending";
+        item.message = "已取消";
+        updateRemovableSyncRow(item);
+        throw new Error("同步已取消。");
+      }
+      item.status = "error";
+      item.message = removableSyncFailureMessage(error, "指纹计算失败");
+      if (isRemovableSyncSourceGoneError(error)) {
+        removableSyncState.cancelled = true;
+        progress.hashed += 1;
+        finalizeRemovableSyncItem(item, progress);
+        releaseRemovableSyncItemSource(item);
+        updateRemovableSyncRow(item);
+        updateRemovableSyncStats();
+        throw new Error("来源设备已断开连接，请重新插入后再选择文件。");
+      }
+      progress.hashed += 1;
+      finalizeRemovableSyncItem(item, progress);
+      releaseRemovableSyncItemSource(item);
+      updateRemovableSyncRow(item);
+      updateRemovableSyncStats();
+      continue;
+    }
+    progress.hashed += 1;
+    if (removableSyncState.cancelled) {
+      item.status = "pending";
+      item.message = "已取消";
+      updateRemovableSyncWorkProgress(progress);
+      updateRemovableSyncRow(item);
+      throw new Error("同步已取消。");
+    }
     if (removableSyncState.destinationHashes.has(item.hash)) {
       item.status = "duplicate";
       item.message = "目标文件夹已存在";
-    } else {
-      item.status = "ready";
-      item.message = "等待上传";
+      finalizeRemovableSyncItem(item, progress);
+      releaseRemovableSyncItemSource(item);
+      updateRemovableSyncWorkProgress(progress);
+      updateRemovableSyncRow(item);
+      updateRemovableSyncStats();
+      continue;
     }
-    completed += 1;
-    updateRemovableSyncProgress(completed, removableSyncState.files.length * 2);
+    item.status = "ready";
+    item.message = "等待导入";
+    updateRemovableSyncWorkProgress(progress);
     updateRemovableSyncRow(item);
     updateRemovableSyncStats();
+    await uploadReadyRemovableFile(item, progress);
+  }
+  if (removableSyncState.cancelled) {
+    throw new Error("同步已取消。");
   }
 }
 
-async function uploadRemovableFiles() {
-  const candidates = removableSyncState.files.filter((item) => item.status === "ready");
-  let completed = removableSyncState.files.length;
-  for (const item of candidates) {
+async function uploadReadyRemovableFile(item, progress) {
+  if (removableSyncState.cancelled) {
+    throw new Error("同步已取消。");
+  }
+  if (item.hash && removableSyncState.destinationHashes.has(item.hash)) {
+    item.status = "duplicate";
+    item.message = "本次同步已导入同内容文件";
+    finalizeRemovableSyncItem(item, progress);
+    releaseRemovableSyncItemSource(item);
+    updateRemovableSyncRow(item);
+    updateRemovableSyncStats();
+    return;
+  }
+  item.status = "uploading";
+  item.message = "导入中";
+  updateRemovableSyncRow(item);
+  removableSyncUi.status.textContent = `正在导入：${item.name}`;
+  try {
+    const result = await uploadRemovableFile(item);
+    item.status = result.status === "saved" ? "saved" : result.status === "duplicate" ? "duplicate" : "rejected";
+    item.message = removableSyncMessageForResult(result);
+    if (result.hash) {
+      removableSyncState.destinationHashes.add(result.hash);
+    }
+  } catch (error) {
     if (removableSyncState.cancelled) {
       throw new Error("同步已取消。");
     }
-    item.status = "uploading";
-    item.message = "上传中";
-    updateRemovableSyncRow(item);
-    removableSyncUi.status.textContent = `正在上传：${item.name}`;
-    try {
-      const result = await uploadRemovableFile(item);
-      item.status = result.status === "saved" ? "saved" : result.status === "duplicate" ? "duplicate" : "rejected";
-      item.message = removableSyncMessageForResult(result);
-      if (result.hash) {
-        removableSyncState.destinationHashes.add(result.hash);
-      }
-    } catch (error) {
+    if (isRemovableSyncSourceGoneError(error)) {
       item.status = "error";
-      item.message = error.message || "上传失败";
+      item.message = "来源设备已断开连接";
+      finalizeRemovableSyncItem(item, progress);
+      releaseRemovableSyncItemSource(item);
+      updateRemovableSyncRow(item);
+      updateRemovableSyncStats();
+      removableSyncState.cancelled = true;
+      throw new Error("来源设备已断开连接，请重新插入后再选择文件。");
     }
-    completed += 1;
-    updateRemovableSyncProgress(completed, removableSyncState.files.length * 2);
-    updateRemovableSyncRow(item);
-    updateRemovableSyncStats();
+    item.status = "error";
+    item.message = removableSyncFailureMessage(error, "导入失败");
   }
+  finalizeRemovableSyncItem(item, progress);
+  releaseRemovableSyncItemSource(item);
+  updateRemovableSyncRow(item);
+  updateRemovableSyncStats();
 }
 
 async function uploadRemovableFile(item) {
+  const file = item.uploadFile || await resolveRemovableSyncFile(item);
   const formData = new FormData();
   formData.set("folder", removableSyncState.targetFolder);
   formData.set("sha256", item.hash);
-  formData.append("file", item.file, item.name);
+  formData.append("file", file, item.name);
   const response = await fetch("/api/removable-sync/upload", {
     method: "POST",
     body: formData,
@@ -298,6 +437,32 @@ async function uploadRemovableFile(item) {
     throw new Error(data.message || `HTTP ${response.status}`);
   }
   return data;
+}
+
+async function sha256RemovableItem(item) {
+  const file = await resolveRemovableSyncFile(item);
+  const buffer = await file.arrayBuffer();
+  item.uploadFile = new Blob([buffer], { type: file.type || "application/octet-stream" });
+  return sha256ArrayBufferHex(buffer);
+}
+
+async function resolveRemovableSyncFile(item) {
+  if (item.file instanceof File) {
+    return item.file;
+  }
+  if (!item.handle || typeof item.handle.getFile !== "function") {
+    throw new Error("来源文件不可用");
+  }
+  const file = await item.handle.getFile();
+  item.file = file;
+  if (!item.size && Number(file.size) >= 0) {
+    item.size = file.size;
+    updateRemovableSyncRow(item);
+  }
+  if (!item.name) {
+    item.name = file.name || item.name;
+  }
+  return file;
 }
 
 async function parseRemovableSyncResponse(response) {
@@ -314,14 +479,18 @@ async function parseRemovableSyncResponse(response) {
 
 async function sha256BrowserFile(file) {
   const buffer = await file.arrayBuffer();
-  const digest = hasNativeSha256()
-    ? await window.crypto.subtle.digest("SHA-256", buffer)
-    : sha256ArrayBuffer(buffer);
-  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return sha256ArrayBufferHex(buffer);
 }
 
 function hasNativeSha256() {
   return Boolean(window.crypto?.subtle?.digest);
+}
+
+async function sha256ArrayBufferHex(buffer) {
+  const digest = hasNativeSha256()
+    ? await window.crypto.subtle.digest("SHA-256", buffer)
+    : sha256ArrayBuffer(buffer);
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function sha256ArrayBuffer(buffer) {
@@ -449,9 +618,43 @@ function updateRemovableSyncStats() {
   removableSyncUi.error.textContent = String(files.filter((item) => item.status === "error" || item.status === "rejected").length);
 }
 
+function finalizeRemovableSyncItem(item, progress) {
+  if (item.finalized) {
+    return;
+  }
+  item.finalized = true;
+  progress.finalized += 1;
+  updateRemovableSyncWorkProgress(progress);
+}
+
+function updateRemovableSyncWorkProgress(progress) {
+  updateRemovableSyncProgress(progress.hashed + progress.finalized, progress.total * 2);
+}
+
 function updateRemovableSyncProgress(completed, total) {
   const percent = total ? Math.min(100, Math.round((completed / total) * 100)) : 0;
   removableSyncUi.progressFill.style.width = `${percent}%`;
+}
+
+function waitRemovableSyncFrame() {
+  return new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+}
+
+function removableSyncSourceName(source) {
+  return source instanceof File ? source.name : String(source?.name || "");
+}
+
+function releaseRemovableSyncItems(items) {
+  items.forEach((item) => releaseRemovableSyncItemSource(item));
+}
+
+function releaseRemovableSyncItemSource(item) {
+  if (!item) {
+    return;
+  }
+  item.file = null;
+  item.handle = null;
+  item.uploadFile = null;
 }
 
 function setRemovableSyncBusy(busy, options = {}) {
@@ -489,6 +692,28 @@ function removableSyncMessageForResult(result) {
     return "服务端确认已存在";
   }
   return result.reason || result.message || "未导入";
+}
+
+function removableSyncFailureMessage(error, fallback) {
+  if (isRemovableSyncSourceGoneError(error)) {
+    return "来源设备已断开连接";
+  }
+  return error?.message || fallback;
+}
+
+function isRemovableSyncSourceGoneError(error) {
+  const name = String(error?.name || "");
+  const message = String(error?.message || "").toLowerCase();
+  return name === "NotFoundError"
+    || name === "NotReadableError"
+    || name === "AbortError"
+    || message.includes("notfound")
+    || message.includes("not found")
+    || message.includes("notreadable")
+    || message.includes("not readable")
+    || message.includes("device")
+    || message.includes("networkerror")
+    || message.includes("network error");
 }
 
 function removableSyncDisplayFolder(path) {

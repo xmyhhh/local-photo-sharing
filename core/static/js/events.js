@@ -38,7 +38,7 @@ document.addEventListener("click", (event) => {
   if (!ratingFilterMenu.hidden && !ratingFilterMenu.contains(event.target) && event.target !== ratingFilterBtn) {
     setRatingMenuOpen(false);
   }
-  if (!viewerRatingMenu.hidden && !viewerRatingMenu.contains(event.target) && event.target !== viewerRatingBtn) {
+  if (!viewerRatingMenu.hidden && !viewerRatingMenu.contains(event.target) && !viewerRatingBtn.contains(event.target)) {
     setViewerRatingMenuOpen(false);
   }
   if (!folderContextMenu.hidden && !folderContextMenu.contains(event.target)) {
@@ -296,9 +296,22 @@ viewer.addEventListener("mousemove", () => {
   }
   showViewerControls({ autoHide: true });
 });
+window.addEventListener("resize", () => {
+  if (!viewerRatingMenu.hidden) {
+    positionViewerRatingMenu();
+  }
+});
+window.addEventListener("scroll", () => {
+  if (!viewerRatingMenu.hidden) {
+    positionViewerRatingMenu();
+  }
+}, { passive: true });
 document.addEventListener("fullscreenchange", () => {
   if (document.fullscreenElement !== viewer) {
     state.viewerRequestedFullscreen = false;
+  }
+  if (!viewerRatingMenu.hidden) {
+    requestAnimationFrame(() => positionViewerRatingMenu());
   }
 });
 document.addEventListener("keydown", (event) => {

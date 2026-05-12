@@ -60,6 +60,7 @@ function finishViewerClose() {
   cancelViewerOriginalLoads();
   releaseServerMemoryPrefetch();
   closePhotoInfoPanel();
+  setViewerRatingMenuOpen(false);
   state.viewerHistoryArmed = false;
   state.closingViewerFromHistory = false;
   state.currentPhoto = null;
@@ -136,6 +137,7 @@ function showPhoto(entry) {
   state.activeTouches.clear();
   state.pinchDistance = 0;
   state.swipeStart = null;
+  setViewerRatingMenuOpen(false);
   refreshPhotoInfoForCurrentEntry();
   viewerTitle.textContent = entry.path;
   viewerImage.alt = entry.name;
@@ -530,6 +532,12 @@ function setViewerRatingMenuOpen(open) {
   }
   viewerRatingMenu.hidden = !open;
   viewerRatingBtn.setAttribute("aria-expanded", String(open));
+  if (open) {
+    positionViewerRatingMenu();
+  } else {
+    viewerRatingMenu.style.removeProperty("left");
+    viewerRatingMenu.style.removeProperty("top");
+  }
 }
 
 async function setRating(entry, rating) {
@@ -699,6 +707,23 @@ function updateViewerControlsLock() {
   if (!locked) {
     updatePageButtons();
   }
+}
+
+function positionViewerRatingMenu() {
+  if (viewerRatingMenu.hidden || viewerRatingBtn.hidden || !viewer.open) {
+    return;
+  }
+  const buttonRect = viewerRatingBtn.getBoundingClientRect();
+  const shellRect = viewer.querySelector(".viewer-shell")?.getBoundingClientRect() || viewer.getBoundingClientRect();
+  const menuWidth = viewerRatingMenu.offsetWidth || 108;
+  const menuHeight = viewerRatingMenu.offsetHeight || 0;
+  const centerX = buttonRect.left + (buttonRect.width / 2) - shellRect.left;
+  const minLeft = 12;
+  const maxLeft = Math.max(minLeft, shellRect.width - menuWidth - 12);
+  const left = Math.max(minLeft, Math.min(maxLeft, centerX - (menuWidth / 2)));
+  const top = buttonRect.top - shellRect.top - menuHeight - 10;
+  viewerRatingMenu.style.left = `${left}px`;
+  viewerRatingMenu.style.top = `${Math.max(12, top)}px`;
 }
 
 function preloadAdjacentPreviews() {

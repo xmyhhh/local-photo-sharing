@@ -10,7 +10,7 @@
 
 ## 配置
 
-- 当前配置使用最新格式，不保留旧字段兼容。新增字段时同步更新 `DEFAULT_CONFIG`、README 和设置页。
+- 当前配置使用最新格式，不保留旧字段兼容。新增字段时同步更新 `DEFAULT_CONFIG`、`docs/configuration.md` 和设置页。
 - `thumbnail_modes` 同时描述缩略图尺寸、质量和队列上限：`size`、`quality`、`queue_limit`。
 - `memory_prefetch.memory_limit_mb` 使用 MB，最小 256MB，最大为系统物理内存减 4GB。
 - `default_save_folder` 不要求位于 `photo_folders` 内；不存在时自动创建，不在根目录内时自动作为额外根目录挂载。
