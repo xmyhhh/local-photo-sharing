@@ -80,7 +80,11 @@ def register(app: Flask, services: AppServices) -> None:
         if Path(filename).suffix.lower() not in MEDIA_EXTENSIONS:
             return jsonify({"name": upload.filename or filename, "status": "rejected", "reason": "Unsupported file type."}), 200
 
-        fd, temp_value = tempfile.mkstemp(prefix="removable-sync-", suffix=Path(filename).suffix)
+        fd, temp_value = tempfile.mkstemp(
+            prefix=".removable-sync-",
+            suffix=Path(filename).suffix,
+            dir=target_folder,
+        )
         os.close(fd)
         temp_path = Path(temp_value)
         try:
@@ -88,7 +92,7 @@ def register(app: Flask, services: AppServices) -> None:
             server_hash = sha256_file(temp_path)
             if client_hash and client_hash != server_hash:
                 return jsonify({"message": "File hash changed during upload."}), 409
-            existing_path = find_hash_in_folder(target_folder, server_hash)
+            existing_path = find_hash_in_folder(target_folder, server_hash, exclude=temp_path)
             if existing_path is not None:
                 return jsonify({
                     "status": "duplicate",
@@ -131,8 +135,11 @@ def destination_hashes(folder_path: Path) -> set[str]:
     return hashes
 
 
-def find_hash_in_folder(folder_path: Path, digest: str) -> Path | None:
+def find_hash_in_folder(folder_path: Path, digest: str, exclude: Path | None = None) -> Path | None:
+    excluded = exclude.resolve() if exclude is not None else None
     for path in iter_media_files(folder_path):
+        if excluded is not None and path.resolve() == excluded:
+            continue
         if sha256_file(path) == digest:
             return path
     return None
@@ -141,6 +148,8 @@ def find_hash_in_folder(folder_path: Path, digest: str) -> Path | None:
 def iter_media_files(folder_path: Path):
     for path in folder_path.rglob("*"):
         try:
+            if path.name.startswith(".removable-sync-"):
+                continue
             if path.is_file() and path.suffix.lower() in MEDIA_EXTENSIONS:
                 yield path
         except OSError:

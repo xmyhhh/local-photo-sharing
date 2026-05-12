@@ -418,7 +418,7 @@ async function loadPreviewImage(entry, attempt = 0) {
     state.previewTimer = null;
   }
   try {
-    const response = await fetch(`/api/preview-status/${encodePath(entry.path)}`, { cache: "no-store" });
+    const response = await fetch(viewerPreviewStatusUrl(entry), { cache: "no-store" });
     const data = await response.json();
     if (response.status === 200) {
       if (state.currentPhoto?.path !== entry.path) {
@@ -430,7 +430,7 @@ async function loadPreviewImage(entry, attempt = 0) {
       viewerImage.classList.remove("ready");
       viewerImage.classList.remove("loading");
       viewerImage.onload = () => viewerImage.classList.add("ready");
-      viewerImage.src = `${data.url}?v=${entry.mtime}`;
+      viewerImage.src = withVersion(data.url, entry.mtime);
       entry.previewUrl = viewerImage.src;
       return;
     }
@@ -457,6 +457,13 @@ function showOriginalImageFallback(entry) {
   if (state.currentPhoto?.path === entry.path) {
     scheduleCurrentOriginalLoad(entry);
   }
+}
+
+function viewerPreviewStatusUrl(entry) {
+  if (entry.browserRenderable === false) {
+    return `/api/thumb-status/${encodePath(entry.path)}?mode=xlarge`;
+  }
+  return `/api/preview-status/${encodePath(entry.path)}`;
 }
 
 function renderViewerRating() {
@@ -682,7 +689,7 @@ function preloadAdjacentPreviews() {
     if (!entry) {
       return;
     }
-    fetch(`/api/preview-status/${encodePath(entry.path)}`, { cache: "no-store" }).catch(() => {});
+    fetch(viewerPreviewStatusUrl(entry), { cache: "no-store" }).catch(() => {});
   });
 }
 
