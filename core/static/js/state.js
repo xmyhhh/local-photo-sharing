@@ -24,6 +24,7 @@ function normalizeClientPrefetchSettings(value) {
   const settings = value && typeof value === "object" ? value : {};
   return {
     enabled: settings.enabled !== false,
+    originalPreviewEnabled: settings.originalPreviewEnabled !== false,
     thumbNeighborRadius: clampClientPrefetchInt(settings.thumbNeighborRadius, 0, 100, DEFAULT_CLIENT_PREFETCH.thumbNeighborRadius),
     originalForward: clampClientPrefetchInt(settings.originalForward, 0, 30, DEFAULT_CLIENT_PREFETCH.originalForward),
     originalBackward: clampClientPrefetchInt(settings.originalBackward, 0, 30, DEFAULT_CLIENT_PREFETCH.originalBackward),
@@ -50,6 +51,7 @@ const THUMB_QUEUE_LIMITS = {
 const CLIENT_PREFETCH_STORAGE_KEY = "clientPrefetchSettings.v1";
 const DEFAULT_CLIENT_PREFETCH = {
   enabled: true,
+  originalPreviewEnabled: true,
   thumbNeighborRadius: 20,
   originalForward: 5,
   originalBackward: 1,
@@ -287,6 +289,7 @@ const themeModeSelect = document.querySelector("#themeModeSelect");
 const memoryPrefetchEnabledInput = document.querySelector("#memoryPrefetchEnabledInput");
 const memoryPrefetchLimitInput = document.querySelector("#memoryPrefetchLimitInput");
 const clientPrefetchEnabledInput = document.querySelector("#clientPrefetchEnabledInput");
+const originalPreviewEnabledInput = document.querySelector("#originalPreviewEnabledInput");
 const clientPrefetchThumbRadiusInput = document.querySelector("#clientPrefetchThumbRadiusInput");
 const clientPrefetchOriginalForwardInput = document.querySelector("#clientPrefetchOriginalForwardInput");
 const clientPrefetchOriginalBackwardInput = document.querySelector("#clientPrefetchOriginalBackwardInput");

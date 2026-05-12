@@ -183,7 +183,7 @@ function showPhoto(entry) {
     return;
   }
 
-  if (entry.originalUrl) {
+  if (state.clientPrefetch.originalPreviewEnabled && entry.originalUrl) {
     viewerImage.classList.remove("loading");
     viewerImage.onload = () => viewerImage.classList.add("ready");
     viewerImage.src = entry.originalUrl;
@@ -191,6 +191,25 @@ function showPhoto(entry) {
     updatePageButtons();
     updateZoom();
     updateDownloadButton();
+    return;
+  }
+
+  if (!state.clientPrefetch.originalPreviewEnabled) {
+    entry.originalReady = false;
+    viewerImage.classList.remove("ready");
+    viewerImage.classList.add("loading");
+    if (entry.thumbUrl) {
+      viewerImage.src = entry.thumbUrl;
+      viewerImage.classList.add("ready");
+    } else {
+      viewerImage.removeAttribute("src");
+    }
+    loadPreviewImage(entry);
+    renderViewerRating();
+    updatePageButtons();
+    updateZoom();
+    updateDownloadButton();
+    preloadAdjacentPreviews();
     return;
   }
 
@@ -454,7 +473,7 @@ async function loadPreviewImage(entry, attempt = 0) {
 }
 
 function showOriginalImageFallback(entry) {
-  if (state.currentPhoto?.path === entry.path) {
+  if (state.currentPhoto?.path === entry.path && state.clientPrefetch.originalPreviewEnabled) {
     scheduleCurrentOriginalLoad(entry);
   }
 }

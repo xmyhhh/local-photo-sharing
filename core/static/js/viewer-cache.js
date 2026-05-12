@@ -3,7 +3,7 @@
   if (state.rapidNavDirection) {
     return;
   }
-  if (!state.clientPrefetch.enabled) {
+  if (!state.clientPrefetch.enabled || !state.clientPrefetch.originalPreviewEnabled) {
     updateServerMemoryPrefetch();
     return;
   }
@@ -64,7 +64,7 @@ function releaseServerMemoryPrefetch(useBeacon = false) {
 }
 
 function queueOriginalPrefetch(entry) {
-  if (!state.clientPrefetch.enabled || state.clientPrefetch.originalQueueLimit <= 0) {
+  if (!state.clientPrefetch.enabled || !state.clientPrefetch.originalPreviewEnabled || state.clientPrefetch.originalQueueLimit <= 0) {
     return;
   }
   if (entry.browserRenderable === false) {
@@ -83,7 +83,7 @@ function queueOriginalPrefetch(entry) {
 }
 
 function runOriginalPrefetchQueue() {
-  if (!viewer.open || state.rapidNavDirection || !state.clientPrefetch.enabled) {
+  if (!viewer.open || state.rapidNavDirection || !state.clientPrefetch.enabled || !state.clientPrefetch.originalPreviewEnabled) {
     return;
   }
   while (
@@ -102,6 +102,9 @@ function runOriginalPrefetchQueue() {
 }
 
 function scheduleCurrentOriginalLoad(entry) {
+  if (!state.clientPrefetch.originalPreviewEnabled) {
+    return;
+  }
   if (state.originalLoadTimer) {
     window.clearTimeout(state.originalLoadTimer);
     state.originalLoadTimer = null;
@@ -145,6 +148,9 @@ function cancelClientOriginalPrefetches() {
 }
 
 async function loadOriginalImage(entry, forceDisplay = false, generation = state.viewerGeneration) {
+  if (forceDisplay && !state.clientPrefetch.originalPreviewEnabled) {
+    return null;
+  }
   if (entry.type !== "photo") {
     return null;
   }

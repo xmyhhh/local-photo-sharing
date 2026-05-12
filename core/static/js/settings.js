@@ -8,6 +8,7 @@ memoryPrefetchLimitInput.addEventListener("input", scheduleGeneralSettingsSave);
 memoryPrefetchLimitInput.addEventListener("change", saveGeneralSettings);
 memoryPrefetchLimitInput.addEventListener("blur", saveGeneralSettings);
 clientPrefetchEnabledInput.addEventListener("change", saveClientPrefetchSettings);
+originalPreviewEnabledInput.addEventListener("change", saveClientPrefetchSettings);
 [
   clientPrefetchThumbRadiusInput,
   clientPrefetchOriginalForwardInput,
@@ -309,6 +310,7 @@ function closeSettingsHelp() {
 function renderClientPrefetchSettings() {
   const settings = state.clientPrefetch;
   clientPrefetchEnabledInput.checked = settings.enabled;
+  originalPreviewEnabledInput.checked = settings.originalPreviewEnabled;
   clientPrefetchThumbRadiusInput.value = String(settings.thumbNeighborRadius);
   clientPrefetchOriginalForwardInput.value = String(settings.originalForward);
   clientPrefetchOriginalBackwardInput.value = String(settings.originalBackward);
@@ -327,8 +329,10 @@ function renderClientPrefetchSettings() {
 
 function saveClientPrefetchSettings() {
   const wasEnabled = state.clientPrefetch.enabled;
+  const wasOriginalPreviewEnabled = state.clientPrefetch.originalPreviewEnabled;
   state.clientPrefetch = normalizeClientPrefetchSettings({
     enabled: clientPrefetchEnabledInput.checked,
+    originalPreviewEnabled: originalPreviewEnabledInput.checked,
     thumbNeighborRadius: clientPrefetchThumbRadiusInput.value,
     originalForward: clientPrefetchOriginalForwardInput.value,
     originalBackward: clientPrefetchOriginalBackwardInput.value,
@@ -340,6 +344,9 @@ function saveClientPrefetchSettings() {
   if (wasEnabled && !state.clientPrefetch.enabled) {
     disableClientPrefetchWork();
   }
+  if (wasOriginalPreviewEnabled && !state.clientPrefetch.originalPreviewEnabled) {
+    disableOriginalPreviewWork();
+  }
   if (generalSettingsLoaded) {
     settingsStatus.textContent = "本机预下载设置已保存。";
   }
@@ -349,6 +356,16 @@ function disableClientPrefetchWork() {
   dropQueuedNeighborThumbnails();
   state.thumbNeighborPrefetchKey = "";
   cancelClientOriginalPrefetches();
+}
+
+function disableOriginalPreviewWork() {
+  cancelViewerOriginalLoads();
+  const entry = state.currentPhoto;
+  if (viewer.open && entry?.type === "photo" && entry.browserRenderable !== false) {
+    entry.originalReady = false;
+    entry.originalUrl = "";
+    loadPreviewImage(entry);
+  }
 }
 
 async function saveGeneralSettings() {
