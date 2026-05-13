@@ -8,7 +8,9 @@ PLUGIN_PARENT = Path(__file__).resolve().parents[1] / "plugins"
 if str(PLUGIN_PARENT) not in sys.path:
     sys.path.insert(0, str(PLUGIN_PARENT))
 
-from cloud_backup.engine import CloudBackupEngine
+from cloud_backup.engine import CloudBackupEngine, merge_settings_update, normalize_settings, provider_summaries, public_settings
+from cloud_backup.providers.aliyundrive import split_remote_path as split_aliyun_path
+from cloud_backup.providers.pan123 import split_remote_path as split_pan123_path
 
 
 def test_local_folder_backup_uploads_once_and_skips_generated_files(tmp_path: Path) -> None:
@@ -56,6 +58,48 @@ def test_local_backup_target_inside_gallery_is_rejected(tmp_path: Path) -> None:
     assert "不能放在图库目录里面" in engine._run["error"]
 
 
+def test_cloud_provider_settings_keep_secrets_when_form_is_blank() -> None:
+    current = normalize_settings({
+        "provider": "aliyundrive",
+        "aliyunClientSecret": "old-secret",
+        "aliyunRefreshToken": "old-refresh",
+        "pan123ClientSecret": "pan-secret",
+    })
+
+    updated = normalize_settings(merge_settings_update(current, {
+        "aliyunClientSecret": "",
+        "aliyunRefreshToken": "",
+        "pan123ClientSecret": "",
+        "aliyunClientId": "client-id",
+    }))
+
+    assert updated["aliyunClientSecret"] == "old-secret"
+    assert updated["aliyunRefreshToken"] == "old-refresh"
+    assert updated["pan123ClientSecret"] == "pan-secret"
+    assert updated["aliyunClientId"] == "client-id"
+    exposed = public_settings(updated)
+    assert exposed["hasAliyunClientSecret"] is True
+    assert exposed["hasAliyunRefreshToken"] is True
+    assert exposed["hasPan123ClientSecret"] is True
+    assert "aliyunClientSecret" not in exposed
+    assert "pan123ClientSecret" not in exposed
+
+
+def test_cloud_providers_are_available() -> None:
+    providers = {item["key"]: item for item in provider_summaries()}
+
+    assert providers["local_folder"]["available"] is True
+    assert providers["aliyundrive"]["available"] is True
+    assert providers["pan123"]["available"] is True
+    assert providers["aliyundrive"]["planned"] is False
+    assert providers["pan123"]["planned"] is False
+
+
+def test_cloud_remote_paths_are_sanitized() -> None:
+    assert split_aliyun_path("cold/../root1\\photo.jpg") == ["cold", "root1", "photo.jpg"]
+    assert split_pan123_path("/cold/./root1/photo.jpg") == ["cold", "root1", "photo.jpg"]
+
+
 def configured_engine(source: Path, target: Path) -> CloudBackupEngine:
     engine = CloudBackupEngine()
     engine._settings = {
@@ -65,7 +109,7 @@ def configured_engine(source: Path, target: Path) -> CloudBackupEngine:
         "remotePrefix": "cold",
         "intervalHours": 24,
         "maxFilesPerRun": 0,
-        "checksum": "sha256",
+        "checksum": "size_mtime",
     }
     engine._manifest = {"version": 1, "files": {}, "runs": []}
     engine._services = SimpleNamespace(roots={"root1": source})

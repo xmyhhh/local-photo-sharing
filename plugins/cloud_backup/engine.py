@@ -13,7 +13,7 @@ from core.photo_share.constants import APP_DIR, MEDIA_EXTENSIONS, RATINGS_FILE, 
 from core.photo_share.context import AppServices
 from core.photo_share.paths import to_relative
 
-from cloud_backup.providers import BackupProvider, LocalFolderProvider, ProviderError
+from cloud_backup.providers import AliyunDriveProvider, BackupProvider, LocalFolderProvider, Pan123Provider, ProviderError
 
 PLUGIN_NAME = "cloud_backup"
 BACKUP_STATE_DIR = APP_DIR / ".photo_share_backup"
@@ -28,6 +28,27 @@ DEFAULT_SETTINGS = {
     "intervalHours": 24,
     "maxFilesPerRun": 0,
     "checksum": "size_mtime",
+    "aliyunClientId": "",
+    "aliyunClientSecret": "",
+    "aliyunRefreshToken": "",
+    "aliyunAccessToken": "",
+    "aliyunTokenExpiresAt": 0,
+    "aliyunApiBase": "",
+    "aliyunDriveId": "",
+    "aliyunDriveType": "default",
+    "aliyunRootFileId": "root",
+    "pan123ClientId": "",
+    "pan123ClientSecret": "",
+    "pan123AccessToken": "",
+    "pan123TokenExpiresAt": 0,
+    "pan123RootFileId": 0,
+}
+SECRET_SETTING_FIELDS = {
+    "aliyunClientSecret",
+    "aliyunRefreshToken",
+    "aliyunAccessToken",
+    "pan123ClientSecret",
+    "pan123AccessToken",
 }
 IGNORED_DIR_NAMES = {
     ".git",
@@ -45,11 +66,10 @@ IGNORED_FILE_NAMES = {
 }
 PROVIDERS: dict[str, type[BackupProvider]] = {
     "local_folder": LocalFolderProvider,
+    "aliyundrive": AliyunDriveProvider,
+    "pan123": Pan123Provider,
 }
-PLANNED_PROVIDERS = [
-    {"key": "aliyundrive", "title": "阿里云盘", "available": False, "planned": True},
-    {"key": "pan123", "title": "123 云盘", "available": False, "planned": True},
-]
+PLANNED_PROVIDERS: list[dict[str, Any]] = []
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,7 +137,7 @@ class CloudBackupEngine:
     def update_settings(self, data: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
             current = dict(self._settings)
-            current.update(data)
+            current = merge_settings_update(current, data)
             settings = normalize_settings(current)
             self._settings = settings
             save_settings(settings)
@@ -194,6 +214,7 @@ class CloudBackupEngine:
             return bool(self._settings.get("enabled") and self._next_run_at and time.time() >= self._next_run_at)
 
     def _execute_run(self, services: AppServices) -> None:
+        provider: BackupProvider | None = None
         with self._lock:
             settings = dict(self._settings)
             if not self._run or self._run.get("state") not in {"queued", "running", "scanning"}:
@@ -202,6 +223,7 @@ class CloudBackupEngine:
         try:
             provider = create_provider(settings)
             provider.validate()
+            self._persist_provider_settings(provider)
             validate_provider_target(services, provider)
             candidates = list(iter_backup_candidates(services, settings))
             max_files = int(settings.get("maxFilesPerRun") or 0)
@@ -217,6 +239,7 @@ class CloudBackupEngine:
                     "providerTitle": provider.title,
                 })
             self._backup_candidates(run_id, provider, candidates)
+            self._persist_provider_settings(provider)
             with self._lock:
                 if not self._is_run_current_locked(run_id):
                     return
@@ -228,6 +251,8 @@ class CloudBackupEngine:
                 self._add_run_history_locked(dict(self._run))
                 save_manifest(self._manifest)
                 self._schedule_next_locked()
+            if provider is not None:
+                self._persist_provider_settings(provider)
         except Exception as exc:  # noqa: BLE001 - background backup must keep the app alive.
             with self._lock:
                 if self._run and self._run.get("id") == run_id:
@@ -237,6 +262,8 @@ class CloudBackupEngine:
                     self._add_run_history_locked(dict(self._run))
                     save_manifest(self._manifest)
                     self._schedule_next_locked()
+            if provider is not None:
+                self._persist_provider_settings(provider)
 
     def _backup_candidates(self, run_id: str, provider: BackupProvider, candidates: list[BackupCandidate]) -> None:
         for index, candidate in enumerate(candidates, 1):
@@ -364,6 +391,16 @@ class CloudBackupEngine:
         if latest_run_time(self._manifest) == 0:
             self._next_run_at = time.time() + 5
 
+    def _persist_provider_settings(self, provider: BackupProvider) -> None:
+        updates = provider.updated_settings()
+        if not updates:
+            return
+        with self._lock:
+            current = dict(self._settings)
+            current.update(updates)
+            self._settings = normalize_settings(current)
+            save_settings(self._settings)
+
 
 def iter_backup_candidates(services: AppServices, settings: dict[str, Any]):
     prefix = normalize_remote_prefix(str(settings.get("remotePrefix") or ""))
@@ -439,6 +476,15 @@ def provider_summaries() -> list[dict[str, Any]]:
     return summaries
 
 
+def merge_settings_update(current: dict[str, Any], data: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(current)
+    for key, value in data.items():
+        if key in SECRET_SETTING_FIELDS and str(value or "").strip() == "":
+            continue
+        merged[key] = value
+    return merged
+
+
 def normalize_settings(value: dict[str, Any]) -> dict[str, Any]:
     settings = dict(DEFAULT_SETTINGS)
     if isinstance(value, dict):
@@ -453,6 +499,26 @@ def normalize_settings(value: dict[str, Any]) -> dict[str, Any]:
     settings["intervalHours"] = parse_int(settings.get("intervalHours"), 1, 24 * 30, DEFAULT_SETTINGS["intervalHours"])
     settings["maxFilesPerRun"] = parse_int(settings.get("maxFilesPerRun"), 0, 1_000_000, DEFAULT_SETTINGS["maxFilesPerRun"])
     settings["checksum"] = "size_mtime"
+    for key in [
+        "aliyunClientId",
+        "aliyunClientSecret",
+        "aliyunRefreshToken",
+        "aliyunAccessToken",
+        "aliyunApiBase",
+        "aliyunDriveId",
+        "aliyunRootFileId",
+        "pan123ClientId",
+        "pan123ClientSecret",
+        "pan123AccessToken",
+    ]:
+        settings[key] = str(settings.get(key) or DEFAULT_SETTINGS.get(key, "")).strip()
+    if not settings["aliyunRootFileId"]:
+        settings["aliyunRootFileId"] = "root"
+    drive_type = str(settings.get("aliyunDriveType") or "default").strip()
+    settings["aliyunDriveType"] = drive_type if drive_type in {"default", "resource", "backup"} else "default"
+    settings["aliyunTokenExpiresAt"] = parse_int(settings.get("aliyunTokenExpiresAt"), 0, 4_102_444_800, 0)
+    settings["pan123TokenExpiresAt"] = parse_int(settings.get("pan123TokenExpiresAt"), 0, 4_102_444_800, 0)
+    settings["pan123RootFileId"] = parse_int(settings.get("pan123RootFileId"), 0, 9_000_000_000_000, 0)
     return settings
 
 
@@ -464,7 +530,16 @@ def public_settings(settings: dict[str, Any]) -> dict[str, Any]:
         "remotePrefix": settings.get("remotePrefix", ""),
         "intervalHours": settings.get("intervalHours"),
         "maxFilesPerRun": settings.get("maxFilesPerRun"),
-        "checksum": settings.get("checksum", "sha256"),
+        "checksum": settings.get("checksum", DEFAULT_SETTINGS["checksum"]),
+        "aliyunClientId": settings.get("aliyunClientId", ""),
+        "hasAliyunClientSecret": bool(settings.get("aliyunClientSecret")),
+        "hasAliyunRefreshToken": bool(settings.get("aliyunRefreshToken")),
+        "aliyunDriveId": settings.get("aliyunDriveId", ""),
+        "aliyunDriveType": settings.get("aliyunDriveType", "default"),
+        "aliyunRootFileId": settings.get("aliyunRootFileId", "root"),
+        "pan123ClientId": settings.get("pan123ClientId", ""),
+        "hasPan123ClientSecret": bool(settings.get("pan123ClientSecret")),
+        "pan123RootFileId": settings.get("pan123RootFileId", 0),
     }
 
 
@@ -513,7 +588,7 @@ def load_settings() -> dict[str, Any]:
 def save_settings(settings: dict[str, Any]) -> None:
     BACKUP_STATE_DIR.mkdir(parents=True, exist_ok=True)
     tmp = SETTINGS_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(public_settings(settings), ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
     os.replace(tmp, SETTINGS_FILE)
 
 

@@ -48,6 +48,15 @@
   opacity: 0.62;
 }
 
+.cloud-backup-provider-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.cloud-backup-provider-fields[hidden] {
+  display: none;
+}
+
 .cloud-backup-actions {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

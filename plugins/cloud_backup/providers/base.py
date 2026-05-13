@@ -27,3 +27,6 @@ class BackupProvider(ABC):
 
     def remote_file_matches(self, remote_path: str, size: int) -> bool:
         return True
+
+    def updated_settings(self) -> dict[str, Any]:
+        return {}

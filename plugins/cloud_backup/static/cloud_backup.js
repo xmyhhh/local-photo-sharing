@@ -33,6 +33,56 @@
           <span>本地备份目录</span>
           <input id="cloudBackupTargetDir" type="text" autocomplete="off" placeholder="例如 F:\\photo-cold-backup" />
         </label>
+        <div id="cloudBackupAliyunFields" class="cloud-backup-provider-fields" hidden>
+          <div class="cloud-backup-grid">
+            <label class="cloud-backup-field">
+              <span>Client ID</span>
+              <input id="cloudBackupAliyunClientId" type="text" autocomplete="off" />
+            </label>
+            <label class="cloud-backup-field">
+              <span>Client Secret</span>
+              <input id="cloudBackupAliyunClientSecret" type="password" autocomplete="new-password" />
+            </label>
+            <label class="cloud-backup-field">
+              <span>Refresh Token</span>
+              <input id="cloudBackupAliyunRefreshToken" type="password" autocomplete="new-password" />
+            </label>
+          </div>
+          <div class="cloud-backup-grid">
+            <label class="cloud-backup-field">
+              <span>Drive ID</span>
+              <input id="cloudBackupAliyunDriveId" type="text" autocomplete="off" placeholder="留空自动读取" />
+            </label>
+            <label class="cloud-backup-field">
+              <span>Drive 类型</span>
+              <select id="cloudBackupAliyunDriveType">
+                <option value="default">默认盘</option>
+                <option value="resource">资源库</option>
+                <option value="backup">备份盘</option>
+              </select>
+            </label>
+            <label class="cloud-backup-field">
+              <span>根目录 File ID</span>
+              <input id="cloudBackupAliyunRootFileId" type="text" autocomplete="off" placeholder="root" />
+            </label>
+          </div>
+        </div>
+        <div id="cloudBackupPan123Fields" class="cloud-backup-provider-fields" hidden>
+          <div class="cloud-backup-grid">
+            <label class="cloud-backup-field">
+              <span>Client ID</span>
+              <input id="cloudBackupPan123ClientId" type="text" autocomplete="off" />
+            </label>
+            <label class="cloud-backup-field">
+              <span>Client Secret</span>
+              <input id="cloudBackupPan123ClientSecret" type="password" autocomplete="new-password" />
+            </label>
+            <label class="cloud-backup-field">
+              <span>根目录 File ID</span>
+              <input id="cloudBackupPan123RootFileId" type="number" min="0" step="1" placeholder="0" />
+            </label>
+          </div>
+        </div>
         <label class="cloud-backup-field">
           <span>远端目录前缀</span>
           <input id="cloudBackupRemotePrefix" type="text" autocomplete="off" placeholder="photo-share-backup" />
@@ -94,6 +144,11 @@
       status.textContent = "请先填写本地备份目录。";
       return false;
     }
+    const validationMessage = validateCloudProviderPayload(payload, { requireProvider: payload.enabled });
+    if (validationMessage) {
+      status.textContent = validationMessage;
+      return false;
+    }
     status.textContent = "正在保存冷备份设置...";
     try {
       const data = await fetchJson("/api/cloud-backup/settings", {
@@ -118,6 +173,11 @@
     const status = getStatusElement();
     if (payload.provider === "local_folder" && !payload.targetDir) {
       status.textContent = "请先填写本地备份目录。";
+      return;
+    }
+    const validationMessage = validateCloudProviderPayload(payload, { requireProvider: true });
+    if (validationMessage) {
+      status.textContent = validationMessage;
       return;
     }
     const saved = await saveCloudBackupSettings();
@@ -194,6 +254,18 @@
     setValue("#cloudBackupRemotePrefix", settings.remotePrefix || "photo-share-backup");
     setValue("#cloudBackupInterval", String(settings.intervalHours || 24));
     setValue("#cloudBackupMaxFiles", String(settings.maxFilesPerRun || 0));
+    setValue("#cloudBackupAliyunClientId", settings.aliyunClientId || "");
+    setValue("#cloudBackupAliyunClientSecret", "");
+    setValue("#cloudBackupAliyunRefreshToken", "");
+    setValue("#cloudBackupAliyunDriveId", settings.aliyunDriveId || "");
+    setValue("#cloudBackupAliyunDriveType", settings.aliyunDriveType || "default");
+    setValue("#cloudBackupAliyunRootFileId", settings.aliyunRootFileId || "root");
+    setValue("#cloudBackupPan123ClientId", settings.pan123ClientId || "");
+    setValue("#cloudBackupPan123ClientSecret", "");
+    setValue("#cloudBackupPan123RootFileId", String(settings.pan123RootFileId || 0));
+    setSecretPlaceholder("#cloudBackupAliyunClientSecret", settings.hasAliyunClientSecret);
+    setSecretPlaceholder("#cloudBackupAliyunRefreshToken", settings.hasAliyunRefreshToken);
+    setSecretPlaceholder("#cloudBackupPan123ClientSecret", settings.hasPan123ClientSecret);
   }
 
   function renderStatus(status) {
@@ -243,6 +315,15 @@
       remotePrefix: document.querySelector("#cloudBackupRemotePrefix")?.value.trim() || "photo-share-backup",
       intervalHours: clampInt(document.querySelector("#cloudBackupInterval")?.value, 1, 720, 24),
       maxFilesPerRun: clampInt(document.querySelector("#cloudBackupMaxFiles")?.value, 0, 1000000, 0),
+      aliyunClientId: document.querySelector("#cloudBackupAliyunClientId")?.value.trim() || "",
+      aliyunClientSecret: document.querySelector("#cloudBackupAliyunClientSecret")?.value.trim() || "",
+      aliyunRefreshToken: document.querySelector("#cloudBackupAliyunRefreshToken")?.value.trim() || "",
+      aliyunDriveId: document.querySelector("#cloudBackupAliyunDriveId")?.value.trim() || "",
+      aliyunDriveType: document.querySelector("#cloudBackupAliyunDriveType")?.value || "default",
+      aliyunRootFileId: document.querySelector("#cloudBackupAliyunRootFileId")?.value.trim() || "root",
+      pan123ClientId: document.querySelector("#cloudBackupPan123ClientId")?.value.trim() || "",
+      pan123ClientSecret: document.querySelector("#cloudBackupPan123ClientSecret")?.value.trim() || "",
+      pan123RootFileId: clampInt(document.querySelector("#cloudBackupPan123RootFileId")?.value, 0, 9000000000000, 0),
     };
   }
 
@@ -252,6 +333,36 @@
     if (target) {
       target.disabled = provider !== "local_folder";
     }
+    setHidden("#cloudBackupAliyunFields", provider !== "aliyundrive");
+    setHidden("#cloudBackupPan123Fields", provider !== "pan123");
+  }
+
+  function validateCloudProviderPayload(payload, { requireProvider }) {
+    if (!requireProvider) {
+      return "";
+    }
+    if (payload.provider === "aliyundrive") {
+      if (!payload.aliyunClientId) {
+        return "请先填写阿里云盘 Client ID。";
+      }
+      const hasSecret = hasExistingSecret("#cloudBackupAliyunClientSecret");
+      const hasRefreshToken = hasExistingSecret("#cloudBackupAliyunRefreshToken");
+      if (!payload.aliyunClientSecret && !hasSecret) {
+        return "请先填写阿里云盘 Client Secret。";
+      }
+      if (!payload.aliyunRefreshToken && !hasRefreshToken) {
+        return "请先填写阿里云盘 Refresh Token。";
+      }
+    }
+    if (payload.provider === "pan123") {
+      if (!payload.pan123ClientId) {
+        return "请先填写 123 云盘 Client ID。";
+      }
+      if (!payload.pan123ClientSecret && !hasExistingSecret("#cloudBackupPan123ClientSecret")) {
+        return "请先填写 123 云盘 Client Secret。";
+      }
+    }
+    return "";
   }
 
   function formatIdleSummary(status) {
@@ -298,6 +409,26 @@
     if (element) {
       element[property] = value;
     }
+  }
+
+  function setHidden(selector, hidden) {
+    const element = document.querySelector(selector);
+    if (element) {
+      element.hidden = hidden;
+    }
+  }
+
+  function setSecretPlaceholder(selector, hasValue) {
+    const element = document.querySelector(selector);
+    if (!element) {
+      return;
+    }
+    element.dataset.hasSecret = hasValue ? "1" : "0";
+    element.placeholder = hasValue ? "已保存，留空不修改" : "";
+  }
+
+  function hasExistingSecret(selector) {
+    return document.querySelector(selector)?.dataset.hasSecret === "1";
   }
 
   function getStatusElement() {

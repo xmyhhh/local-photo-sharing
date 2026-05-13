@@ -20,7 +20,7 @@ ENGINE = CloudBackupEngine()
 
 PLUGIN = {
     "title": "冷备份",
-    "description": "定期把图库增量备份到本地目录，后续可扩展到阿里云盘和 123 云盘。",
+    "description": "定期把图库增量备份到本地目录、阿里云盘或 123 云盘。",
     "static_dir": "static",
     "scripts": ["cloud_backup.js"],
     "styles": ["cloud_backup.css"],
@@ -28,7 +28,7 @@ PLUGIN = {
         {
             "id": "cloud_backup.settings",
             "title": "冷备份",
-            "description": "按备份清单增量上传媒体文件，第一阶段支持本地目录目标。",
+            "description": "按备份清单增量上传媒体文件，支持本地目录、阿里云盘和 123 云盘。",
             "capabilities": [
                 {"type": "background_service", "operations": ["scan", "incremental_backup", "schedule"]},
                 {"type": "cloud_backup", "providers": ["local_folder", "aliyundrive", "pan123"]},
@@ -41,7 +41,7 @@ PLUGIN = {
                     "label": "冷备份",
                     "title": "冷备份",
                     "kicker": "备份",
-                    "description": "把图库定期复制到独立备份位置，先从本地目录开始。",
+                    "description": "把图库定期复制到独立备份位置，可选择本地目录或云盘。",
                 }
             ],
         }
