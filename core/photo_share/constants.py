@@ -80,6 +80,11 @@ DEFAULT_CONFIG = {
             "path": "plugins/removable_sync/plugin.py",
         },
         {
+            "name": "cloud_backup",
+            "path": "plugins/cloud_backup/plugin.py",
+            "enabled": False,
+        },
+        {
             "name": "global_search",
             "path": "plugins/global_search/plugin.py",
             "enabled": False,

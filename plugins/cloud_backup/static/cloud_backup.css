@@ -1,0 +1,104 @@
+.cloud-backup-card {
+  gap: 16px;
+}
+
+.cloud-backup-head {
+  display: grid;
+  gap: 10px;
+}
+
+.cloud-backup-switch {
+  min-height: 44px;
+}
+
+.cloud-backup-summary,
+.cloud-backup-status,
+.cloud-backup-empty {
+  color: var(--settings-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.cloud-backup-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cloud-backup-field {
+  display: grid;
+  gap: 7px;
+  color: var(--settings-muted);
+  font-size: 13px;
+}
+
+.cloud-backup-field input,
+.cloud-backup-field select {
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid rgba(23, 107, 135, 0.16);
+  border-radius: 14px;
+  padding: 0 12px;
+  background: var(--settings-input-bg);
+  color: var(--settings-text);
+  font: inherit;
+}
+
+.cloud-backup-field input:disabled {
+  opacity: 0.62;
+}
+
+.cloud-backup-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.cloud-backup-actions button {
+  width: 100%;
+  min-width: 0;
+}
+
+.cloud-backup-history {
+  display: grid;
+  gap: 8px;
+}
+
+.cloud-backup-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 46px;
+  border: 1px solid rgba(23, 107, 135, 0.12);
+  border-radius: 14px;
+  padding: 9px 12px;
+  background: var(--settings-row-bg);
+  color: var(--settings-text);
+  font-size: 13px;
+}
+
+.cloud-backup-history-row strong {
+  margin-right: 8px;
+}
+
+.cloud-backup-history-row span {
+  color: var(--settings-muted);
+}
+
+.cloud-backup-history-row.state-error {
+  border-color: rgba(180, 35, 24, 0.24);
+  color: var(--settings-danger);
+}
+
+@media (max-width: 620px) {
+  .cloud-backup-grid,
+  .cloud-backup-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .cloud-backup-history-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

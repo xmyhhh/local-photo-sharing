@@ -1,0 +1,1 @@
+"""Cold backup plugin package."""
