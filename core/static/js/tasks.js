@@ -23,16 +23,14 @@ async function pollBackendTasks() {
   try {
     const payload = await fetchJson("/api/tasks", { cache: "no-store" });
     renderBackendTasks(payload);
-    const hasTasks = (payload.tasks || []).length > 0;
+    const hasTasks = (payload.tasks || []).length > 0 || getClientTaskSnapshots().length > 0;
     if (hasTasks || backendTasksDialog?.open) {
       state.backendTasksPollTimer = window.setTimeout(pollBackendTasks, hasTasks ? 1000 : 3000);
     } else {
       state.backendTasksPollTimer = null;
     }
   } catch {
-    if (backendTasksBtn) {
-      backendTasksBtn.hidden = true;
-    }
+    renderBackendTasks({ tasks: [] });
     if (backendTasksDialog?.open) {
       state.backendTasksPollTimer = window.setTimeout(pollBackendTasks, 5000);
     } else {
@@ -44,6 +42,78 @@ async function pollBackendTasks() {
 function notifyBackendTaskStarted() {
   document.dispatchEvent(new CustomEvent("photoShare:backend-task-started"));
   startBackendTasksPolling();
+}
+
+function registerClientTask(taskId, task) {
+  if (!taskId || !task || typeof task.snapshot !== "function") {
+    return;
+  }
+  state.clientTasks.set(taskId, task);
+  renderBackendTasks({ tasks: state.backendTasks });
+  startBackendTasksPolling();
+}
+
+function updateClientTask(taskId) {
+  if (!state.clientTasks.has(taskId)) {
+    return;
+  }
+  renderBackendTasks({ tasks: state.backendTasks });
+}
+
+function unregisterClientTask(taskId) {
+  const task = state.clientTasks.get(taskId);
+  if (!task) {
+    return;
+  }
+  state.clientTasks.delete(taskId);
+  if (task.retainSnapshot && typeof task.snapshot === "function") {
+    const snapshot = task.snapshot();
+    state.clientTasks.set(taskId, {
+      snapshot: () => snapshot,
+      open: task.open,
+    });
+    window.setTimeout(() => {
+      const current = state.clientTasks.get(taskId);
+      if (current?.snapshot?.() === snapshot) {
+        state.clientTasks.delete(taskId);
+        renderBackendTasks({ tasks: state.backendTasks });
+      }
+    }, 2500);
+  }
+  renderBackendTasks({ tasks: state.backendTasks });
+}
+
+function getClientTaskSnapshots() {
+  return Array.from(state.clientTasks.entries())
+    .map(([id, task]) => {
+      try {
+        return normalizeClientTaskSnapshot(id, task.snapshot());
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+function normalizeClientTaskSnapshot(id, raw) {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const stateValue = raw.state || "running";
+  return {
+    id: `client.${id}`,
+    source: raw.source || "client",
+    title: raw.title || "浏览器任务",
+    detail: raw.detail || "",
+    state: stateValue,
+    progress: raw.progress,
+    progressMode: raw.progressMode || (raw.progress === null || raw.progress === undefined ? "activity" : "percent"),
+    completed: raw.completed,
+    total: raw.total,
+    error: raw.error || "",
+    actionLabel: raw.actionLabel || "打开",
+    clientTaskId: id,
+  };
 }
 
 function hideBackendTasksUi() {
@@ -58,8 +128,9 @@ function hideBackendTasksUi() {
 }
 
 function renderBackendTasks(payload) {
-  const tasks = Array.isArray(payload?.tasks) ? payload.tasks : [];
-  state.backendTasks = tasks;
+  const backendTasks = Array.isArray(payload?.tasks) ? payload.tasks : [];
+  state.backendTasks = backendTasks;
+  const tasks = [...backendTasks, ...getClientTaskSnapshots()];
   if (!backendTasksBtn) {
     return;
   }
@@ -93,7 +164,8 @@ function renderBackendTasks(payload) {
 }
 
 function renderBackendTasksDialog(payload = { tasks: state.backendTasks }) {
-  const tasks = Array.isArray(payload?.tasks) ? payload.tasks : state.backendTasks;
+  const backendTasks = Array.isArray(payload?.tasks) ? payload.tasks : state.backendTasks;
+  const tasks = [...backendTasks, ...getClientTaskSnapshots()];
   const active = Number(payload?.active) || tasks.filter((task) => isTaskActive(task)).length;
   const errors = Number(payload?.errors) || tasks.filter((task) => task.state === "error").length;
   if (!tasks.length) {
@@ -125,7 +197,10 @@ function createBackendTaskRow(task) {
         <div class="backend-task-title">${escapeHtml(task.title || "后台任务")}</div>
         <div class="backend-task-detail">${escapeHtml(task.detail || task.source || "")}</div>
       </div>
-      <div class="backend-task-state">${escapeHtml(taskStateLabel(task.state))}</div>
+      <div class="backend-task-side">
+        ${task.clientTaskId ? `<button class="backend-task-open" type="button" data-client-task-id="${escapeHtml(task.clientTaskId)}">${escapeHtml(task.actionLabel || "打开")}</button>` : ""}
+        <div class="backend-task-state">${escapeHtml(taskStateLabel(task.state))}</div>
+      </div>
     </div>
     <div class="backend-task-progress ${hasProgress ? "" : "indeterminate"}">
       <span style="width: ${hasProgress ? Math.max(2, percent) : 38}%"></span>
@@ -136,7 +211,16 @@ function createBackendTaskRow(task) {
       ${task.error ? `<span class="backend-task-error">${escapeHtml(task.error)}</span>` : ""}
     </div>
   `;
+  const openButton = row.querySelector("[data-client-task-id]");
+  openButton?.addEventListener("click", () => openClientTask(openButton.dataset.clientTaskId));
   return row;
+}
+
+function openClientTask(taskId) {
+  const task = state.clientTasks.get(taskId);
+  if (task?.open) {
+    task.open();
+  }
 }
 
 function isTaskActive(task) {
@@ -147,6 +231,7 @@ function taskStateLabel(state) {
   if (state === "queued") return "排队";
   if (state === "scanning") return "扫描";
   if (state === "indexing") return "索引";
+  if (state === "done") return "完成";
   if (state === "error") return "异常";
   return "运行";
 }

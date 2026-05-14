@@ -761,6 +761,21 @@ h1 {
   font-weight: 800;
 }
 
+.backend-task-side {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.backend-task-open {
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .state-error .backend-task-state {
   color: var(--danger);
 }

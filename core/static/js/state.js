@@ -175,6 +175,7 @@ const state = {
   backendTasksPollTimer: null,
   backendTasks: [],
   backendTasksVisibleUntil: 0,
+  clientTasks: new Map(),
   filters: {
     ratings: [],
     dateFrom: "",
@@ -255,6 +256,7 @@ const uploadFilesInput = document.querySelector("#uploadFilesInput");
 const uploadStatus = document.querySelector("#uploadStatus");
 const createUploadFolderBtn = document.querySelector("#createUploadFolderBtn");
 const submitUploadBtn = document.querySelector("#submitUploadBtn");
+const backgroundUploadBtn = document.querySelector("#backgroundUploadBtn");
 const folderContextMenu = document.querySelector("#folderContextMenu");
 const blankContextMenu = document.querySelector("#blankContextMenu");
 const itemContextMenu = document.querySelector("#itemContextMenu");

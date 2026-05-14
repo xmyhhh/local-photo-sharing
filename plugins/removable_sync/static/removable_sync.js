@@ -1,4 +1,5 @@
 const removableSyncUi = {};
+const REMOVABLE_SYNC_CLIENT_TASK_ID = "plugin.removable_sync";
 const removableSyncState = {
   targetFolder: "",
   targetLabel: "",
@@ -6,6 +7,11 @@ const removableSyncState = {
   destinationHashes: new Set(),
   cancelled: false,
   running: false,
+  backgrounded: false,
+  completed: 0,
+  total: 0,
+  statusDetail: "",
+  error: "",
   prepareToken: null,
 };
 
@@ -55,6 +61,7 @@ function createRemovableSyncDialog() {
           <div id="removableSyncList" class="removable-sync-list"></div>
         </div>
         <footer class="removable-sync-actions">
+          <button id="backgroundRemovableSyncBtn" class="ghost" type="button" hidden>后台执行</button>
           <button id="cancelRemovableSyncBtn" class="ghost" type="button" disabled>取消</button>
           <button id="startRemovableSyncBtn" type="button" disabled>开始同步</button>
         </footer>
@@ -72,6 +79,7 @@ function createRemovableSyncDialog() {
   removableSyncUi.status = dialog.querySelector("#removableSyncStatus");
   removableSyncUi.list = dialog.querySelector("#removableSyncList");
   removableSyncUi.closeButton = dialog.querySelector("#closeRemovableSyncBtn");
+  removableSyncUi.backgroundButton = dialog.querySelector("#backgroundRemovableSyncBtn");
   removableSyncUi.cancelButton = dialog.querySelector("#cancelRemovableSyncBtn");
   removableSyncUi.startButton = dialog.querySelector("#startRemovableSyncBtn");
   removableSyncUi.progressFill = dialog.querySelector("#removableSyncProgressFill");
@@ -85,6 +93,7 @@ function createRemovableSyncDialog() {
 
 function bindRemovableSyncEvents() {
   removableSyncUi.closeButton.addEventListener("click", closeRemovableSyncDialog);
+  removableSyncUi.backgroundButton.addEventListener("click", backgroundRemovableSync);
   removableSyncUi.cancelButton.addEventListener("click", () => {
     removableSyncState.cancelled = true;
     removableSyncUi.status.textContent = "正在取消...";
@@ -119,11 +128,30 @@ function openRemovableSyncForContextFolder() {
 
 function closeRemovableSyncDialog() {
   if (removableSyncState.running) {
-    removableSyncState.cancelled = true;
-    removableSyncUi.status.textContent = "正在取消...";
+    backgroundRemovableSync();
     return;
   }
   removableSyncUi.dialog.close();
+}
+
+function backgroundRemovableSync() {
+  if (!removableSyncState.running) {
+    return;
+  }
+  removableSyncState.backgrounded = true;
+  updateRemovableSyncBackgroundButton();
+  if (removableSyncUi.dialog.open) {
+    removableSyncUi.dialog.close();
+  }
+  updateClientTask(REMOVABLE_SYNC_CLIENT_TASK_ID);
+}
+
+function openRemovableSyncFromTask() {
+  if (!removableSyncUi.dialog.open) {
+    removableSyncUi.dialog.showModal();
+  }
+  removableSyncState.backgrounded = false;
+  updateRemovableSyncBackgroundButton();
 }
 
 function resetRemovableSyncState() {
@@ -132,6 +160,11 @@ function resetRemovableSyncState() {
   removableSyncState.destinationHashes = new Set();
   removableSyncState.cancelled = false;
   removableSyncState.running = false;
+  removableSyncState.backgrounded = false;
+  removableSyncState.completed = 0;
+  removableSyncState.total = 0;
+  removableSyncState.statusDetail = "";
+  removableSyncState.error = "";
   removableSyncState.prepareToken = null;
   removableSyncUi.source.textContent = "尚未选择来源。";
   removableSyncUi.status.textContent = "";
@@ -275,7 +308,17 @@ async function startRemovableSync() {
   }
   removableSyncState.cancelled = false;
   removableSyncState.running = true;
+  removableSyncState.backgrounded = false;
+  removableSyncState.completed = 0;
+  removableSyncState.total = removableSyncState.files.length;
+  removableSyncState.statusDetail = removableSyncState.targetLabel;
+  removableSyncState.error = "";
   setRemovableSyncBusy(true);
+  registerClientTask(REMOVABLE_SYNC_CLIENT_TASK_ID, {
+    snapshot: removableSyncClientTaskSnapshot,
+    open: openRemovableSyncFromTask,
+    retainSnapshot: true,
+  });
   try {
     await loadRemovableDestinationIndex();
     await syncRemovableFiles();
@@ -283,17 +326,38 @@ async function startRemovableSync() {
     const duplicate = removableSyncState.files.filter((item) => item.status === "duplicate").length;
     const failed = removableSyncState.files.filter((item) => item.status === "error" || item.status === "rejected").length;
     removableSyncUi.status.textContent = `同步完成：导入 ${saved} 个，跳过已存在 ${duplicate} 个${failed ? `，异常 ${failed} 个` : ""}。`;
+    removableSyncState.completed = removableSyncState.total;
+    removableSyncState.error = failed ? `${failed} 个文件异常` : "";
     if (saved) {
       await loadFolder(state.folder, { silent: true });
     }
   } catch (error) {
     removableSyncUi.status.textContent = error.message || "同步失败。";
+    removableSyncState.error = error.message || "同步失败。";
   } finally {
     removableSyncState.running = false;
+    removableSyncState.backgrounded = false;
     setRemovableSyncBusy(false);
     updateRemovableSyncStats();
+    updateClientTask(REMOVABLE_SYNC_CLIENT_TASK_ID);
+    window.setTimeout(() => unregisterClientTask(REMOVABLE_SYNC_CLIENT_TASK_ID), 2500);
     releaseRemovableSyncItems(removableSyncState.files);
   }
+}
+
+function removableSyncClientTaskSnapshot() {
+  const errorCount = removableSyncState.files.filter((item) => item.status === "error" || item.status === "rejected").length;
+  return {
+    title: "同步存储设备",
+    detail: removableSyncState.statusDetail || removableSyncState.targetLabel,
+    source: "同步插件",
+    state: removableSyncState.running ? "running" : errorCount || removableSyncState.error ? "error" : "done",
+    progress: removableSyncState.total ? removableSyncState.completed / removableSyncState.total : null,
+    completed: removableSyncState.completed,
+    total: removableSyncState.total,
+    error: removableSyncState.error,
+    actionLabel: "打开同步",
+  };
 }
 
 async function loadRemovableDestinationIndex() {
@@ -628,7 +692,10 @@ function finalizeRemovableSyncItem(item, progress) {
 }
 
 function updateRemovableSyncWorkProgress(progress) {
+  removableSyncState.completed = Math.min(progress.total, progress.finalized);
+  removableSyncState.total = progress.total;
   updateRemovableSyncProgress(progress.hashed + progress.finalized, progress.total * 2);
+  updateClientTask(REMOVABLE_SYNC_CLIENT_TASK_ID);
 }
 
 function updateRemovableSyncProgress(completed, total) {
@@ -663,6 +730,14 @@ function setRemovableSyncBusy(busy, options = {}) {
   removableSyncUi.closeButton.disabled = Boolean(options.scanning);
   removableSyncUi.cancelButton.disabled = !busy || Boolean(options.scanning);
   removableSyncUi.startButton.disabled = busy || !removableSyncState.files.length;
+  updateRemovableSyncBackgroundButton();
+}
+
+function updateRemovableSyncBackgroundButton() {
+  if (!removableSyncUi.backgroundButton) {
+    return;
+  }
+  removableSyncUi.backgroundButton.hidden = !removableSyncState.running || removableSyncState.backgrounded;
 }
 
 function isRemovableSyncMedia(name) {

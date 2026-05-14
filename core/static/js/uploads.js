@@ -1,4 +1,21 @@
+const UPLOAD_CLIENT_TASK_ID = "core.upload";
+const uploadTaskState = {
+  running: false,
+  backgrounded: false,
+  completed: 0,
+  total: 0,
+  detail: "",
+  state: "running",
+  error: "",
+};
+
 function openUploadDialog() {
+  if (uploadTaskState.running) {
+    uploadTaskState.backgrounded = false;
+    uploadDialog.showModal();
+    updateUploadBackgroundButton();
+    return;
+  }
   const defaultFolder = state.folder || "";
   uploadFolderInput.value = defaultFolder;
   uploadFilesInput.value = "";
@@ -11,9 +28,25 @@ function openUploadDialog() {
 }
 
 function closeUploadDialog() {
+  if (uploadTaskState.running) {
+    backgroundUpload();
+    return;
+  }
   if (uploadDialog.open) {
     uploadDialog.close();
   }
+}
+
+function backgroundUpload() {
+  if (!uploadTaskState.running) {
+    return;
+  }
+  uploadTaskState.backgrounded = true;
+  updateUploadBackgroundButton();
+  if (uploadDialog.open) {
+    uploadDialog.close();
+  }
+  updateClientTask(UPLOAD_CLIENT_TASK_ID);
 }
 
 function updateUploadRootLabel() {
@@ -62,6 +95,7 @@ async function submitUpload(event) {
   files.forEach((file) => formData.append("files", file, file.name));
 
   setUploadBusy(true);
+  startUploadClientTask(files.length, normalizeUploadFolder(uploadFolderInput.value));
   setUploadStatus(`正在上传 ${files.length} 个文件...`, "");
   try {
     const response = await fetch("/api/upload", {
@@ -75,6 +109,9 @@ async function submitUpload(event) {
     const rejected = data.rejected?.length || 0;
     const saved = data.saved?.length || 0;
     const unpaired = data.unpairedLiveCandidates?.length || 0;
+    uploadTaskState.completed = saved + rejected;
+    uploadTaskState.state = rejected ? "error" : "running";
+    uploadTaskState.error = rejected ? `${rejected} 个文件未导入` : "";
     const suffixParts = [];
     if (rejected) {
       suffixParts.push(`${rejected} 个文件未导入`);
@@ -84,6 +121,7 @@ async function submitUpload(event) {
     }
     const suffix = suffixParts.length ? `，${suffixParts.join("，")}` : "";
     setUploadStatus(`已上传 ${saved} 个文件${suffix}。`, rejected ? "error" : "success");
+    finishUploadClientTask(rejected ? "error" : "done");
     if (unpaired) {
       showMissingLiveVideoNotice(data.unpairedLiveCandidates);
     }
@@ -94,9 +132,60 @@ async function submitUpload(event) {
     await loadFolder(data.folder || "");
   } catch (error) {
     setUploadStatus(error.message, "error");
+    uploadTaskState.state = "error";
+    uploadTaskState.error = error.message;
+    finishUploadClientTask("error");
   } finally {
     setUploadBusy(false);
   }
+}
+
+function startUploadClientTask(total, folder) {
+  uploadTaskState.running = true;
+  uploadTaskState.backgrounded = false;
+  uploadTaskState.completed = 0;
+  uploadTaskState.total = total;
+  uploadTaskState.detail = folder ? `上传到 ${folder}` : "上传到默认保存位置";
+  uploadTaskState.state = "running";
+  uploadTaskState.error = "";
+  registerClientTask(UPLOAD_CLIENT_TASK_ID, {
+    snapshot: uploadClientTaskSnapshot,
+    open: openUploadDialogFromTask,
+    retainSnapshot: true,
+  });
+  updateUploadBackgroundButton();
+}
+
+function finishUploadClientTask(stateValue) {
+  uploadTaskState.running = false;
+  uploadTaskState.backgrounded = false;
+  uploadTaskState.state = stateValue;
+  uploadTaskState.completed = uploadTaskState.total;
+  updateUploadBackgroundButton();
+  updateClientTask(UPLOAD_CLIENT_TASK_ID);
+  unregisterClientTask(UPLOAD_CLIENT_TASK_ID);
+}
+
+function uploadClientTaskSnapshot() {
+  return {
+    title: "上传照片",
+    detail: uploadTaskState.detail,
+    source: "上传",
+    state: uploadTaskState.state,
+    progress: uploadTaskState.total ? uploadTaskState.completed / uploadTaskState.total : null,
+    completed: uploadTaskState.completed,
+    total: uploadTaskState.total,
+    error: uploadTaskState.error,
+    actionLabel: "打开上传",
+  };
+}
+
+function openUploadDialogFromTask() {
+  if (!uploadDialog.open) {
+    uploadDialog.showModal();
+  }
+  uploadTaskState.backgrounded = false;
+  updateUploadBackgroundButton();
 }
 
 function showMissingLiveVideoNotice(items) {
@@ -132,10 +221,11 @@ function normalizeUploadFolder(folder) {
 function setUploadBusy(busy) {
   submitUploadBtn.disabled = busy;
   createUploadFolderBtn.disabled = busy;
-  closeUploadBtn.disabled = busy;
+  closeUploadBtn.disabled = busy && !uploadTaskState.running;
   uploadFilesInput.disabled = busy;
   uploadFolderInput.disabled = busy;
   uploadPasswordInput.disabled = busy;
+  updateUploadBackgroundButton();
 }
 
 function setUploadStatus(message, kind) {
@@ -146,6 +236,15 @@ function setUploadStatus(message, kind) {
   }
 }
 
+function updateUploadBackgroundButton() {
+  if (!backgroundUploadBtn) {
+    return;
+  }
+  backgroundUploadBtn.hidden = !uploadTaskState.running || uploadTaskState.backgrounded;
+}
+
 function getUploadPassword() {
   return state.uploadPasswordRequired ? uploadPasswordInput.value : "";
 }
+
+backgroundUploadBtn?.addEventListener("click", backgroundUpload);
