@@ -95,7 +95,7 @@ function showThumbnailFallback(entry, img, spinner) {
     }
     spinner.classList.add("failed");
   };
-  img.src = `/api/image/${encodePath(entry.path)}`;
+  img.src = versionedMediaUrl(entry);
   if (img.complete && img.naturalWidth > 0) {
     img.classList.add("loaded");
     spinner.hidden = true;

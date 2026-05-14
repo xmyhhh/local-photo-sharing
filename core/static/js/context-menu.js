@@ -315,7 +315,7 @@ function handleGridTileClick(event) {
     return;
   }
   if (event.target.closest(".tile-select")) {
-    handleSelectionClick(event, entry.path, { forceSelection: true });
+    handleCheckboxSelectionClick(event, entry.path);
     return;
   }
   if (!event.target.closest(".tile-button")) {
@@ -553,6 +553,26 @@ function invertSelection() {
   updateAllSelectionTiles();
 }
 
+function handleCheckboxSelectionClick(event, path) {
+  const checkbox = event.target.closest(".tile-select");
+  if (!checkbox) {
+    return;
+  }
+  event.stopPropagation();
+  if (!state.selectionMode) {
+    state.selectionMode = true;
+    closeAllContextMenus();
+    updateSelectionModeChrome();
+  }
+  if (event.shiftKey) {
+    event.preventDefault();
+    selectRangeTo(path, event.ctrlKey || event.metaKey);
+  } else {
+    toggleSelectedPath(path, checkbox.checked);
+    state.selectionAnchorPath = path;
+  }
+}
+
 function handleSelectionClick(event, path, options = {}) {
   const forceSelection = Boolean(options.forceSelection);
   const additive = event.ctrlKey || event.metaKey;
@@ -761,6 +781,8 @@ function updateSelectionBar() {
     return;
   }
   selectionBar.hidden = !state.selectionMode;
+  breadcrumb.classList.toggle("selection-hidden", state.selectionMode);
+  thumbModeControl.classList.toggle("selection-hidden", state.selectionMode);
   filterPanelToggleBtn.hidden = state.selectionMode;
   compactToggleBtn.hidden = state.selectionMode;
   selectionCount.textContent = `已选择 ${state.selectedPaths.size} 项`;

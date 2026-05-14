@@ -146,7 +146,7 @@ function showPhoto(entry) {
   }
   state.viewerGeneration += 1;
   state.viewerLiveMode = false;
-  cancelStaleOriginalLoads(entry.type === "photo" ? entry.path : null);
+  cancelStaleOriginalLoads(entry.type === "photo" ? originalEntryKey(entry) : null);
   state.currentPhoto = entry;
   updateServerMemoryPrefetch();
   state.zoom = 1;
@@ -180,7 +180,7 @@ function showPhoto(entry) {
     viewerImage.removeAttribute("src");
     viewerVideo.hidden = false;
     viewerVideo.currentTime = 0;
-    viewerVideo.src = `/api/image/${encodePath(entry.path)}`;
+    viewerVideo.src = versionedMediaUrl(entry);
     viewerVideo.load();
     renderViewerRating();
     updateViewerModeControls();
@@ -241,12 +241,12 @@ function showPhoto(entry) {
     return;
   }
 
-  const cachedOriginal = getOriginalCache(entry.path);
+  const cachedOriginal = getOriginalCache(entry);
   entry.originalReady = Boolean(cachedOriginal);
   if (cachedOriginal) {
     showOriginalUrl(entry, cachedOriginal.url);
-  } else if (state.originalFetches.has(entry.path)) {
-    viewerImage.classList.add("loading");
+  } else if (state.originalFetches.has(originalEntryKey(entry))) {
+    showViewerLoadingPreview(entry);
     scheduleCurrentOriginalLoad(entry);
   } else if (entry.thumbUrl) {
     viewerImage.classList.remove("ready");
@@ -471,7 +471,7 @@ async function loadPreviewImage(entry, attempt = 0) {
       if (state.currentPhoto?.path !== entry.path) {
         return;
       }
-      if (entry.originalReady || getOriginalCache(entry.path)) {
+      if (entry.originalReady || getOriginalCache(entry)) {
         return;
       }
       viewerImage.classList.remove("ready");
@@ -504,6 +504,17 @@ function showOriginalImageFallback(entry) {
   if (state.currentPhoto?.path === entry.path && state.clientPrefetch.originalPreviewEnabled) {
     scheduleCurrentOriginalLoad(entry);
   }
+}
+
+function showViewerLoadingPreview(entry) {
+  viewerImage.classList.remove("ready");
+  viewerImage.classList.add("loading");
+  if (entry.thumbUrl) {
+    viewerImage.src = entry.thumbUrl;
+    viewerImage.classList.add("ready");
+    return;
+  }
+  viewerImage.removeAttribute("src");
 }
 
 function viewerPreviewStatusUrl(entry) {
@@ -874,7 +885,7 @@ function getTransitionImageSource(referenceElement, entry) {
   if (image?.currentSrc || image?.src) {
     return image.currentSrc || image.src;
   }
-  return entry.previewUrl || entry.thumbUrl || entry.originalUrl || "";
+  return entry.previewUrl || entry.thumbUrl || entry.originalUrl || versionedMediaUrl(entry);
 }
 
 function getViewerTargetRect(referenceElement) {

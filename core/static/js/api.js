@@ -34,3 +34,8 @@ function withVersion(url, mtime) {
   const separator = url.includes("?") ? "&" : "?";
   return `${url}${separator}v=${mtime}`;
 }
+
+function versionedMediaUrl(entry) {
+  const url = `/api/image/${encodePath(entry.path)}`;
+  return entry.mtime ? withVersion(url, entry.mtime) : url;
+}

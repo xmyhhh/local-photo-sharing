@@ -70,10 +70,11 @@ function queueOriginalPrefetch(entry) {
   if (entry.browserRenderable === false) {
     return;
   }
-  if (getOriginalCache(entry.path) || state.originalFetches.has(entry.path)) {
+  const entryKey = originalEntryKey(entry);
+  if (getOriginalCache(entry) || state.originalFetches.has(entryKey)) {
     return;
   }
-  if (state.originalPrefetchQueue.some((item) => item.path === entry.path)) {
+  if (state.originalPrefetchQueue.some((item) => originalEntryKey(item) === entryKey)) {
     return;
   }
   state.originalPrefetchQueue.push(entry);
@@ -119,14 +120,14 @@ function scheduleCurrentOriginalLoad(entry) {
   }, delay);
 }
 
-function cancelStaleOriginalLoads(keepPath = null) {
+function cancelStaleOriginalLoads(keepKey = null) {
   if (state.originalLoadTimer) {
     window.clearTimeout(state.originalLoadTimer);
     state.originalLoadTimer = null;
   }
   state.originalPrefetchQueue = [];
-  for (const [path, controller] of state.originalControllers.entries()) {
-    if (path !== keepPath) {
+  for (const [key, controller] of state.originalControllers.entries()) {
+    if (key !== keepKey) {
       controller.abort();
     }
   }
@@ -138,10 +139,10 @@ function cancelViewerOriginalLoads() {
 }
 
 function cancelClientOriginalPrefetches() {
-  const keepPath = state.currentPhoto?.path || null;
+  const keepKey = state.currentPhoto ? originalEntryKey(state.currentPhoto) : null;
   state.originalPrefetchQueue = [];
-  for (const [path, controller] of state.originalControllers.entries()) {
-    if (path !== keepPath) {
+  for (const [key, controller] of state.originalControllers.entries()) {
+    if (key !== keepKey) {
       controller.abort();
     }
   }
@@ -157,15 +158,16 @@ async function loadOriginalImage(entry, forceDisplay = false, generation = state
   if (entry.browserRenderable === false) {
     return null;
   }
-  const cached = getOriginalCache(entry.path);
+  const entryKey = originalEntryKey(entry);
+  const cached = getOriginalCache(entry);
   if (cached) {
     if (forceDisplay || state.currentPhoto?.path === entry.path) {
       showOriginalUrl(entry, cached.url);
     }
     return cached.url;
   }
-  if (state.originalFetches.has(entry.path)) {
-    const url = await state.originalFetches.get(entry.path);
+  if (state.originalFetches.has(entryKey)) {
+    const url = await state.originalFetches.get(entryKey);
     if ((forceDisplay || state.currentPhoto?.path === entry.path) && url && state.viewerGeneration === generation) {
       showOriginalUrl(entry, url);
     }
@@ -173,11 +175,11 @@ async function loadOriginalImage(entry, forceDisplay = false, generation = state
   }
 
   if (forceDisplay) {
-    cancelStaleOriginalLoads(entry.path);
+    cancelStaleOriginalLoads(entryKey);
   }
   const controller = new AbortController();
-  state.originalControllers.set(entry.path, controller);
-  const promise = fetch(`/api/image/${encodePath(entry.path)}`, { signal: controller.signal })
+  state.originalControllers.set(entryKey, controller);
+  const promise = fetch(versionedMediaUrl(entry), { signal: controller.signal })
     .then((response) => {
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -187,15 +189,15 @@ async function loadOriginalImage(entry, forceDisplay = false, generation = state
     .then(async (blob) => {
       const url = URL.createObjectURL(blob);
       const decoded = await decodeImageUrl(url);
-      putOriginalCache(entry.path, url, blob.size, decoded);
+      putOriginalCache(entry, url, blob.size, decoded);
       return url;
     })
     .catch(() => null)
     .finally(() => {
-      state.originalFetches.delete(entry.path);
-      state.originalControllers.delete(entry.path);
+      state.originalFetches.delete(entryKey);
+      state.originalControllers.delete(entryKey);
     });
-  state.originalFetches.set(entry.path, promise);
+  state.originalFetches.set(entryKey, promise);
   const url = await promise;
   if ((forceDisplay || state.currentPhoto?.path === entry.path) && url && state.viewerGeneration === generation) {
     showOriginalUrl(entry, url);
@@ -207,9 +209,10 @@ function showOriginalUrl(entry, url) {
   if (!viewer.open || entry.type !== "photo" || state.currentPhoto?.path !== entry.path) {
     return;
   }
-  const cached = getOriginalCache(entry.path);
+  const cached = getOriginalCache(entry);
   const decoded = cached?.url === url && cached.decoded;
   entry.originalReady = true;
+  entry.originalUrl = url;
   viewerImage.classList.remove("loading");
   if (!decoded) {
     viewerImage.classList.remove("ready");
@@ -222,15 +225,30 @@ function showOriginalUrl(entry, url) {
   queueAdjacentOriginals();
 }
 
-function getOriginalCache(path) {
-  const item = state.originalCache.get(path);
+function originalEntryKey(entry) {
+  return `${entry.path}:${entry.mtime || ""}`;
+}
+
+function getOriginalCache(entry) {
+  const key = originalEntryKey(entry);
+  const item = state.originalCache.get(key);
   if (!item) {
     return null;
   }
   item.lastUsed = Date.now();
-  state.originalCache.delete(path);
-  state.originalCache.set(path, item);
+  state.originalCache.delete(key);
+  state.originalCache.set(key, item);
   return item;
+}
+
+function deleteOriginalCacheKey(key) {
+  const item = state.originalCache.get(key);
+  if (!item) {
+    return;
+  }
+  state.originalCacheBytes -= item.bytes;
+  URL.revokeObjectURL(item.url);
+  state.originalCache.delete(key);
 }
 
 async function decodeImageUrl(url) {
@@ -252,14 +270,15 @@ async function decodeImageUrl(url) {
   }
 }
 
-function putOriginalCache(path, url, bytes, decoded = false) {
-  const existing = state.originalCache.get(path);
+function putOriginalCache(entry, url, bytes, decoded = false) {
+  const key = originalEntryKey(entry);
+  const existing = state.originalCache.get(key);
   if (existing) {
     state.originalCacheBytes -= existing.bytes;
     URL.revokeObjectURL(existing.url);
-    state.originalCache.delete(path);
+    state.originalCache.delete(key);
   }
-  state.originalCache.set(path, { url, bytes, decoded, lastUsed: Date.now() });
+  state.originalCache.set(key, { url, bytes, decoded, lastUsed: Date.now() });
   state.originalCacheBytes += bytes;
   trimOriginalCache();
 }

@@ -216,6 +216,7 @@ const ratingFilterInputs = Array.from(document.querySelectorAll("#ratingFilterMe
 const dateFromFilter = document.querySelector("#dateFromFilter");
 const dateToFilter = document.querySelector("#dateToFilter");
 const thumbModeSelect = document.querySelector("#thumbModeSelect");
+const thumbModeControl = document.querySelector(".thumb-mode-control");
 const compactToggleBtn = document.querySelector("#compactToggleBtn");
 const clearFiltersBtn = document.querySelector("#clearFiltersBtn");
 const scrollTopBtn = document.querySelector("#scrollTopBtn");

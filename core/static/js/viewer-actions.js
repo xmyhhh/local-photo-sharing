@@ -36,17 +36,20 @@ async function rotateCurrentPhoto() {
   }
   rotateBtn.disabled = true;
   try {
+    const previousOriginalKey = originalEntryKey(entry);
     const updated = await fetchJson(`/api/rotate/${encodePath(entry.path)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ direction: "right" }),
     });
+    deleteOriginalCacheKey(previousOriginalKey);
+    state.originalFetches.delete(previousOriginalKey);
     entry.mtime = updated.mtime;
     entry.originalUrl = "";
     entry.previewUrl = "";
     entry.originalReady = false;
-    state.originalCache.delete(entry.path);
-    state.originalFetches.delete(entry.path);
+    deleteOriginalCacheKey(originalEntryKey(entry));
+    state.originalFetches.delete(originalEntryKey(entry));
     state.viewerGeneration += 1;
     cancelStaleOriginalLoads();
     viewerImage.classList.remove("ready");
@@ -123,13 +126,13 @@ async function saveCurrentPhotoForAppleMobile() {
 }
 
 async function fetchPhotoBlob(entry) {
-  const cached = getOriginalCache(entry.path);
+  const cached = getOriginalCache(entry);
   if (cached) {
     const response = await fetch(cached.url);
     return response.blob();
   }
 
-  const response = await fetch(`/api/image/${encodePath(entry.path)}`);
+  const response = await fetch(versionedMediaUrl(entry));
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
   }
