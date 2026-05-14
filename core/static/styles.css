@@ -1203,6 +1203,29 @@ main {
   padding: 5px 7px;
 }
 
+.selection-bar #deleteSelectedBtn {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #fff;
+}
+
+.selection-bar #deleteSelectedBtn:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+.selection-bar #exitSelectionBtn {
+  border-color: rgba(23, 107, 135, 0.28);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 860;
+}
+
+.selection-bar #exitSelectionBtn:hover {
+  background: var(--accent-strong);
+  color: #fff;
+}
+
 .selection-bar[hidden] {
   display: none;
 }
