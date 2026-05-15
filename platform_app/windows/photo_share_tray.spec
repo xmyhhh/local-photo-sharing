@@ -4,13 +4,11 @@ from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_data_files
 
-spec_path = Path(__file__).resolve()
-project_root = spec_path.parents[2]
+project_root = Path.cwd()
 tray_app = project_root / "platform_app" / "windows" / "tray_app.py"
 datas = collect_data_files("pillow_heif")
 datas += [
     (str(project_root / "core" / "static"), "static"),
-    (str(project_root / "core" / "assets" / "bracket_project.prj"), "assets"),
     (str(project_root / "plugins"), "plugins"),
 ]
 

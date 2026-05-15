@@ -56,9 +56,15 @@ function Invoke-Build {
     New-Item -ItemType Directory -Path $BuildDir -Force | Out-Null
     New-Item -ItemType Directory -Path $PyInstallerWorkDir -Force | Out-Null
 
-    & $PythonExe -m PyInstaller --noconfirm --distpath $DistDir --workpath $PyInstallerWorkDir $SpecFile
-    if ($LASTEXITCODE -ne 0) {
-        throw "PyInstaller build failed with exit code $LASTEXITCODE."
+    Push-Location $RootDir
+    try {
+        & $PythonExe -m PyInstaller --noconfirm --distpath $DistDir --workpath $PyInstallerWorkDir $SpecFile
+        if ($LASTEXITCODE -ne 0) {
+            throw "PyInstaller build failed with exit code $LASTEXITCODE."
+        }
+    }
+    finally {
+        Pop-Location
     }
 
     Write-Host "Build completed."
