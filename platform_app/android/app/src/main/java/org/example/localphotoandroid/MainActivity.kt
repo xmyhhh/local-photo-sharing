@@ -8,11 +8,17 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updateLayoutParams
+import androidx.core.view.updatePadding
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import org.example.localphotoandroid.databinding.ActivityMainBinding
@@ -20,7 +26,7 @@ import org.example.localphotoandroid.databinding.ItemPhotoBinding
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
-    private val adapter = PhotoAdapter()
+    private val adapter = PhotoAdapter { showPhotoViewer(it) }
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) {
@@ -29,14 +35,60 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        applySystemInsets()
         binding.photoGrid.layoutManager = GridLayoutManager(this, 3)
         binding.photoGrid.adapter = adapter
         binding.permissionButton.setOnClickListener { requestPhotoPermissions() }
         binding.refreshButton.setOnClickListener { refreshPhotos() }
+        binding.viewerOverlay.setOnClickListener { hidePhotoViewer() }
         refreshPhotos()
+    }
+
+    private fun applySystemInsets() {
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
+            val topInset = maxOf(bars.top, cutout.top)
+            val bottomInset = maxOf(bars.bottom, cutout.bottom)
+            val leftInset = maxOf(bars.left, cutout.left)
+            val rightInset = maxOf(bars.right, cutout.right)
+
+            binding.topBar.updatePadding(
+                left = 20.dp + leftInset,
+                top = topInset,
+                right = 20.dp + rightInset,
+            )
+            binding.topBar.updateLayoutParams<ViewGroup.LayoutParams> {
+                height = 72.dp + topInset
+            }
+            binding.statusText.updatePadding(
+                left = 20.dp + leftInset,
+                right = 20.dp + rightInset,
+            )
+            binding.photoGrid.updatePadding(
+                left = 12.dp + leftInset,
+                top = 12.dp,
+                right = 12.dp + rightInset,
+                bottom = 12.dp + bottomInset,
+            )
+            binding.viewerImage.updatePadding(
+                left = 12.dp + leftInset,
+                top = 12.dp + topInset,
+                right = 12.dp + rightInset,
+                bottom = 12.dp + bottomInset,
+            )
+            binding.viewerTitle.updatePadding(
+                left = 20.dp + leftInset,
+                top = 14.dp + topInset,
+                right = 20.dp + rightInset,
+                bottom = 14.dp,
+            )
+            insets
+        }
     }
 
     private fun refreshPhotos() {
@@ -99,6 +151,20 @@ class MainActivity : AppCompatActivity() {
         }
         return result
     }
+
+    private fun showPhotoViewer(item: PhotoItem) {
+        binding.viewerImage.setImageURI(item.uri)
+        binding.viewerTitle.text = item.name.ifBlank { "本地照片" }
+        binding.viewerOverlay.visibility = View.VISIBLE
+    }
+
+    private fun hidePhotoViewer() {
+        binding.viewerOverlay.visibility = View.GONE
+        binding.viewerImage.setImageDrawable(null)
+    }
+
+    private val Int.dp: Int
+        get() = (this * resources.displayMetrics.density).toInt()
 }
 
 data class PhotoItem(
@@ -107,7 +173,9 @@ data class PhotoItem(
     val uri: Uri,
 )
 
-class PhotoAdapter : RecyclerView.Adapter<PhotoViewHolder>() {
+class PhotoAdapter(
+    private val onPhotoClick: (PhotoItem) -> Unit,
+) : RecyclerView.Adapter<PhotoViewHolder>() {
     private val items = mutableListOf<PhotoItem>()
 
     fun submitList(nextItems: List<PhotoItem>) {
@@ -120,7 +188,7 @@ class PhotoAdapter : RecyclerView.Adapter<PhotoViewHolder>() {
         val binding = ItemPhotoBinding.inflate(LayoutInflater.from(parent.context), parent, false)
         val size = parent.resources.displayMetrics.widthPixels / 3
         binding.root.layoutParams = RecyclerView.LayoutParams(size, size)
-        return PhotoViewHolder(binding)
+        return PhotoViewHolder(binding, onPhotoClick)
     }
 
     override fun onBindViewHolder(holder: PhotoViewHolder, position: Int) {
@@ -132,9 +200,11 @@ class PhotoAdapter : RecyclerView.Adapter<PhotoViewHolder>() {
 
 class PhotoViewHolder(
     private val binding: ItemPhotoBinding,
+    private val onPhotoClick: (PhotoItem) -> Unit,
 ) : RecyclerView.ViewHolder(binding.root) {
     fun bind(item: PhotoItem) {
         binding.photoImage.scaleType = ImageView.ScaleType.CENTER_CROP
         binding.photoImage.setImageURI(item.uri)
+        binding.root.setOnClickListener { onPhotoClick(item) }
     }
 }
