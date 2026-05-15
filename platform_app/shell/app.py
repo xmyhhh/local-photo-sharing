@@ -16,16 +16,18 @@ from core.photo_share.config import (
 from core.photo_share.runtime import get_app_base_dir
 from core.photo_share.server import create_server_runtime
 
+DEFAULT_LIBRARY_DIRNAME = ".photo_share_library"
+
 
 def default_photo_root() -> Path:
-    return get_app_base_dir()
+    return get_app_base_dir() / DEFAULT_LIBRARY_DIRNAME
 
 
 def prompt_initial_photo_root() -> Path | None:
     default_root = default_photo_root()
     print("Config file was not found. Let's set up your photo library folder.")
     print(f"Default folder: {default_root}")
-    entered = input("Photo library folder (press Enter to use default): ").strip()
+    entered = input(f"Photo library folder (press Enter to use default: {default_root}): ").strip()
     if not entered:
         return default_root
     return Path(entered).expanduser()

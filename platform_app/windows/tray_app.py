@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 import threading
 import webbrowser
 from pathlib import Path
 import sys
-from tkinter import TclError, Tk, filedialog, messagebox
 import winreg
 
 import pystray
@@ -93,42 +93,61 @@ def default_photo_root() -> Path:
     return get_app_base_dir()
 
 
-def with_hidden_tk(callback):
-    root = Tk()
-    root.withdraw()
-    root.attributes("-topmost", True)
-    try:
-        return callback(root)
-    finally:
-        root.destroy()
-
-
 def choose_photo_root(reason: str, default_path: Path) -> Path | None:
-    def show_dialog(root: Tk) -> Path | None:
-        choice = messagebox.askyesnocancel(
-            APP_NAME,
-            f"{reason}\n\nDefault folder:\n{default_path}",
-            parent=root,
-        )
-        if choice is None:
-            return None
-        if choice:
-            return default_path
-        selected = filedialog.askdirectory(
-            parent=root,
-            title=APP_NAME,
-            mustexist=False,
-            initialdir=str(default_path),
-        )
-        if not selected:
-            return None
-        return Path(selected).expanduser()
-
-    try:
-        selected = with_hidden_tk(show_dialog)
-    except TclError as exc:
-        raise RuntimeError("Unable to open folder picker for initial configuration.") from exc
-    return selected
+    escaped_reason = reason.replace("'", "''")
+    escaped_default = str(default_path).replace("'", "''")
+    ps_script = f"""
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$message = '{escaped_reason}`n`nDefault folder:`n{escaped_default}'
+$choice = [System.Windows.Forms.MessageBox]::Show(
+    $message,
+    '{APP_NAME}',
+    [System.Windows.Forms.MessageBoxButtons]::YesNoCancel,
+    [System.Windows.Forms.MessageBoxIcon]::Question
+)
+if ($choice -eq [System.Windows.Forms.DialogResult]::Cancel) {{
+    Write-Output '__CANCEL__'
+    exit 0
+}}
+if ($choice -eq [System.Windows.Forms.DialogResult]::Yes) {{
+    Write-Output '{escaped_default}'
+    exit 0
+}}
+$dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+$dialog.Description = '{APP_NAME}'
+$dialog.SelectedPath = '{escaped_default}'
+$dialog.ShowNewFolderButton = $true
+if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {{
+    Write-Output $dialog.SelectedPath
+}} else {{
+    Write-Output '__CANCEL__'
+}}
+"""
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    result = subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-STA",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            ps_script,
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        creationflags=creationflags,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Unable to open folder picker: {result.stderr.strip() or result.stdout.strip()}")
+    selected = (result.stdout or "").strip()
+    if not selected or selected == "__CANCEL__":
+        return None
+    return Path(selected).expanduser()
 
 
 def write_initial_photo_config(config_path: Path, photo_root: Path) -> None:
