@@ -6,12 +6,13 @@ import threading
 import webbrowser
 from pathlib import Path
 import sys
+from tkinter import TclError, Tk, filedialog, messagebox
 import winreg
 
 import pystray
 from PIL import Image, ImageDraw
 
-from core.photo_share.config import get_config_path, parse_args
+from core.photo_share.config import build_default_config, get_config_path, parse_args, write_config
 from core.photo_share.runtime import get_app_base_dir
 from core.photo_share.server import ServerRuntime, create_server_runtime
 
@@ -88,11 +89,94 @@ def print_startup_summary(runtime: ServerRuntime) -> None:
     print(f"Open on LAN devices: http://<this-computer-LAN-IP>:{runtime.port}")
 
 
+def default_photo_root() -> Path:
+    return get_app_base_dir()
+
+
+def with_hidden_tk(callback):
+    root = Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    try:
+        return callback(root)
+    finally:
+        root.destroy()
+
+
+def choose_photo_root(reason: str, default_path: Path) -> Path | None:
+    def show_dialog(root: Tk) -> Path | None:
+        choice = messagebox.askyesnocancel(
+            APP_NAME,
+            f"{reason}\n\nDefault folder:\n{default_path}",
+            parent=root,
+        )
+        if choice is None:
+            return None
+        if choice:
+            return default_path
+        selected = filedialog.askdirectory(
+            parent=root,
+            title=APP_NAME,
+            mustexist=False,
+            initialdir=str(default_path),
+        )
+        if not selected:
+            return None
+        return Path(selected).expanduser()
+
+    try:
+        selected = with_hidden_tk(show_dialog)
+    except TclError as exc:
+        raise RuntimeError("Unable to open folder picker for initial configuration.") from exc
+    return selected
+
+
+def write_initial_photo_config(config_path: Path, photo_root: Path) -> None:
+    photo_root.mkdir(parents=True, exist_ok=True)
+    write_config(config_path, build_default_config(photo_root))
+
+
+def ensure_tray_config_ready(config_path: Path) -> bool:
+    if config_path.exists():
+        return True
+    selected = choose_photo_root("First launch: choose a folder for your photo library.\n\nYes = use the default folder\nNo = choose another folder", default_photo_root())
+    if selected is None:
+        logging.info("Initial setup cancelled before config creation")
+        return False
+    write_initial_photo_config(config_path, selected)
+    logging.info("Created initial config at %s with photo root %s", config_path, selected)
+    return True
+
+
+def prompt_repair_photo_root(config_path: Path, error: Exception) -> bool:
+    message = (
+        "The current photo library folder is missing or invalid.\n\n"
+        f"{error}\n\n"
+        "Yes = use the default folder\nNo = choose another folder"
+    )
+    selected = choose_photo_root(message, default_photo_root())
+    if selected is None:
+        logging.info("Photo root repair cancelled")
+        return False
+    write_initial_photo_config(config_path, selected)
+    logging.info("Updated config at %s with repaired photo root %s", config_path, selected)
+    return True
+
+
 def main() -> None:
     log_path = configure_logging()
     args = parse_args()
     config_path = get_config_path(args.config)
-    runtime = create_server_runtime(config_path)
+    if not ensure_tray_config_ready(config_path):
+        return
+    try:
+        runtime = create_server_runtime(config_path)
+    except ValueError as error:
+        if "Photo root does not exist or is not a folder" not in str(error):
+            raise
+        if not prompt_repair_photo_root(config_path, error):
+            return
+        runtime = create_server_runtime(config_path)
     print_startup_summary(runtime)
     logging.info("Starting tray app with config %s", config_path)
 

@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import argparse
+import copy
 import json
 from pathlib import Path
 from typing import Any
@@ -13,13 +14,24 @@ from .constants import (
 from .memory_prefetch import MemoryPrefetchSettings, system_prefetch_memory_limit_mb
 
 
-def create_default_config(config_path: Path) -> None:
-    config_path.write_text(json.dumps(DEFAULT_CONFIG, ensure_ascii=False, indent=2), encoding="utf-8")
+def build_default_config(photo_root: Path | str | None = None) -> dict[str, Any]:
+    config = copy.deepcopy(DEFAULT_CONFIG)
+    if photo_root is not None:
+        root_text = str(Path(photo_root).expanduser())
+        config["photo_folders"] = [root_text]
+        config["default_save_folder"] = root_text
+    return config
+
+
+def create_default_config(config_path: Path, photo_root: Path | str | None = None) -> None:
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(json.dumps(build_default_config(photo_root), ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def write_config(config_path: Path | None, config: dict[str, Any]) -> None:
     if config_path is None:
         return
+    config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
