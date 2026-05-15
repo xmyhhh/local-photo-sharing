@@ -9,6 +9,7 @@ tray_app = project_root / "platform_app" / "windows" / "tray_app.py"
 datas = collect_data_files("pillow_heif")
 datas += [
     (str(project_root / "core" / "static"), "static"),
+    (str(project_root / "core" / "assets" / "icons8-photo-gallery-96.ico"), "assets"),
     (str(project_root / "plugins"), "plugins"),
 ]
 
@@ -38,6 +39,7 @@ exe = EXE(
     a.datas,
     [],
     name="LocalPhotoSharingTray",
+    icon=str(project_root / "core" / "assets" / "icons8-photo-gallery-96.ico"),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

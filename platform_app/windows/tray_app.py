@@ -12,7 +12,7 @@ import sys
 import winreg
 
 from core.photo_share.config import build_default_config, get_config_path, parse_args, write_config
-from core.photo_share.runtime import get_app_base_dir
+from core.photo_share.runtime import get_app_base_dir, get_resource_base_dir
 from core.photo_share.server import ServerRuntime, create_server_runtime
 
 APP_NAME = "Local Photo Sharing"
@@ -39,6 +39,9 @@ MF_UNCHECKED = 0x00000000
 TPM_RETURNCMD = 0x00000100
 TPM_RIGHTBUTTON = 0x00000002
 IDI_APPLICATION = 32512
+IMAGE_ICON = 1
+LR_LOADFROMFILE = 0x00000010
+TRAY_ICON_RELATIVE_PATH = Path("assets") / "icons8-photo-gallery-96.ico"
 CMD_OPEN = 1001
 CMD_TOGGLE_AUTOSTART = 1002
 CMD_EXIT = 1003
@@ -266,6 +269,15 @@ user32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM,
 user32.DefWindowProcW.restype = LRESULT
 user32.LoadIconW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR]
 user32.LoadIconW.restype = wintypes.HICON
+user32.LoadImageW.argtypes = [
+    wintypes.HINSTANCE,
+    wintypes.LPCWSTR,
+    wintypes.UINT,
+    ctypes.c_int,
+    ctypes.c_int,
+    wintypes.UINT,
+]
+user32.LoadImageW.restype = wintypes.HANDLE
 user32.CreatePopupMenu.restype = wintypes.HMENU
 user32.TrackPopupMenu.argtypes = [
     wintypes.HMENU,
@@ -330,7 +342,7 @@ class NativeTrayIcon:
         check_windows_result(self.hwnd, "CreateWindowExW")
 
     def _add_icon(self) -> None:
-        self.hicon = user32.LoadIconW(None, ctypes.c_wchar_p(IDI_APPLICATION))
+        self.hicon = self._load_icon()
         check_windows_result(self.hicon, "LoadIconW")
         nid = NOTIFYICONDATA()
         nid.cbSize = ctypes.sizeof(NOTIFYICONDATA)
@@ -342,6 +354,18 @@ class NativeTrayIcon:
         nid.szTip = APP_NAME
         check_windows_result(shell32.Shell_NotifyIconW(NIM_ADD, ctypes.byref(nid)), "Shell_NotifyIconW(NIM_ADD)")
         self.nid = nid
+
+    def _load_icon(self):
+        icon_path = get_resource_base_dir() / TRAY_ICON_RELATIVE_PATH
+        if icon_path.is_file():
+            hicon = user32.LoadImageW(None, str(icon_path), IMAGE_ICON, 0, 0, LR_LOADFROMFILE)
+            if hicon:
+                logging.info("Loaded tray icon: %s", icon_path)
+                return hicon
+            logging.warning("Failed to load tray icon from %s; falling back to system icon", icon_path)
+        else:
+            logging.warning("Tray icon file not found: %s; falling back to system icon", icon_path)
+        return user32.LoadIconW(None, ctypes.c_wchar_p(IDI_APPLICATION))
 
     def _delete_icon(self) -> None:
         if self.nid is not None:

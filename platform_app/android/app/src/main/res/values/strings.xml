@@ -1,5 +1,7 @@
 <resources>
-    <string name="app_name">Local Photo Android</string>
-    <string name="ready">Ready</string>
-    <string name="log_message">Log message</string>
+    <string name="app_name">Local Photo Sharing</string>
+    <string name="ready">正在准备本地图库</string>
+    <string name="refresh">刷新</string>
+    <string name="grant_permission">授权照片访问</string>
+    <string name="empty_gallery">没有找到照片</string>
 </resources>
