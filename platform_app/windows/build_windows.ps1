@@ -12,6 +12,7 @@ $PipExe = Join-Path $VenvDir "Scripts\pip.exe"
 $DistDir = Join-Path $RootDir "dist"
 $BuildDir = Join-Path $RootDir "build"
 $SpecFile = Join-Path $RootDir "platform_app\windows\photo_share_tray.spec"
+$PyInstallerWorkDir = Join-Path $BuildDir "pyinstaller"
 
 function Ensure-Python {
     if (Test-Path -LiteralPath $PythonExe) {
@@ -52,7 +53,14 @@ function Invoke-Build {
         }
     }
 
-    & $PythonExe -m PyInstaller --noconfirm $SpecFile
+    New-Item -ItemType Directory -Path $BuildDir -Force | Out-Null
+    New-Item -ItemType Directory -Path $PyInstallerWorkDir -Force | Out-Null
+
+    & $PythonExe -m PyInstaller --noconfirm --distpath $DistDir --workpath $PyInstallerWorkDir $SpecFile
+    if ($LASTEXITCODE -ne 0) {
+        throw "PyInstaller build failed with exit code $LASTEXITCODE."
+    }
+
     Write-Host "Build completed."
     Write-Host "EXE: $(Join-Path $DistDir 'LocalPhotoSharingTray.exe')"
 }

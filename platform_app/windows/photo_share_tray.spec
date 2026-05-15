@@ -5,6 +5,7 @@ from pathlib import Path
 from PyInstaller.utils.hooks import collect_data_files
 
 project_root = Path.cwd()
+tray_app = project_root / "platform_app" / "windows" / "tray_app.py"
 datas = collect_data_files("pillow_heif")
 datas += [
     (str(project_root / "core" / "static"), "static"),
@@ -19,7 +20,7 @@ hiddenimports = [
 ]
 
 a = Analysis(
-    ["platform_app/windows/tray_app.py"],
+    [str(tray_app)],
     pathex=[str(project_root)],
     binaries=[],
     datas=datas,

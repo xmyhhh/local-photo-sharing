@@ -13,3 +13,5 @@ test_out
 .photo_share_bracket_results
 .deploy/
 *.prj
+build/
+dist/

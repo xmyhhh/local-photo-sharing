@@ -172,13 +172,7 @@ python .\platform_app\windows\tray_app.py
 .\platform_app\windows\build_windows.ps1
 ```
 
-安装开机自启动：
-
-```powershell
-.\platform_app\windows\install_autostart.ps1
-```
-
-Windows 壳负责后台启动 core、任务栏右下角常驻图标、右键打开网页或退出。core 仍可通过 shell app 单独运行。
+Windows 壳负责后台启动 core、任务栏右下角常驻图标、右键打开网页、切换“开机自启动”或退出。开机自启动通过托盘菜单里的 `Launch at startup` 开关控制。core 仍可通过 shell app 单独运行。
 
 ## Android 平台壳
 

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import webbrowser
 from pathlib import Path
+import sys
+import winreg
 
 import pystray
 from PIL import Image, ImageDraw
@@ -13,6 +16,8 @@ from core.photo_share.runtime import get_app_base_dir
 from core.photo_share.server import ServerRuntime, create_server_runtime
 
 APP_NAME = "Local Photo Sharing"
+AUTOSTART_REG_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
+AUTOSTART_VALUE_NAME = "LocalPhotoSharingTray"
 
 
 def configure_logging() -> Path:
@@ -40,6 +45,38 @@ def create_tray_icon_image() -> Image.Image:
 
 def open_in_browser(runtime: ServerRuntime) -> None:
     webbrowser.open(runtime.local_url)
+
+
+def get_autostart_command() -> str:
+    if getattr(sys, "frozen", False):
+        return f'"{Path(sys.executable)}"'
+    return f'"{Path(sys.executable)}" "{Path(__file__).resolve()}"'
+
+
+def is_autostart_enabled() -> bool:
+    expected = get_autostart_command()
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, AUTOSTART_REG_PATH, 0, winreg.KEY_READ) as key:
+            value, _ = winreg.QueryValueEx(key, AUTOSTART_VALUE_NAME)
+    except FileNotFoundError:
+        return False
+    return os.path.normcase(str(value)) == os.path.normcase(expected)
+
+
+def set_autostart_enabled(enabled: bool) -> None:
+    with winreg.OpenKey(
+        winreg.HKEY_CURRENT_USER,
+        AUTOSTART_REG_PATH,
+        0,
+        winreg.KEY_SET_VALUE,
+    ) as key:
+        if enabled:
+            winreg.SetValueEx(key, AUTOSTART_VALUE_NAME, 0, winreg.REG_SZ, get_autostart_command())
+            return
+        try:
+            winreg.DeleteValue(key, AUTOSTART_VALUE_NAME)
+        except FileNotFoundError:
+            pass
 
 
 def print_startup_summary(runtime: ServerRuntime) -> None:
@@ -77,6 +114,17 @@ def main() -> None:
         finally:
             icon_ref.stop()
 
+    def autostart_checked(item: pystray.MenuItem) -> bool:
+        del item
+        return is_autostart_enabled()
+
+    def handle_toggle_autostart(icon_ref: pystray.Icon, item: pystray.MenuItem) -> None:
+        del item
+        enabled = not is_autostart_enabled()
+        set_autostart_enabled(enabled)
+        logging.info("Autostart %s", "enabled" if enabled else "disabled")
+        icon_ref.update_menu()
+
     def setup(icon_ref: pystray.Icon) -> None:
         logging.info("Tray icon ready; log file: %s", log_path)
 
@@ -86,6 +134,7 @@ def main() -> None:
         APP_NAME,
         menu=pystray.Menu(
             pystray.MenuItem("Open Web UI", handle_open, default=True),
+            pystray.MenuItem("Launch at startup", handle_toggle_autostart, checked=autostart_checked),
             pystray.MenuItem("Exit", handle_exit),
         ),
     )
