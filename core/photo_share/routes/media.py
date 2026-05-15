@@ -34,6 +34,7 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
         root_id, rel_path = _split_rooted(photo_path)
         root_services = _root_services(services, root_id)
         path = resolve_media(root_services.root, rel_path)
+        # 先查后端原图预取池；命中时直接从内存返回，绕过磁盘读取。
         prefetched = services.memory_prefetch.get(path)
         if prefetched is not None:
             response = send_file(
@@ -67,6 +68,7 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
                 resolved.append(resolve_photo(root_services.root, rel_path))
             except Exception:
                 continue
+        # 前端提交的是一组“希望保留的原图路径”；真正是否缓存、缓存多少由后端池按上限裁剪。
         services.memory_prefetch.prefetch(client_id, resolved)
         return jsonify({"accepted": len(resolved)})
 
@@ -75,6 +77,7 @@ def register_media_routes(app: Flask, services: AppServices) -> None:
         data = request.get_json(silent=True) or {}
         client_id = data.get("clientId", "")
         if isinstance(client_id, str) and client_id:
+            # viewer 关闭后释放这个 client 的租约；没有租约引用的项会尽快从池里移除。
             services.memory_prefetch.release(client_id)
         return jsonify({"released": True})
 

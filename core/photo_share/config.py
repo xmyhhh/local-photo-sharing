@@ -156,7 +156,7 @@ def get_memory_prefetch_settings(config: dict[str, Any]) -> MemoryPrefetchSettin
     if not isinstance(value, dict):
         raise ValueError("Config field memory_prefetch must be an object.")
     return MemoryPrefetchSettings(
-        enabled=bool(value.get("enabled", False)),
+        enabled=bool(value.get("enabled", True)),
         memory_limit_mb=_parse_int_range(
             value.get("memory_limit_mb", 1024),
             "memory_prefetch.memory_limit_mb",

@@ -784,6 +784,7 @@ function closeViewerAnimated() {
   }
   stopRapidNavigation(false);
   cancelViewerOriginalLoads();
+  releaseServerMemoryPrefetch();
   const entry = state.currentPhoto;
   if (!entry) {
     finishViewerClose();

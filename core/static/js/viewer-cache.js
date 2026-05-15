@@ -3,6 +3,7 @@
   if (state.rapidNavDirection) {
     return;
   }
+  // 前端原图预取只按“前 n / 后 m”窗口挑邻居，不参与服务端内存上限决策。
   if (!state.clientPrefetch.enabled || !state.clientPrefetch.originalPreviewEnabled) {
     updateServerMemoryPrefetch();
     return;
@@ -36,6 +37,7 @@ function updateServerMemoryPrefetch() {
   if (index < 0) {
     return;
   }
+  // 服务端预取窗口单独维护：把当前图附近一整段路径提交给后端池，由后端决定缓存和淘汰。
   const start = Math.max(0, index - state.memoryPrefetchWindowBefore);
   const end = Math.min(photos.length, index + state.memoryPrefetchWindowAfter + 1);
   const paths = photos.slice(start, end).map((entry) => entry.path);
@@ -50,6 +52,7 @@ function releaseServerMemoryPrefetch(useBeacon = false) {
   if (!state.memoryPrefetchClientId) {
     return;
   }
+  // viewer 关闭或页面退出时主动释放这个 client 的后端租约，避免服务端继续保留原图。
   const body = JSON.stringify({ clientId: state.memoryPrefetchClientId });
   if (useBeacon && navigator.sendBeacon) {
     navigator.sendBeacon("/api/prefetch/release", new Blob([body], { type: "application/json" }));
@@ -78,6 +81,7 @@ function queueOriginalPrefetch(entry) {
     return;
   }
   state.originalPrefetchQueue.push(entry);
+  // 这里只限制待下载任务数，不改变“前 n / 后 m”本身的选图策略。
   while (state.originalPrefetchQueue.length > state.clientPrefetch.originalQueueLimit) {
     state.originalPrefetchQueue.pop();
   }
@@ -111,6 +115,7 @@ function scheduleCurrentOriginalLoad(entry) {
     state.originalLoadTimer = null;
   }
   const generation = state.viewerGeneration;
+  // 快速连翻时稍微延迟当前图升级到原图，减少刚发起就过期的请求。
   const delay = state.rapidNavDirection ? 180 : 0;
   state.originalLoadTimer = window.setTimeout(() => {
     state.originalLoadTimer = null;
@@ -175,6 +180,7 @@ async function loadOriginalImage(entry, forceDisplay = false, generation = state
   }
 
   if (forceDisplay) {
+    // 当前图需要立刻显示原图时，保留它自己的请求，取消其它旧请求。
     cancelStaleOriginalLoads(entryKey);
   }
   const controller = new AbortController();

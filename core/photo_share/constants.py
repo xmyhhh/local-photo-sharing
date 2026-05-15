@@ -55,7 +55,7 @@ DEFAULT_CONFIG = {
         for mode, spec in THUMBNAIL_MODES.items()
     },
     "memory_prefetch": {
-        "enabled": False,
+        "enabled": True,
         "memory_limit_mb": 1024,
     },
     "theme": "system",

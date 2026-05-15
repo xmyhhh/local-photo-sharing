@@ -28,7 +28,7 @@ def register_settings_routes(app: Flask, services: AppServices) -> None:
         theme = parse_theme(data.get("theme", services.config.get("theme", "system")))
         max_mb = system_prefetch_memory_limit_mb()
         settings = MemoryPrefetchSettings(
-            enabled=bool(prefetch.get("enabled", False)),
+            enabled=bool(prefetch.get("enabled", True)),
             memory_limit_mb=parse_int_range(prefetch.get("memoryLimitMb", 1024), 256, max_mb, "memoryLimitMb"),
         )
         services.config["memory_prefetch"] = {

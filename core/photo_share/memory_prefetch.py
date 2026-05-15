@@ -3,6 +3,7 @@ from __future__ import annotations
 import mimetypes
 import os
 import threading
+import gc
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -66,7 +67,9 @@ class PrefetchItem:
 class MemoryPrefetchPool:
     def __init__(self, settings: MemoryPrefetchSettings) -> None:
         self.settings = settings
+        # OrderedDict 既存数据，也承担 LRU 顺序；最近访问/更新的键会被移动到尾部。
         self._items: OrderedDict[str, PrefetchItem] = OrderedDict()
+        # client_id -> 当前这位客户端希望保留的路径集合，相当于一层“租约”。
         self._client_keys: dict[str, set[str]] = {}
         self._inflight: set[str] = set()
         self._lock = threading.RLock()
@@ -97,6 +100,7 @@ class MemoryPrefetchPool:
             if item.mtime != stat.st_mtime or item.size != stat.st_size:
                 self._remove_locked(key)
                 return None
+            # 命中即刷新 LRU，说明这张图最近真的被访问过。
             self._items.move_to_end(key)
             return item
 
@@ -104,6 +108,7 @@ class MemoryPrefetchPool:
         if not client_id:
             return
         with self._lock:
+            # 新一轮 prefetch 视为“完整替换”当前 client 的关注窗口，先撤销旧租约再挂新租约。
             self.release(client_id)
             if not self.settings.enabled:
                 return
@@ -132,8 +137,9 @@ class MemoryPrefetchPool:
                 item = self._items.get(key)
                 if item is not None:
                     item.clients.discard(client_id)
-            self._drop_unleased_locked()
+            removed = self._drop_unleased_locked()
             self._trim_locked()
+            self._maybe_return_memory(removed)
 
     def clear(self) -> None:
         with self._lock:
@@ -156,6 +162,7 @@ class MemoryPrefetchPool:
             if not self.settings.enabled:
                 return
             if client_id not in self._client_keys or key not in self._client_keys[client_id]:
+                # 异步加载完成时，如果这个 client 已经翻页/退出，结果直接丢弃。
                 return
             existing = self._items.get(key)
             if existing is not None:
@@ -174,28 +181,57 @@ class MemoryPrefetchPool:
             self._trim_locked()
 
     def _trim_locked(self) -> None:
+        removed = 0
         while self._bytes > self.settings.max_bytes and self._items:
+            # 先淘汰没有任何 client 租约的旧项；如果全都还被租着，再从最老项开始顶掉。
             victim_key = next((key for key, item in self._items.items() if not item.clients), None)
             if victim_key is None:
                 victim_key = next(iter(self._items))
-            self._remove_locked(victim_key)
+            removed += self._remove_locked(victim_key)
+        self._maybe_return_memory(removed)
 
-    def _drop_unleased_locked(self) -> None:
+    def _drop_unleased_locked(self) -> int:
+        removed = 0
         for key in list(self._items.keys()):
             if not self._items[key].clients:
-                self._remove_locked(key)
+                removed += self._remove_locked(key)
+        return removed
 
-    def _remove_locked(self, key: str) -> None:
+    def _remove_locked(self, key: str) -> int:
         item = self._items.pop(key, None)
         if item is not None:
-            self._bytes -= len(item.data)
+            size = len(item.data)
+            self._bytes -= size
+            return size
+        return 0
 
     def _clear_locked(self) -> None:
+        removed = self._bytes
         self._items.clear()
         self._client_keys.clear()
         self._inflight.clear()
         self._bytes = 0
+        self._maybe_return_memory(removed)
 
     @staticmethod
     def _key(path: Path) -> str:
         return str(path.resolve()).lower()
+
+    @staticmethod
+    def _maybe_return_memory(removed_bytes: int) -> None:
+        if removed_bytes <= 0:
+            return
+        # Python 对象删掉后，进程 RSS 不一定立刻下降；这里主动推动一次回收。
+        gc.collect()
+        if os.name == "nt":
+            return
+        try:
+            import ctypes
+
+            libc = ctypes.CDLL(None)
+            malloc_trim = getattr(libc, "malloc_trim", None)
+            if malloc_trim is not None:
+                # glibc 下尝试把空闲堆页归还给系统，Linux 上更容易看到 RSS 回落。
+                malloc_trim(0)
+        except Exception:
+            return

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 project_root = Path.cwd()
 tray_app = project_root / "platform_app" / "windows" / "tray_app.py"
@@ -13,10 +13,8 @@ datas += [
 ]
 
 hiddenimports = [
-    "PIL._tkinter_finder",
-    "pystray._win32",
-    "pystray._xorg",
 ]
+hiddenimports += collect_submodules("core.photo_share.routes")
 
 a = Analysis(
     [str(tray_app)],

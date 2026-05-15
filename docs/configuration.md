@@ -52,7 +52,7 @@ chmod +x ./platform_app/shell/deploy/deploy.sh
 
 ## 配置文件
 
-首次启动如果没有 `config.json`，shell 入口会在终端里询问图库目录，直接回车可使用默认项目根目录；Windows 托盘入口会弹出对话框，默认使用 EXE 所在目录，也可以改选其他目录。确认后程序会创建初始配置并继续启动服务。
+首次启动如果没有 `config.json`，shell 入口会在终端里询问图库目录，直接回车可使用默认隐藏目录（启动根目录下的 `.photo_share_library`）；Windows 托盘入口会弹出对话框，默认也使用启动根目录下的 `.photo_share_library`，也可以改选其他目录。确认后程序会创建初始配置并继续启动服务。
 
 当前配置使用最新格式，不保留旧字段兼容。
 
@@ -69,7 +69,7 @@ chmod +x ./platform_app/shell/deploy/deploy.sh
     "xlarge": { "size": 1280, "quality": 92, "queue_limit": 30 }
   },
   "memory_prefetch": {
-    "enabled": false,
+    "enabled": true,
     "memory_limit_mb": 1024
   },
   "theme": "system",

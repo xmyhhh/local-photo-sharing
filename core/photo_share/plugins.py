@@ -8,7 +8,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any
 
-from .runtime import get_app_base_dir
+from .runtime import get_app_base_dir, get_resource_base_dir
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -68,8 +68,13 @@ def parse_plugin_specs(config: dict[str, Any]) -> list[PluginSpec]:
 def discover_plugin_specs(config: dict[str, Any]) -> list[PluginSpec]:
     configured = parse_plugin_specs(config)
     specs: dict[str, PluginSpec] = {spec.name: spec for spec in configured}
-    plugins_dir = get_app_base_dir() / "plugins"
-    if plugins_dir.is_dir():
+    plugin_roots = [get_app_base_dir() / "plugins"]
+    resource_plugins_dir = get_resource_base_dir() / "plugins"
+    if resource_plugins_dir not in plugin_roots:
+        plugin_roots.append(resource_plugins_dir)
+    for plugins_dir in plugin_roots:
+        if not plugins_dir.is_dir():
+            continue
         for plugin_file in sorted(plugins_dir.glob("*/plugin.py")):
             name = plugin_file.parent.name
             if name not in specs:
@@ -119,9 +124,16 @@ def _load_plugin_module(spec: PluginSpec) -> ModuleType:
 
 def resolve_plugin_path(value: str) -> Path:
     path = Path(value).expanduser()
-    if not path.is_absolute():
-        path = get_app_base_dir() / path
-    return path.resolve()
+    if path.is_absolute():
+        return path.resolve()
+    candidates = [
+        get_app_base_dir() / path,
+        get_resource_base_dir() / path,
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate.resolve()
+    return candidates[0].resolve()
 
 
 def _register_plugin_assets(app: "Flask", services: "AppServices", spec: PluginSpec, module: ModuleType) -> None:
