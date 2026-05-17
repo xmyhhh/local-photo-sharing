@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>拼图工作台</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/plugin-assets/collage/collage.css" />
+  </head>
+  <body class="collage-page">
+    <header class="collage-topbar">
+      <div class="collage-brand">
+        <a class="collage-back" href="/" aria-label="返回照片库">←</a>
+        <div>
+          <div class="collage-kicker">插件</div>
+          <h1>拼图工作台</h1>
+        </div>
+      </div>
+      <div class="collage-top-actions">
+        <button id="collageNewGroupBtn" type="button">新建工作组</button>
+        <button id="collageSaveBtn" class="ghost" type="button">保存排版</button>
+        <a id="collageDownloadBtn" class="button-link" href="#" download>下载成品</a>
+      </div>
+    </header>
+
+    <main class="collage-shell">
+      <aside class="collage-sidebar">
+        <div class="collage-sidebar-head">
+          <div>
+            <div class="collage-panel-title">工作组</div>
+            <div id="collageGroupCount" class="collage-muted">0 个拼图</div>
+          </div>
+        </div>
+        <div id="collageGroups" class="collage-groups"></div>
+      </aside>
+
+      <section class="collage-stage-panel">
+        <div class="collage-stage-head">
+          <input id="collageNameInput" class="collage-name-input" type="text" aria-label="拼图名称" />
+          <div id="collageStatus" class="collage-status"></div>
+        </div>
+        <div class="collage-work-area">
+          <div id="collageCanvasWrap" class="collage-canvas-wrap">
+            <div id="collageCanvas" class="collage-canvas"></div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="collage-inspector">
+        <section class="collage-controls">
+          <div class="collage-panel-title">排版</div>
+          <div class="collage-layout-grid" role="group" aria-label="排版模式">
+            <button type="button" data-layout="grid">网格</button>
+            <button type="button" data-layout="masonry">瀑布</button>
+            <button type="button" data-layout="hero">主图</button>
+            <button type="button" data-layout="film">胶片</button>
+            <button type="button" data-layout="free">自由</button>
+          </div>
+          <label>
+            尺寸
+            <select id="collageSizeSelect">
+              <option value="2400x1600">横版 3:2</option>
+              <option value="1600x2400">竖版 2:3</option>
+              <option value="2000x2000">方形 1:1</option>
+              <option value="2560x1440">宽屏 16:9</option>
+              <option value="1440x2560">手机 9:16</option>
+            </select>
+          </label>
+          <label>
+            列数
+            <input id="collageColumnsInput" type="range" min="1" max="8" value="3" />
+          </label>
+          <label>
+            间距
+            <input id="collageGapInput" type="range" min="0" max="120" value="24" />
+          </label>
+          <label>
+            边距
+            <input id="collagePaddingInput" type="range" min="0" max="240" value="48" />
+          </label>
+          <label>
+            圆角
+            <input id="collageRadiusInput" type="range" min="0" max="80" value="18" />
+          </label>
+          <label>
+            背景
+            <input id="collageBackgroundInput" type="color" value="#f7f3ea" />
+          </label>
+          <label class="collage-switch">
+            <span>阴影</span>
+            <input id="collageShadowInput" type="checkbox" checked />
+          </label>
+          <label>
+            图片填充
+            <select id="collageFitSelect">
+              <option value="cover">裁切填满</option>
+              <option value="contain">完整显示</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="collage-photos-panel">
+          <div class="collage-panel-row">
+            <div>
+              <div class="collage-panel-title">工作组照片</div>
+              <div id="collagePhotoCount" class="collage-muted">0 张</div>
+            </div>
+            <button id="collageBrowseBtn" class="ghost" type="button">添加照片</button>
+          </div>
+          <div id="collagePhotos" class="collage-photos"></div>
+        </section>
+
+        <section class="collage-pool-panel">
+          <div class="collage-panel-row">
+            <div>
+              <div class="collage-panel-title">拼图素材池</div>
+              <div id="collagePoolCount" class="collage-muted">0 张待用</div>
+            </div>
+            <button id="collageAddPoolBtn" class="ghost" type="button">加入工作组</button>
+          </div>
+          <div id="collagePool" class="collage-pool"></div>
+        </section>
+      </aside>
+    </main>
+
+    <dialog id="collageLibraryDialog" class="collage-library-dialog">
+      <div class="collage-library-panel">
+        <header class="collage-library-head">
+          <div>
+            <div class="collage-kicker">照片库</div>
+            <h2>添加到当前拼图组</h2>
+          </div>
+          <button id="collageCloseLibraryBtn" class="ghost" type="button">关闭</button>
+        </header>
+        <div class="collage-library-toolbar">
+          <button id="collageLibraryBackBtn" class="ghost" type="button">返回上级</button>
+          <div id="collageLibraryPath" class="collage-muted"></div>
+          <button id="collageLibraryAddBtn" type="button">添加选中</button>
+        </div>
+        <div id="collageLibraryGrid" class="collage-library-grid"></div>
+      </div>
+    </dialog>
+
+    <script src="/static/js/api.js"></script>
+    <script src="/plugin-assets/collage/collage_workbench.js"></script>
+  </body>
+</html>

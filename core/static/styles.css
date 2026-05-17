@@ -1230,6 +1230,16 @@ main {
   display: none;
 }
 
+.selection-plugin-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.selection-plugin-actions[hidden] {
+  display: none;
+}
+
 .tile:hover {
   border-color: rgba(23, 107, 135, 0.24);
   box-shadow: 0 14px 34px rgba(31, 63, 77, 0.12);

@@ -1,0 +1,568 @@
+.collage-page {
+  min-height: 100vh;
+  background: #f4f1ea;
+  color: #20242a;
+}
+
+.collage-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 72px;
+  padding: 12px 20px;
+  background: rgba(250, 248, 243, 0.94);
+  border-bottom: 1px solid rgba(45, 49, 57, 0.12);
+  backdrop-filter: blur(14px);
+}
+
+.collage-brand,
+.collage-top-actions,
+.collage-panel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.collage-brand h1 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.collage-kicker,
+.collage-muted {
+  font-size: 12px;
+  color: #6e746f;
+}
+
+.collage-back {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(45, 49, 57, 0.16);
+  border-radius: 8px;
+  color: inherit;
+  text-decoration: none;
+  background: #fffaf1;
+}
+
+.button-link,
+.collage-topbar button,
+.collage-inspector button,
+.collage-sidebar button,
+.collage-stage-panel button {
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: #236c62;
+  color: #fff;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button-link.disabled,
+button:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+button.ghost,
+.collage-topbar button.ghost,
+.collage-inspector button.ghost {
+  background: #ffffff;
+  color: #20242a;
+  border: 1px solid rgba(45, 49, 57, 0.15);
+}
+
+.collage-shell {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr) 320px;
+  gap: 0;
+  min-height: calc(100vh - 73px);
+}
+
+.collage-sidebar,
+.collage-inspector {
+  padding: 18px;
+  background: #fbf8f0;
+  border-right: 1px solid rgba(45, 49, 57, 0.12);
+  overflow: auto;
+}
+
+.collage-inspector {
+  border-right: 0;
+  border-left: 1px solid rgba(45, 49, 57, 0.12);
+}
+
+.collage-sidebar-head,
+.collage-panel-row {
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.collage-panel-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.collage-groups,
+.collage-photos {
+  display: grid;
+  gap: 10px;
+}
+
+.collage-group,
+.collage-photo {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  text-align: left;
+  color: inherit;
+  background: #fff;
+  border: 1px solid rgba(45, 49, 57, 0.12);
+  border-radius: 8px;
+}
+
+.collage-group {
+  grid-template-columns: 72px minmax(0, 1fr);
+}
+
+.collage-group.active,
+.collage-photo.active {
+  border-color: #236c62;
+  box-shadow: 0 0 0 2px rgba(35, 108, 98, 0.14);
+}
+
+.collage-group-preview,
+.collage-photo img {
+  width: 72px;
+  height: 54px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #e8e1d5;
+}
+
+.collage-group-preview img,
+.collage-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.collage-group-text,
+.collage-photo span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collage-stage-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+}
+
+.collage-stage-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(45, 49, 57, 0.1);
+}
+
+.collage-name-input {
+  width: min(520px, 70vw);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 20px;
+  font-weight: 700;
+  outline: none;
+}
+
+.collage-status {
+  min-height: 20px;
+  color: #236c62;
+  font-size: 13px;
+}
+
+.collage-work-area {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.collage-canvas-wrap {
+  width: 100%;
+  height: 100%;
+  min-height: 520px;
+  display: grid;
+  place-items: center;
+}
+
+.collage-canvas {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(31, 35, 40, 0.22);
+}
+
+.collage-canvas.empty {
+  display: grid;
+  place-items: center;
+  width: min(720px, 90%);
+  height: 420px;
+  background: #fffaf1;
+  color: #6e746f;
+  box-shadow: none;
+  border: 1px dashed rgba(45, 49, 57, 0.22);
+}
+
+.collage-frame {
+  position: absolute;
+  overflow: hidden;
+  border: 0;
+  padding: 0;
+  background: #ddd7cc;
+  box-shadow: 0 12px 32px rgba(22, 26, 31, 0.18);
+  contain: layout paint style;
+  touch-action: none;
+  will-change: transform, width, height;
+  cursor: pointer;
+}
+
+.collage-frame.dragging {
+  box-shadow: 0 8px 20px rgba(22, 26, 31, 0.14);
+}
+
+.collage-frame.selected {
+  outline: 3px solid #1f776b;
+  outline-offset: 3px;
+}
+
+.collage-frame img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+
+.collage-resize-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 22px;
+  height: 22px;
+  background: #236c62;
+  border-radius: 8px 0 0 0;
+  cursor: nwse-resize;
+}
+
+.collage-frame-remove,
+.collage-photo-remove {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 999px;
+  background: rgba(28, 31, 35, 0.72);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.56);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.collage-frame-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.collage-frame:hover .collage-frame-remove,
+.collage-frame.selected .collage-frame-remove,
+.collage-frame:focus-within .collage-frame-remove {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.collage-photo-remove {
+  background: #fff;
+  color: #7b3434;
+  border-color: rgba(123, 52, 52, 0.18);
+}
+
+.collage-controls {
+  display: grid;
+  gap: 14px;
+}
+
+.collage-controls label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: #4f5753;
+}
+
+.collage-controls input,
+.collage-controls select {
+  min-height: 36px;
+}
+
+.collage-layout-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.collage-layout-grid button {
+  background: #fff;
+  color: #20242a;
+  border: 1px solid rgba(45, 49, 57, 0.14);
+}
+
+.collage-layout-grid button.active {
+  background: #236c62;
+  color: #fff;
+}
+
+.collage-switch {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.collage-photos-panel {
+  margin-top: 24px;
+}
+
+.collage-pool-panel {
+  margin-top: 24px;
+}
+
+.collage-pool {
+  display: grid;
+  gap: 10px;
+}
+
+.collage-pool-item {
+  display: grid;
+  grid-template-columns: auto 54px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid rgba(45, 49, 57, 0.12);
+  cursor: pointer;
+}
+
+.collage-pool-item.active {
+  border-color: #236c62;
+  box-shadow: 0 0 0 2px rgba(35, 108, 98, 0.14);
+}
+
+.collage-pool-item img {
+  width: 54px;
+  height: 42px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #e8e1d5;
+}
+
+.collage-pool-item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collage-mini-action {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 999px;
+  background: #236c62;
+  color: #fff;
+}
+
+.collage-empty {
+  padding: 18px;
+  border: 1px dashed rgba(45, 49, 57, 0.22);
+  border-radius: 8px;
+  color: #6e746f;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.collage-library-dialog {
+  width: min(1080px, 96vw);
+  height: min(760px, 92vh);
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: #fbf8f0;
+  color: #20242a;
+}
+
+.collage-library-dialog::backdrop {
+  background: rgba(20, 22, 25, 0.42);
+}
+
+.collage-library-panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  height: 100%;
+}
+
+.collage-library-head,
+.collage-library-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(45, 49, 57, 0.12);
+}
+
+.collage-library-head h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.collage-library-toolbar {
+  justify-content: flex-start;
+}
+
+#collageLibraryPath {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collage-library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  align-content: start;
+  gap: 12px;
+  padding: 18px;
+  overflow: auto;
+}
+
+.collage-library-item {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-height: 132px;
+  padding: 8px;
+  color: inherit;
+  background: #fff;
+  border: 1px solid rgba(45, 49, 57, 0.12);
+  border-radius: 8px;
+  text-align: left;
+}
+
+.collage-library-item.folder {
+  place-items: center;
+  text-align: center;
+}
+
+.collage-library-item.selected {
+  border-color: #236c62;
+  box-shadow: 0 0 0 2px rgba(35, 108, 98, 0.16);
+}
+
+.collage-library-item img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #e8e1d5;
+}
+
+.collage-library-item > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collage-folder-icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 44px;
+  border-radius: 8px;
+  background: #e8e1d5;
+  color: #236c62;
+  font-size: 24px;
+}
+
+.collage-library-check {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(35, 108, 98, 0.92);
+  color: #fff;
+  font-weight: 700;
+}
+
+@media (max-width: 1120px) {
+  .collage-shell {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .collage-inspector {
+    grid-column: 1 / -1;
+    border-left: 0;
+    border-top: 1px solid rgba(45, 49, 57, 0.12);
+  }
+
+  .collage-controls {
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .collage-topbar,
+  .collage-stage-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .collage-shell {
+    display: block;
+  }
+
+  .collage-sidebar,
+  .collage-inspector {
+    max-height: none;
+  }
+
+  .collage-controls {
+    grid-template-columns: 1fr;
+  }
+}

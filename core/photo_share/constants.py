@@ -95,6 +95,11 @@ DEFAULT_CONFIG = {
             "enabled": False,
         },
         {
+            "name": "collage",
+            "path": "plugins/collage/plugin.py",
+            "enabled": False,
+        },
+        {
             "name": "recycle_bin",
             "path": "plugins/recycle_bin/plugin.py",
             "enabled": False,

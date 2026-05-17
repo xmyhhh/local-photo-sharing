@@ -270,6 +270,7 @@ const copySelectedBtn = document.querySelector("#copySelectedBtn");
 const cutSelectedBtn = document.querySelector("#cutSelectedBtn");
 const moveSelectedBtn = document.querySelector("#moveSelectedBtn");
 const deleteSelectedBtn = document.querySelector("#deleteSelectedBtn");
+const selectionPluginActions = document.querySelector("#selectionPluginActions");
 const invertSelectionBtn = document.querySelector("#invertSelectionBtn");
 const exitSelectionBtn = document.querySelector("#exitSelectionBtn");
 const pluginDialogs = document.querySelector("#pluginDialogs");

@@ -49,6 +49,7 @@ function openItemContextMenu(event, entry) {
       menuButton("删除", "×", () => deleteEntries([entry.path]), { danger: true }),
       menuButton("多选", "☑", () => enterSelectionMode(entry.path)),
     ]),
+    ...(entry.type === "photo" ? pluginMenuSections("file") : []),
   ]);
   openContextMenuAt(itemContextMenu, event.clientX, event.clientY);
 }
@@ -790,6 +791,9 @@ function updateSelectionBar() {
   const canBatchRate = selectedEntriesAreAllPhotos();
   if (batchRatingControl) {
     batchRatingControl.hidden = !canBatchRate;
+  }
+  if (typeof updateSelectionPluginActions === "function") {
+    updateSelectionPluginActions();
   }
   batchRatingButtons.forEach((button) => {
     button.disabled = !canBatchRate;

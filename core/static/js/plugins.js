@@ -49,6 +49,7 @@ function renderPluginComponentTriggers() {
       }
     });
   });
+  renderSelectionPluginActions();
 }
 
 function enabledPluginAssets() {
@@ -188,6 +189,8 @@ function dispatchPluginComponentAction(component, trigger) {
     component,
     trigger,
     contextFolder: state.contextFolder,
+    contextEntry: state.contextEntry,
+    selectedPaths: Array.from(state.selectedPaths || []),
   });
 }
 
@@ -209,6 +212,42 @@ function pluginContextMenuGroups(target) {
     });
   });
   return Array.from(groups.values()).filter((group) => group.items.length);
+}
+
+function renderSelectionPluginActions() {
+  if (!selectionPluginActions) {
+    return;
+  }
+  selectionPluginActions.innerHTML = "";
+  pluginContextMenuGroups("file_selection").forEach((group) => {
+    group.items.forEach(({ component, trigger }) => {
+      const button = createSelectionPluginButton(component, trigger);
+      selectionPluginActions.append(button);
+    });
+  });
+  updateSelectionPluginActions();
+}
+
+function createSelectionPluginButton(component, trigger) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "ghost";
+  button.dataset.pluginSelectionAction = "1";
+  button.textContent = trigger.label || component.title || component.id;
+  button.addEventListener("click", () => dispatchPluginComponentAction(component, trigger));
+  return button;
+}
+
+function updateSelectionPluginActions() {
+  if (!selectionPluginActions) {
+    return;
+  }
+  const entries = typeof selectedEntries === "function" ? selectedEntries() : [];
+  const allPhotos = entries.length > 0 && entries.length === state.selectedPaths.size && entries.every((entry) => entry.type === "photo");
+  selectionPluginActions.hidden = !allPhotos || !selectionPluginActions.children.length;
+  selectionPluginActions.querySelectorAll("button").forEach((button) => {
+    button.disabled = !allPhotos;
+  });
 }
 
 function loadPluginStyle(href) {

@@ -16,6 +16,7 @@ datas += [
 hiddenimports = [
 ]
 hiddenimports += collect_submodules("core.photo_share.routes")
+hiddenimports += collect_submodules("PIL")
 
 a = Analysis(
     [str(tray_app)],
