@@ -50,11 +50,30 @@
         <section class="collage-controls">
           <div class="collage-panel-title">排版</div>
           <div class="collage-layout-grid" role="group" aria-label="排版模式">
+            <button type="button" data-layout="template">模板</button>
             <button type="button" data-layout="grid">网格</button>
             <button type="button" data-layout="masonry">瀑布</button>
             <button type="button" data-layout="hero">主图</button>
             <button type="button" data-layout="film">胶片</button>
+            <button type="button" data-layout="strip">长图</button>
             <button type="button" data-layout="free">自由</button>
+          </div>
+          <div class="collage-segmented" role="group" aria-label="长图方向">
+            <button type="button" data-strip-direction="vertical">纵向</button>
+            <button type="button" data-strip-direction="horizontal">横向</button>
+          </div>
+          <div id="collageTemplatePanel" class="collage-template-panel">
+            <div class="collage-panel-row compact">
+              <div>
+                <div class="collage-panel-title">模板库</div>
+                <div id="collageTemplateHint" class="collage-muted"></div>
+              </div>
+            </div>
+            <div id="collageTemplates" class="collage-template-grid"></div>
+            <div class="collage-template-actions">
+              <button id="collageShuffleBtn" class="ghost" type="button">随机换位</button>
+              <button id="collageFreezeFreeBtn" class="ghost" type="button">转自由编辑</button>
+            </div>
           </div>
           <label>
             尺寸
@@ -68,11 +87,23 @@
           </label>
           <label>
             列数
-            <input id="collageColumnsInput" type="range" min="1" max="8" value="3" />
+            <input id="collageColumnsInput" type="range" min="1" max="12" value="3" />
+          </label>
+          <label>
+            行数
+            <input id="collageRowsInput" type="range" min="1" max="12" value="2" />
           </label>
           <label>
             间距
             <input id="collageGapInput" type="range" min="0" max="120" value="24" />
+          </label>
+          <label>
+            边缘过渡 · 重叠范围
+            <input id="collageOverlapInput" type="range" min="0" max="360" value="0" />
+          </label>
+          <label>
+            边缘过渡 · 过渡速度
+            <input id="collageBlendSpeedInput" type="range" min="0.25" max="4" step="0.25" value="1" />
           </label>
           <label>
             边距

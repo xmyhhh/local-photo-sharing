@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import PIL.Image as Image
+import PIL.ImageChops as ImageChops
 import PIL.ImageDraw as ImageDraw
 import PIL.ImageFilter as ImageFilter
 import PIL.ImageOps as ImageOps
@@ -30,16 +31,69 @@ MAX_POOL_ITEMS = 500
 MAX_RENDER_SIDE = 4096
 DEFAULT_SETTINGS = {
     "layout": "grid",
+    "templateId": "",
+    "stripDirection": "vertical",
     "width": 2400,
     "height": 1600,
     "gap": 24,
+    "overlap": 0,
+    "blendSpeed": 1,
     "padding": 48,
     "background": "#f7f3ea",
     "fit": "cover",
     "radius": 18,
     "shadow": True,
     "columns": 3,
+    "rows": 2,
     "aspect": "auto",
+}
+
+COLLAGE_TEMPLATES: dict[int, list[dict[str, Any]]] = {
+    1: [{"id": "1-0", "name": "单图", "boxes": [(0, 0, 100, 100)]}],
+    2: [
+        {"id": "2-0", "name": "左右", "boxes": [(0, 0, 50, 100), (50, 0, 50, 100)]},
+        {"id": "2-1", "name": "上下", "boxes": [(0, 0, 100, 50), (0, 50, 100, 50)]},
+        {"id": "2-2", "name": "主次", "boxes": [(0, 0, 66.6667, 100), (66.6667, 0, 33.3333, 100)]},
+        {"id": "2-3", "name": "封面", "boxes": [(0, 0, 100, 66.6667), (0, 66.6667, 100, 33.3333)]},
+    ],
+    3: [
+        {"id": "3-0", "name": "左主图", "boxes": [(0, 0, 66.6667, 100), (66.6667, 0, 33.3333, 50), (66.6667, 50, 33.3333, 50)]},
+        {"id": "3-1", "name": "上主图", "boxes": [(0, 0, 100, 66.6667), (0, 66.6667, 50, 33.3333), (50, 66.6667, 50, 33.3333)]},
+        {"id": "3-2", "name": "三列", "boxes": [(0, 0, 33.3333, 100), (33.3333, 0, 33.3334, 100), (66.6667, 0, 33.3333, 100)]},
+        {"id": "3-3", "name": "错落", "boxes": [(0, 0, 50, 50), (50, 0, 50, 100), (0, 50, 50, 50)]},
+    ],
+    4: [
+        {"id": "4-0", "name": "四宫格", "boxes": [(0, 0, 50, 50), (50, 0, 50, 50), (0, 50, 50, 50), (50, 50, 50, 50)]},
+        {"id": "4-1", "name": "左主图", "boxes": [(0, 0, 66.6667, 100), (66.6667, 0, 33.3333, 33.3333), (66.6667, 33.3333, 33.3333, 33.3334), (66.6667, 66.6667, 33.3333, 33.3333)]},
+        {"id": "4-2", "name": "上宽幅", "boxes": [(0, 0, 100, 50), (0, 50, 33.3333, 50), (33.3333, 50, 33.3334, 50), (66.6667, 50, 33.3333, 50)]},
+        {"id": "4-3", "name": "杂志", "boxes": [(0, 0, 50, 66.6667), (50, 0, 50, 33.3333), (50, 33.3333, 50, 33.3334), (0, 66.6667, 100, 33.3333)]},
+    ],
+    5: [
+        {"id": "5-0", "name": "右主图", "boxes": [(0, 0, 33.3333, 33.3333), (33.3333, 0, 66.6667, 66.6667), (0, 33.3333, 33.3333, 33.3334), (0, 66.6667, 33.3333, 33.3333), (33.3333, 66.6667, 66.6667, 33.3333)]},
+        {"id": "5-1", "name": "中主图", "boxes": [(0, 0, 50, 25), (50, 0, 50, 25), (0, 25, 100, 50), (0, 75, 50, 25), (50, 75, 50, 25)]},
+        {"id": "5-2", "name": "竖版拼贴", "boxes": [(0, 0, 40, 50), (40, 0, 60, 25), (40, 25, 60, 25), (0, 50, 60, 50), (60, 50, 40, 50)]},
+    ],
+    6: [
+        {"id": "6-0", "name": "上主图", "boxes": [(0, 0, 100, 50), (0, 50, 33.3333, 25), (33.3333, 50, 33.3334, 25), (66.6667, 50, 33.3333, 50), (0, 75, 33.3333, 25), (33.3333, 75, 33.3334, 25)]},
+        {"id": "6-1", "name": "双主图", "boxes": [(0, 0, 50, 50), (50, 0, 50, 50), (0, 50, 25, 50), (25, 50, 25, 50), (50, 50, 25, 50), (75, 50, 25, 50)]},
+        {"id": "6-2", "name": "六宫格", "boxes": [(0, 0, 33.3333, 50), (33.3333, 0, 33.3334, 50), (66.6667, 0, 33.3333, 50), (0, 50, 33.3333, 50), (33.3333, 50, 33.3334, 50), (66.6667, 50, 33.3333, 50)]},
+    ],
+    7: [
+        {"id": "7-0", "name": "中心", "boxes": [(0, 0, 25, 25), (25, 0, 50, 50), (75, 0, 25, 25), (0, 25, 25, 50), (75, 25, 25, 50), (0, 75, 50, 25), (50, 75, 50, 25)]},
+        {"id": "7-1", "name": "横向故事", "boxes": [(0, 0, 50, 50), (50, 0, 25, 25), (75, 0, 25, 25), (50, 25, 50, 25), (0, 50, 25, 50), (25, 50, 25, 50), (50, 50, 50, 50)]},
+    ],
+    8: [
+        {"id": "8-0", "name": "八格交错", "boxes": [(0, 0, 25, 25), (25, 0, 75, 25), (0, 25, 75, 25), (75, 25, 25, 25), (0, 50, 25, 25), (25, 50, 75, 25), (0, 75, 75, 25), (75, 75, 25, 25)]},
+        {"id": "8-1", "name": "大图收束", "boxes": [(0, 0, 50, 50), (50, 0, 25, 25), (75, 0, 25, 25), (50, 25, 50, 25), (0, 50, 25, 25), (25, 50, 25, 25), (50, 50, 50, 50), (0, 75, 50, 25)]},
+    ],
+    9: [
+        {"id": "9-0", "name": "九宫格", "boxes": [(0, 0, 33.3333, 33.3333), (33.3333, 0, 33.3334, 33.3333), (66.6667, 0, 33.3333, 33.3333), (0, 33.3333, 33.3333, 33.3334), (33.3333, 33.3333, 33.3334, 33.3334), (66.6667, 33.3333, 33.3333, 33.3334), (0, 66.6667, 33.3333, 33.3333), (33.3333, 66.6667, 33.3334, 33.3333), (66.6667, 66.6667, 33.3333, 33.3333)]},
+        {"id": "9-1", "name": "中心主图", "boxes": [(0, 0, 50, 25), (50, 0, 50, 25), (0, 25, 25, 50), (25, 25, 50, 50), (75, 25, 25, 50), (0, 75, 25, 25), (25, 75, 25, 25), (50, 75, 25, 25), (75, 75, 25, 25)]},
+        {"id": "9-2", "name": "大小拼贴", "boxes": [(0, 0, 33.3333, 33.3333), (33.3333, 0, 16.6667, 16.6667), (50, 0, 50, 50), (33.3333, 16.6667, 16.6667, 16.6666), (0, 33.3333, 16.6667, 16.6667), (16.6667, 33.3333, 16.6666, 16.6667), (33.3333, 33.3333, 16.6667, 16.6667), (0, 50, 50, 50), (50, 50, 50, 50)]},
+    ],
+    10: [
+        {"id": "10-0", "name": "十图网格", "boxes": [(0, 0, 20, 50), (20, 0, 20, 25), (40, 0, 40, 50), (80, 0, 20, 25), (20, 25, 20, 25), (80, 25, 20, 25), (0, 50, 25, 50), (25, 50, 25, 50), (50, 50, 25, 50), (75, 50, 25, 50)]},
+    ],
 }
 
 
@@ -394,6 +448,8 @@ def build_items(services: AppServices, paths: list[str]) -> list[dict[str, Any]]
             "y": 0,
             "w": 0,
             "h": 0,
+            "cropX": 50,
+            "cropY": 50,
         })
     return items
 
@@ -411,6 +467,8 @@ def normalize_items_from_payload(services: AppServices, items: list[Any]) -> lis
         built["id"] = str(item.get("id") or built["id"])[:32]
         for key in ("x", "y", "w", "h"):
             built[key] = clamp_number(item.get(key), 0, 10_000, 0)
+        built["cropX"] = clamp_number(item.get("cropX"), 0, 100, 50)
+        built["cropY"] = clamp_number(item.get("cropY"), 0, 100, 50)
         normalized.append(built)
     return normalized
 
@@ -431,13 +489,18 @@ def normalize_settings(value: Any, previous: Any = None) -> dict[str, Any]:
         settings.update(previous)
     if isinstance(value, dict):
         settings.update(value)
-    settings["layout"] = settings["layout"] if settings["layout"] in {"grid", "masonry", "hero", "film", "free"} else "grid"
+    settings["layout"] = settings["layout"] if settings["layout"] in {"grid", "masonry", "hero", "film", "free", "template", "strip"} else "grid"
+    settings["templateId"] = str(settings.get("templateId") or "")[:32]
+    settings["stripDirection"] = settings["stripDirection"] if settings.get("stripDirection") in {"vertical", "horizontal"} else "vertical"
     settings["width"] = int(clamp_number(settings.get("width"), 800, MAX_RENDER_SIDE, DEFAULT_SETTINGS["width"]))
     settings["height"] = int(clamp_number(settings.get("height"), 800, MAX_RENDER_SIDE, DEFAULT_SETTINGS["height"]))
     settings["gap"] = int(clamp_number(settings.get("gap"), 0, 120, DEFAULT_SETTINGS["gap"]))
+    settings["overlap"] = int(clamp_number(settings.get("overlap"), 0, 720, DEFAULT_SETTINGS["overlap"]))
+    settings["blendSpeed"] = clamp_number(settings.get("blendSpeed"), 0.25, 4, DEFAULT_SETTINGS["blendSpeed"])
     settings["padding"] = int(clamp_number(settings.get("padding"), 0, 240, DEFAULT_SETTINGS["padding"]))
     settings["radius"] = int(clamp_number(settings.get("radius"), 0, 80, DEFAULT_SETTINGS["radius"]))
-    settings["columns"] = int(clamp_number(settings.get("columns"), 1, 8, DEFAULT_SETTINGS["columns"]))
+    settings["columns"] = int(clamp_number(settings.get("columns"), 1, 12, DEFAULT_SETTINGS["columns"]))
+    settings["rows"] = int(clamp_number(settings.get("rows"), 1, 12, DEFAULT_SETTINGS["rows"]))
     settings["fit"] = settings["fit"] if settings["fit"] in {"cover", "contain"} else "cover"
     settings["shadow"] = bool(settings.get("shadow", True))
     settings["background"] = normalize_color(settings.get("background"), DEFAULT_SETTINGS["background"])
@@ -465,26 +528,45 @@ def render_group(services: AppServices, group: dict[str, Any]) -> None:
     settings = normalize_settings(group.get("settings"))
     group["settings"] = settings
     items = [item for item in group.get("items", []) if isinstance(item, dict)]
+    render_settings = effective_render_settings(settings, items)
     output = output_path_for_group(group)
     output.parent.mkdir(parents=True, exist_ok=True)
-    canvas = Image.new("RGB", (settings["width"], settings["height"]), settings["background"])
+    canvas = Image.new("RGB", (render_settings["width"], render_settings["height"]), render_settings["background"])
     if not items:
         canvas.save(output, "JPEG", quality=92, optimize=True)
         group["output"] = output.name
         return
 
-    boxes = layout_boxes(settings, items)
-    for item, box in zip(items, boxes):
+    boxes = layout_boxes(render_settings, items)
+    for index, (item, box) in enumerate(zip(items, boxes)):
         try:
             root_id, rel = parse_rooted_path(str(item.get("path") or ""))
             root_services = _root_services(services, root_id)
             source = resolve_photo(root_services.root, rel)
             with load_photo_image(source) as image:
-                draw_image(canvas, image, box, settings)
+                draw_image(canvas, image, box, render_settings, item, index)
         except Exception:
             draw_missing(canvas, box)
     canvas.save(output, "JPEG", quality=94, optimize=True)
     group["output"] = output.name
+
+
+def effective_render_settings(settings: dict[str, Any], items: list[dict[str, Any]]) -> dict[str, Any]:
+    render_settings = dict(settings)
+    if settings["layout"] != "strip" or not items:
+        return render_settings
+    pad = settings["padding"]
+    gap = settings["gap"]
+    overlap = settings["overlap"]
+    if settings["stripDirection"] == "horizontal":
+        inner_h = max(1, settings["height"] - pad * 2)
+        total_width = sum(inner_h * (clamp_number(item.get("width"), 1, 10_000, 4) / clamp_number(item.get("height"), 1, 10_000, 3)) for item in items)
+        render_settings["width"] = int(clamp_number(round(pad * 2 + total_width + gap * max(0, len(items) - 1) - overlap * max(0, len(items) - 1)), 800, MAX_RENDER_SIDE, settings["width"]))
+        return render_settings
+    inner_w = max(1, settings["width"] - pad * 2)
+    total_height = sum(inner_w * (clamp_number(item.get("height"), 1, 10_000, 3) / clamp_number(item.get("width"), 1, 10_000, 4)) for item in items)
+    render_settings["height"] = int(clamp_number(round(pad * 2 + total_height + gap * max(0, len(items) - 1) - overlap * max(0, len(items) - 1)), 800, MAX_RENDER_SIDE, settings["height"]))
+    return render_settings
 
 
 def layout_boxes(settings: dict[str, Any], items: list[dict[str, Any]]) -> list[tuple[int, int, int, int]]:
@@ -505,12 +587,74 @@ def layout_boxes(settings: dict[str, Any], items: list[dict[str, Any]]) -> list[
         return film_boxes(settings, len(items))
     if settings["layout"] == "masonry":
         return masonry_boxes(settings, items)
+    if settings["layout"] == "template":
+        return template_boxes(settings, len(items))
+    if settings["layout"] == "strip":
+        return strip_boxes(settings, items)
     return grid_boxes(settings, len(items))
+
+
+def templates_for_count(count: int) -> list[dict[str, Any]]:
+    if count <= 0:
+        return []
+    if count in COLLAGE_TEMPLATES:
+        return COLLAGE_TEMPLATES[count]
+    return generated_templates(count)
+
+
+def generated_templates(count: int) -> list[dict[str, Any]]:
+    columns = math.ceil(math.sqrt(count))
+    rows = math.ceil(count / columns)
+    cell_w = 100 / columns
+    cell_h = 100 / rows
+    boxes = [((index % columns) * cell_w, (index // columns) * cell_h, cell_w, cell_h) for index in range(count)]
+    templates = [{"id": f"{count}-grid", "name": f"{count} 宫格", "boxes": boxes}]
+    if count >= 5:
+        hero_boxes_data = [(0, 0, 50, 50)]
+        small_columns = 2
+        small_rows = math.ceil((count - 1) / small_columns)
+        small_w = 50 / small_columns
+        small_h = 100 / small_rows
+        for index in range(1, count):
+            local = index - 1
+            hero_boxes_data.append((50 + (local % small_columns) * small_w, (local // small_columns) * small_h, small_w, small_h))
+        templates.append({"id": f"{count}-hero", "name": "主图拼贴", "boxes": hero_boxes_data})
+    return templates
+
+
+def selected_template(settings: dict[str, Any], count: int) -> dict[str, Any] | None:
+    templates = templates_for_count(count)
+    if not templates:
+        return None
+    template_id = str(settings.get("templateId") or "")
+    return next((template for template in templates if template["id"] == template_id), templates[0])
+
+
+def template_boxes(settings: dict[str, Any], count: int) -> list[tuple[int, int, int, int]]:
+    template = selected_template(settings, count)
+    if template is None:
+        return grid_boxes(settings, count)
+    pad = settings["padding"]
+    gap = settings["gap"]
+    inner_w = settings["width"] - pad * 2
+    inner_h = settings["height"] - pad * 2
+    boxes = []
+    for left, top, width, height in template["boxes"][:count]:
+        x_inset = 0 if left <= 0 else gap / 2
+        y_inset = 0 if top <= 0 else gap / 2
+        right_inset = 0 if left + width >= 99.999 else gap / 2
+        bottom_inset = 0 if top + height >= 99.999 else gap / 2
+        x = pad + inner_w * (left / 100) + x_inset
+        y = pad + inner_h * (top / 100) + y_inset
+        w = inner_w * (width / 100) - x_inset - right_inset
+        h = inner_h * (height / 100) - y_inset - bottom_inset
+        boxes.append((round(x), round(y), max(1, round(w)), max(1, round(h))))
+    return boxes
 
 
 def grid_boxes(settings: dict[str, Any], count: int) -> list[tuple[int, int, int, int]]:
     columns = min(settings["columns"], max(1, count))
-    rows = math.ceil(count / columns)
+    rows = max(settings["rows"], math.ceil(count / columns))
     pad = settings["padding"]
     gap = settings["gap"]
     cell_w = (settings["width"] - pad * 2 - gap * (columns - 1)) / columns
@@ -519,6 +663,33 @@ def grid_boxes(settings: dict[str, Any], count: int) -> list[tuple[int, int, int
         (round(pad + (index % columns) * (cell_w + gap)), round(pad + (index // columns) * (cell_h + gap)), round(cell_w), round(cell_h))
         for index in range(count)
     ]
+
+
+def strip_boxes(settings: dict[str, Any], items: list[dict[str, Any]]) -> list[tuple[int, int, int, int]]:
+    count = len(items)
+    if count <= 0:
+        return []
+    pad = settings["padding"]
+    gap = settings["gap"]
+    horizontal = settings["stripDirection"] == "horizontal"
+    overlap = min(settings["overlap"], max(0, int((settings["width"] if horizontal else settings["height"]) * 0.4)))
+    if horizontal:
+        frame_h = max(1, settings["height"] - pad * 2)
+        boxes = []
+        x = float(pad)
+        for item in items:
+            frame_w = frame_h * (clamp_number(item.get("width"), 1, 10_000, 4) / clamp_number(item.get("height"), 1, 10_000, 3))
+            boxes.append((round(x), pad, round(frame_w), frame_h))
+            x += frame_w + gap - overlap
+        return boxes
+    frame_w = max(1, settings["width"] - pad * 2)
+    boxes = []
+    y = float(pad)
+    for item in items:
+        frame_h = frame_w * (clamp_number(item.get("height"), 1, 10_000, 3) / clamp_number(item.get("width"), 1, 10_000, 4))
+        boxes.append((pad, round(y), frame_w, round(frame_h)))
+        y += frame_h + gap - overlap
+    return boxes
 
 
 def hero_boxes(settings: dict[str, Any], count: int) -> list[tuple[int, int, int, int]]:
@@ -569,11 +740,11 @@ def masonry_boxes(settings: dict[str, Any], items: list[dict[str, Any]]) -> list
     return [(x, round(pad + (y - pad) * scale), w, max(1, round(h * scale))) for x, y, w, h in boxes]
 
 
-def draw_image(canvas: Image.Image, image: Image.Image, box: tuple[int, int, int, int], settings: dict[str, Any]) -> None:
+def draw_image(canvas: Image.Image, image: Image.Image, box: tuple[int, int, int, int], settings: dict[str, Any], item: dict[str, Any] | None = None, index: int = 0) -> None:
     x, y, w, h = box
     if w <= 0 or h <= 0:
         return
-    frame = ImageOps.fit(image.convert("RGB"), (w, h), method=Image.Resampling.LANCZOS) if settings["fit"] == "cover" else contain_image(image.convert("RGB"), w, h, settings["background"])
+    frame = cover_image(image.convert("RGB"), w, h, item or {}) if settings["fit"] == "cover" else contain_image(image.convert("RGB"), w, h, settings["background"])
     radius = min(settings["radius"], w // 2, h // 2)
     if settings["shadow"]:
         shadow = Image.new("RGBA", (w + 20, h + 20), (0, 0, 0, 0))
@@ -581,12 +752,40 @@ def draw_image(canvas: Image.Image, image: Image.Image, box: tuple[int, int, int
         shadow_draw.rounded_rectangle((10, 10, w + 10, h + 10), radius=radius, fill=(0, 0, 0, 46))
         shadow = shadow.filter(ImageFilter.GaussianBlur(8))
         canvas.paste(shadow.convert("RGB"), (x - 10, y - 8), shadow.split()[-1])
-    if radius:
-        mask = Image.new("L", (w, h), 0)
-        ImageDraw.Draw(mask).rounded_rectangle((0, 0, w, h), radius=radius, fill=255)
+    blend = blend_axis(settings, index)
+    if radius or blend:
+        mask = image_paste_mask(w, h, radius, blend, settings)
         canvas.paste(frame, (x, y), mask)
     else:
         canvas.paste(frame, (x, y))
+
+
+def blend_axis(settings: dict[str, Any], index: int) -> str:
+    if settings["layout"] != "strip" or index <= 0 or settings["overlap"] <= 0:
+        return ""
+    return "x" if settings["stripDirection"] == "horizontal" else "y"
+
+
+def image_paste_mask(width: int, height: int, radius: int, blend: str, settings: dict[str, Any]) -> Image.Image:
+    mask = Image.new("L", (width, height), 255)
+    if blend:
+        overlap = min(settings["overlap"], width if blend == "x" else height)
+        speed = settings["blendSpeed"]
+        if overlap > 0:
+            if blend == "x":
+                for x in range(overlap):
+                    alpha = round(255 * ((x + 1) / overlap) ** speed)
+                    ImageDraw.Draw(mask).line((x, 0, x, height), fill=alpha)
+            else:
+                draw = ImageDraw.Draw(mask)
+                for y in range(overlap):
+                    alpha = round(255 * ((y + 1) / overlap) ** speed)
+                    draw.line((0, y, width, y), fill=alpha)
+    if radius:
+        radius_mask = Image.new("L", (width, height), 0)
+        ImageDraw.Draw(radius_mask).rounded_rectangle((0, 0, width, height), radius=radius, fill=255)
+        mask = ImageChops.multiply(mask, radius_mask)
+    return mask
 
 
 def contain_image(image: Image.Image, width: int, height: int, background: str) -> Image.Image:
@@ -594,6 +793,20 @@ def contain_image(image: Image.Image, width: int, height: int, background: str) 
     frame = Image.new("RGB", (width, height), background)
     frame.paste(image, ((width - image.width) // 2, (height - image.height) // 2))
     return frame
+
+
+def cover_image(image: Image.Image, width: int, height: int, item: dict[str, Any]) -> Image.Image:
+    scale = max(width / image.width, height / image.height)
+    resized_width = max(1, round(image.width * scale))
+    resized_height = max(1, round(image.height * scale))
+    resized = image.resize((resized_width, resized_height), Image.Resampling.LANCZOS)
+    overflow_x = max(0, resized_width - width)
+    overflow_y = max(0, resized_height - height)
+    crop_x = clamp_number(item.get("cropX"), 0, 100, 50) / 100
+    crop_y = clamp_number(item.get("cropY"), 0, 100, 50) / 100
+    left = round(overflow_x * crop_x)
+    top = round(overflow_y * crop_y)
+    return resized.crop((left, top, left + width, top + height))
 
 
 def draw_missing(canvas: Image.Image, box: tuple[int, int, int, int]) -> None:
@@ -659,6 +872,8 @@ def serialize_item(item: dict[str, Any]) -> dict[str, Any]:
         "y": int(item.get("y") or 0),
         "w": int(item.get("w") or 0),
         "h": int(item.get("h") or 0),
+        "cropX": round(clamp_number(item.get("cropX"), 0, 100, 50), 1),
+        "cropY": round(clamp_number(item.get("cropY"), 0, 100, 50), 1),
         "thumbUrl": thumb_url(path, "small") if path else "",
         "imageUrl": image_url(path) if path else "",
     }

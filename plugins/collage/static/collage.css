@@ -106,6 +106,10 @@ button.ghost,
   margin-bottom: 12px;
 }
 
+.collage-panel-row.compact {
+  margin-bottom: 8px;
+}
+
 .collage-panel-title {
   font-size: 14px;
   font-weight: 700;
@@ -241,11 +245,12 @@ button.ghost,
   contain: layout paint style;
   touch-action: none;
   will-change: transform, width, height;
-  cursor: pointer;
+  cursor: grab;
 }
 
 .collage-frame.dragging {
   box-shadow: 0 8px 20px rgba(22, 26, 31, 0.14);
+  cursor: grabbing;
 }
 
 .collage-frame.selected {
@@ -258,15 +263,37 @@ button.ghost,
   height: 100%;
   display: block;
   pointer-events: none;
+  user-select: none;
 }
 
+.collage-move-handle,
 .collage-resize-handle {
   position: absolute;
-  right: 0;
-  bottom: 0;
   width: 22px;
   height: 22px;
   background: #236c62;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  z-index: 4;
+}
+
+.collage-move-handle {
+  left: 0;
+  top: 0;
+  border-radius: 0 0 8px 0;
+  cursor: move;
+}
+
+.collage-move-handle::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-top: 2px solid #fff;
+  border-left: 2px solid #fff;
+}
+
+.collage-resize-handle {
+  right: 0;
+  bottom: 0;
   border-radius: 8px 0 0 0;
   cursor: nwse-resize;
 }
@@ -288,10 +315,11 @@ button.ghost,
 
 .collage-frame-remove {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
   opacity: 0;
-  transform: translateY(-2px);
+  transform: none;
   transition: opacity 0.12s ease, transform 0.12s ease;
 }
 
@@ -299,7 +327,7 @@ button.ghost,
 .collage-frame.selected .collage-frame-remove,
 .collage-frame:focus-within .collage-frame-remove {
   opacity: 1;
-  transform: translateY(0);
+  transform: none;
 }
 
 .collage-photo-remove {
@@ -340,6 +368,97 @@ button.ghost,
 .collage-layout-grid button.active {
   background: #236c62;
   color: #fff;
+}
+
+.collage-segmented {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.collage-segmented button {
+  background: #fff;
+  color: #20242a;
+  border: 1px solid rgba(45, 49, 57, 0.14);
+}
+
+.collage-segmented button.active {
+  background: #1d1d1d;
+  color: #fff;
+}
+
+.collage-template-panel {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(45, 49, 57, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.collage-template-panel.disabled {
+  opacity: 0.62;
+}
+
+.collage-template-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.collage-template {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 7px;
+  background: #fff;
+  color: #20242a;
+  border: 1px solid rgba(45, 49, 57, 0.14);
+  border-radius: 8px;
+}
+
+.collage-template.active {
+  border-color: #236c62;
+  box-shadow: 0 0 0 2px rgba(35, 108, 98, 0.16);
+}
+
+.collage-template-preview {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 6px;
+  background: #f1eee7;
+  overflow: hidden;
+}
+
+.collage-template-preview > span {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid #f7f4ed;
+  background: #7f958f;
+}
+
+.collage-template-name {
+  min-width: 0;
+  color: #4f5753;
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collage-template-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.collage-template-actions button {
+  min-width: 0;
+  padding: 8px 10px;
 }
 
 .collage-switch {
@@ -543,6 +662,10 @@ button.ghost,
 
   .collage-controls {
     grid-template-columns: repeat(3, minmax(150px, 1fr));
+  }
+
+  .collage-template-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
