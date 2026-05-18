@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sys
+import traceback
 from pathlib import Path
 from threading import Lock
 
 _runtime = None
 _runtime_lock = Lock()
+_log_path = None
+_log_stream = None
 
 
 def start_server(context, app_dir: str, default_photo_dir: str) -> dict:
@@ -21,6 +25,10 @@ def start_server(context, app_dir: str, default_photo_dir: str) -> dict:
         photo_path = Path(default_photo_dir)
         app_path.mkdir(parents=True, exist_ok=True)
         photo_path.mkdir(parents=True, exist_ok=True)
+        _configure_logging(app_path)
+        logging.info("Starting Local Photo Sharing Android service")
+        logging.info("App dir: %s", app_path)
+        logging.info("Default photo dir: %s", photo_path)
 
         os.environ["PHOTO_SHARE_APP_DIR"] = str(app_path)
         os.environ["PHOTO_SHARE_RESOURCE_DIR"] = str(resource_path)
@@ -40,14 +48,24 @@ def start_server(context, app_dir: str, default_photo_dir: str) -> dict:
         else:
             _repair_config(config_path, photo_path)
 
-        _runtime = create_server_runtime(config_path)
+        try:
+            _runtime = create_server_runtime(config_path)
+        except Exception:
+            logging.exception("Failed to create server runtime")
+            raise
+        logging.info("Server runtime created on %s:%s", _runtime.host, _runtime.port)
         return _runtime_info(_runtime)
 
 
 def serve_forever() -> None:
     runtime = _runtime
     if runtime is not None:
-        runtime.serve_forever()
+        try:
+            logging.info("Serving forever")
+            runtime.serve_forever()
+        except Exception:
+            logging.exception("Server loop crashed")
+            raise
 
 
 def stop_server() -> None:
@@ -56,6 +74,7 @@ def stop_server() -> None:
         runtime = _runtime
         _runtime = None
     if runtime is not None:
+        logging.info("Stopping server")
         runtime.shutdown()
 
 
@@ -64,6 +83,26 @@ def status() -> dict:
     if runtime is None:
         return {"running": False}
     return {"running": True, **_runtime_info(runtime)}
+
+
+def read_log(max_chars: int = 60000) -> str:
+    path = _current_log_path()
+    if not path.exists():
+        return ""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return traceback.format_exc()
+    if len(text) > max_chars:
+        return text[-max_chars:]
+    return text
+
+
+def clear_log() -> None:
+    path = _current_log_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("", encoding="utf-8")
+    logging.info("Log cleared")
 
 
 def _runtime_info(runtime) -> dict:
@@ -80,6 +119,34 @@ def _ensure_import_paths(resource_path: Path) -> None:
         text = str(candidate)
         if text not in sys.path:
             sys.path.insert(0, text)
+
+
+def _configure_logging(app_path: Path) -> None:
+    global _log_path, _log_stream
+    _log_path = app_path / "android_service.log"
+    _log_path.parent.mkdir(parents=True, exist_ok=True)
+    if _log_stream is None:
+        _log_stream = _log_path.open("a", encoding="utf-8", buffering=1)
+    sys.stdout = _log_stream
+    sys.stderr = _log_stream
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    for handler in list(root_logger.handlers):
+        root_logger.removeHandler(handler)
+    file_handler = logging.StreamHandler(_log_stream)
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
+    logging.getLogger("werkzeug").setLevel(logging.INFO)
+
+
+def _current_log_path() -> Path:
+    if _log_path is not None:
+        return _log_path
+    app_dir = os.environ.get("PHOTO_SHARE_APP_DIR")
+    if app_dir:
+        return Path(app_dir) / "android_service.log"
+    return Path("android_service.log")
 
 
 def _repair_config(config_path: Path, default_photo_dir: Path) -> None:

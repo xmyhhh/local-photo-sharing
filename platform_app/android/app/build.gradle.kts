@@ -4,12 +4,25 @@ plugins {
     id("com.chaquo.python")
 }
 
+import java.util.Properties
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.isFile) {
+        file.inputStream().use(::load)
+    }
+}
+val chaquopyBuildPython = localProperties.getProperty("chaquopy.buildPython")
+    ?: providers.environmentVariable("CHAQUOPY_BUILD_PYTHON").orNull
+
 val generatedPythonDir = layout.buildDirectory.dir("generated/python")
 val syncPythonSources by tasks.registering(Sync::class) {
     into(generatedPythonDir)
-    from("src/main/python")
     from("../../../core") {
         into("core")
+    }
+    from("../../../core/static") {
+        into("static")
     }
     from("../../../plugins") {
         into("plugins")
@@ -32,13 +45,6 @@ android {
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
         }
-    }
-
-    flavorDimensions += "pyVersion"
-    productFlavors {
-        create("py310") { dimension = "pyVersion" }
-        create("py311") { dimension = "pyVersion" }
-        create("py312") { dimension = "pyVersion" }
     }
 
     buildTypes {
@@ -68,23 +74,24 @@ android {
 tasks.named("preBuild") {
     dependsOn(syncPythonSources)
 }
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("PythonSources") }.configureEach {
+    dependsOn(syncPythonSources)
+}
 
 chaquopy {
     defaultConfig {
-        version = "3.11"
+        version = "3.13"
+        if (!chaquopyBuildPython.isNullOrBlank()) {
+            buildPython(chaquopyBuildPython)
+        }
         extractPackages("*")
         pip {
             install("Flask==3.0.3")
             install("Werkzeug==3.0.3")
-            install("Pillow==10.4.0")
-            install("numpy==1.26.4")
+            install("Pillow==11.0.0")
+            install("numpy")
             install("piexif==1.1.3")
         }
-    }
-    productFlavors {
-        getByName("py310") { version = "3.10" }
-        getByName("py311") { version = "3.11" }
-        getByName("py312") { version = "3.12" }
     }
     sourceSets {
         getByName("main") {

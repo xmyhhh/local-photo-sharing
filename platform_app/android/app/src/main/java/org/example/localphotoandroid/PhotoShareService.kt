@@ -20,6 +20,7 @@ import com.chaquo.python.PyException
 import com.chaquo.python.android.AndroidPlatform
 import java.io.File
 import java.net.Inet4Address
+import java.time.LocalDateTime
 import kotlin.concurrent.thread
 
 data class ServiceState(
@@ -97,11 +98,21 @@ class PhotoShareService : Service() {
             )
             module.callAttr("serve_forever")
         } catch (error: PyException) {
-            publish(ServiceState(error = error.stackTraceString))
+            appendServiceLog(error.stackTraceToString())
+            publish(ServiceState(error = error.stackTraceToString()))
             stopSelf()
         } catch (error: Throwable) {
+            appendServiceLog(error.stackTraceToString())
             publish(ServiceState(error = error.message ?: error.toString()))
             stopSelf()
+        }
+    }
+
+    private fun appendServiceLog(text: String) {
+        runCatching {
+            val logFile = File(File(filesDir, "photo_share"), "android_service.log")
+            logFile.parentFile?.mkdirs()
+            logFile.appendText("${LocalDateTime.now()} ERROR AndroidService\n$text\n")
         }
     }
 

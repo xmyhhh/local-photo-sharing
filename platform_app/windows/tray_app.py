@@ -23,6 +23,7 @@ WM_DESTROY = 0x0002
 WM_COMMAND = 0x0111
 WM_USER = 0x0400
 WM_TRAYICON = WM_USER + 20
+WM_RESTART_SERVICE = WM_USER + 21
 WM_RBUTTONUP = 0x0205
 WM_LBUTTONDBLCLK = 0x0203
 NIM_ADD = 0x00000000
@@ -42,9 +43,10 @@ IMAGE_ICON = 1
 LR_LOADFROMFILE = 0x00000010
 TRAY_ICON_RELATIVE_PATH = Path("assets") / "icons8-photo-gallery-96.ico"
 CMD_OPEN = 1001
-CMD_MANAGE_FOLDERS = 1002
+CMD_OPEN_SETTINGS = 1002
 CMD_TOGGLE_AUTOSTART = 1003
 CMD_EXIT = 1004
+TRAY_WINDOW_CLASS = "LocalPhotoSharingTrayWindow"
 
 LRESULT = ctypes.c_ssize_t
 WNDPROC = ctypes.WINFUNCTYPE(LRESULT, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
@@ -68,6 +70,28 @@ def configure_logging() -> Path:
 
 def open_in_browser(runtime: ServerRuntime) -> None:
     webbrowser.open(runtime.local_url)
+
+
+def open_config_ui(config_path: Path) -> subprocess.Popen | None:
+    app_file = get_resource_base_dir() / "platform_app" / "config_ui_flet" / "app.py"
+    if not app_file.is_file():
+        app_file = Path(__file__).resolve().parents[1] / "config_ui_flet" / "app.py"
+    if not app_file.is_file():
+        raise FileNotFoundError(f"Config UI not found: {app_file}")
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    return subprocess.Popen(
+        [
+            sys.executable,
+            str(app_file),
+            "--config",
+            str(config_path),
+            "--managed-by-tray",
+        ],
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        creationflags=creationflags,
+    )
 
 
 def get_autostart_command() -> str:
@@ -259,17 +283,24 @@ def manage_photo_folders(config_path: Path) -> list[Path] | None:
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public static class DwmBackdrop {{
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+}}
+"@
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = '照片库目录'
 $form.StartPosition = 'CenterScreen'
-$form.Width = 780
-$form.Height = 560
+$form.ClientSize = New-Object System.Drawing.Size(900, 620)
 $form.MinimizeBox = $false
 $form.MaximizeBox = $false
 $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
 $form.ShowIcon = $false
-$form.BackColor = [System.Drawing.Color]::FromArgb(246, 248, 250)
+$form.BackColor = [System.Drawing.Color]::FromArgb(238, 244, 247)
 $form.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9)
 
 $accent = [System.Drawing.Color]::FromArgb(23, 107, 135)
@@ -277,6 +308,8 @@ $accentDark = [System.Drawing.Color]::FromArgb(15, 80, 101)
 $panel = [System.Drawing.Color]::White
 $muted = [System.Drawing.Color]::FromArgb(96, 113, 128)
 $line = [System.Drawing.Color]::FromArgb(215, 224, 232)
+$soft = [System.Drawing.Color]::FromArgb(238, 244, 247)
+$listSurface = [System.Drawing.Color]::FromArgb(248, 251, 252)
 
 function Set-ButtonStyle($button, [bool]$primary = $false) {{
     $button.Height = 36
@@ -298,7 +331,7 @@ $title = New-Object System.Windows.Forms.Label
 $title.Text = '管理照片库目录'
 $title.Left = 24
 $title.Top = 22
-$title.Width = 320
+$title.Width = 520
 $title.Height = 34
 $title.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 18, [System.Drawing.FontStyle]::Bold)
 $title.ForeColor = [System.Drawing.Color]::FromArgb(28, 35, 43)
@@ -308,7 +341,7 @@ $subtitle = New-Object System.Windows.Forms.Label
 $subtitle.Text = '这些本机目录会组合成网页中的照片库入口。修改后会自动重启本机服务。'
 $subtitle.Left = 26
 $subtitle.Top = 62
-$subtitle.Width = 660
+$subtitle.Width = 760
 $subtitle.Height = 24
 $subtitle.ForeColor = $muted
 $form.Controls.Add($subtitle)
@@ -316,10 +349,10 @@ $form.Controls.Add($subtitle)
 $card = New-Object System.Windows.Forms.Panel
 $card.Left = 24
 $card.Top = 100
-$card.Width = 710
-$card.Height = 330
-$card.BackColor = $panel
-$card.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+$card.Width = 852
+$card.Height = 390
+$card.BackColor = [System.Drawing.Color]::FromArgb(252, 254, 255)
+$card.BorderStyle = [System.Windows.Forms.BorderStyle]::None
 $form.Controls.Add($card)
 
 $listLabel = New-Object System.Windows.Forms.Label
@@ -335,74 +368,85 @@ $hintLabel = New-Object System.Windows.Forms.Label
 $hintLabel.Text = '第一项会作为默认浏览入口；可以用上移、下移调整顺序。'
 $hintLabel.Left = 18
 $hintLabel.Top = 40
-$hintLabel.Width = 520
+$hintLabel.Width = 660
 $hintLabel.Height = 22
 $hintLabel.ForeColor = $muted
 $card.Controls.Add($hintLabel)
 
+$listPanel = New-Object System.Windows.Forms.Panel
+$listPanel.Left = 18
+$listPanel.Top = 72
+$listPanel.Width = 626
+$listPanel.Height = 296
+$listPanel.BackColor = $listSurface
+$listPanel.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+$card.Controls.Add($listPanel)
+
 $list = New-Object System.Windows.Forms.ListBox
-$list.Left = 18
-$list.Top = 72
-$list.Width = 510
-$list.Height = 238
+$list.Left = 1
+$list.Top = 1
+$list.Width = 624
+$list.Height = 294
 $list.HorizontalScrollbar = $true
-$list.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
-$list.BackColor = [System.Drawing.Color]::FromArgb(252, 253, 254)
-$card.Controls.Add($list)
+$list.BorderStyle = [System.Windows.Forms.BorderStyle]::None
+$list.BackColor = $listSurface
+$list.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9.5)
+$listPanel.Controls.Add($list)
 
 $addButton = New-Object System.Windows.Forms.Button
 $addButton.Text = '添加...'
-$addButton.Left = 552
+$addButton.Left = 672
 $addButton.Top = 72
-$addButton.Width = 126
+$addButton.Width = 150
 Set-ButtonStyle $addButton $true
 $card.Controls.Add($addButton)
 
 $removeButton = New-Object System.Windows.Forms.Button
 $removeButton.Text = '删除'
-$removeButton.Left = 552
+$removeButton.Left = 672
 $removeButton.Top = 116
-$removeButton.Width = 126
+$removeButton.Width = 150
 Set-ButtonStyle $removeButton
 $card.Controls.Add($removeButton)
 
 $upButton = New-Object System.Windows.Forms.Button
 $upButton.Text = '上移'
-$upButton.Left = 552
+$upButton.Left = 672
 $upButton.Top = 176
-$upButton.Width = 126
+$upButton.Width = 150
 Set-ButtonStyle $upButton
 $card.Controls.Add($upButton)
 
 $downButton = New-Object System.Windows.Forms.Button
 $downButton.Text = '下移'
-$downButton.Left = 552
+$downButton.Left = 672
 $downButton.Top = 220
-$downButton.Width = 126
+$downButton.Width = 150
 Set-ButtonStyle $downButton
 $card.Controls.Add($downButton)
 
 $defaultLabel = New-Object System.Windows.Forms.Label
 $defaultLabel.Text = '默认上传目录'
 $defaultLabel.Left = 26
-$defaultLabel.Top = 452
-$defaultLabel.Width = 170
+$defaultLabel.Top = 514
+$defaultLabel.Width = 150
 $defaultLabel.Height = 24
 $defaultLabel.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 10, [System.Drawing.FontStyle]::Bold)
 $form.Controls.Add($defaultLabel)
 
 $defaultBox = New-Object System.Windows.Forms.ComboBox
-$defaultBox.Left = 150
-$defaultBox.Top = 448
-$defaultBox.Width = 390
+$defaultBox.Left = 190
+$defaultBox.Top = 510
+$defaultBox.Width = 454
 $defaultBox.Height = 34
 $defaultBox.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+$defaultBox.BackColor = [System.Drawing.Color]::White
 $form.Controls.Add($defaultBox)
 
 $okButton = New-Object System.Windows.Forms.Button
 $okButton.Text = '保存并重启服务'
-$okButton.Left = 548
-$okButton.Top = 496
+$okButton.Left = 690
+$okButton.Top = 558
 $okButton.Width = 186
 $okButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
 $form.AcceptButton = $okButton
@@ -411,13 +455,22 @@ $form.Controls.Add($okButton)
 
 $cancelButton = New-Object System.Windows.Forms.Button
 $cancelButton.Text = '取消'
-$cancelButton.Left = 412
-$cancelButton.Top = 496
+$cancelButton.Left = 552
+$cancelButton.Top = 558
 $cancelButton.Width = 120
 $cancelButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
 $form.CancelButton = $cancelButton
 Set-ButtonStyle $cancelButton
 $form.Controls.Add($cancelButton)
+
+$form.Add_Shown({{
+    try {{
+        # Windows 11: 3 is a transient-window system backdrop (Acrylic-like when supported).
+        $backdrop = 3
+        [DwmBackdrop]::DwmSetWindowAttribute($form.Handle, 38, [ref]$backdrop, 4) | Out-Null
+    }} catch {{
+    }}
+}})
 
 function Sync-DefaultBox {{
     $current = $defaultBox.SelectedItem
@@ -626,6 +679,8 @@ user32.CreateWindowExW.argtypes = [
 user32.CreateWindowExW.restype = wintypes.HWND
 user32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
 user32.DefWindowProcW.restype = LRESULT
+user32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+user32.PostMessageW.restype = wintypes.BOOL
 user32.LoadIconW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR]
 user32.LoadIconW.restype = wintypes.HICON
 user32.LoadImageW.argtypes = [
@@ -661,12 +716,13 @@ def check_windows_result(result, action: str) -> None:
 class NativeTrayIcon:
     def __init__(self, runtime: ServerRuntime):
         self.runtime = runtime
-        self.class_name = "LocalPhotoSharingTrayWindow"
+        self.class_name = TRAY_WINDOW_CLASS
         self.instance = ctypes.windll.kernel32.GetModuleHandleW(None)
         self.hwnd = None
         self.hicon = None
         self.wndproc = WNDPROC(self._wndproc)
         self.nid = None
+        self.settings_process: subprocess.Popen | None = None
 
     def run(self) -> None:
         self._create_window()
@@ -735,7 +791,7 @@ class NativeTrayIcon:
         menu = user32.CreatePopupMenu()
         check_windows_result(menu, "CreatePopupMenu")
         user32.AppendMenuW(menu, MF_STRING, CMD_OPEN, "打开网页")
-        user32.AppendMenuW(menu, MF_STRING, CMD_MANAGE_FOLDERS, "管理照片库目录...")
+        user32.AppendMenuW(menu, MF_STRING, CMD_OPEN_SETTINGS, "打开本机设置...")
         checked = MF_CHECKED if is_autostart_enabled() else MF_UNCHECKED
         user32.AppendMenuW(menu, MF_STRING | checked, CMD_TOGGLE_AUTOSTART, "开机启动")
         user32.AppendMenuW(menu, MF_SEPARATOR, 0, None)
@@ -752,17 +808,21 @@ class NativeTrayIcon:
         if command == CMD_OPEN:
             logging.info("Opening browser: %s", self.runtime.local_url)
             open_in_browser(self.runtime)
-        elif command == CMD_MANAGE_FOLDERS:
-            logging.info("Opening photo folder manager")
+        elif command == CMD_OPEN_SETTINGS:
+            logging.info("Opening local config UI")
             try:
-                updated = manage_photo_folders(self.runtime.config_path)
+                if self.settings_process is None or self.settings_process.poll() is not None:
+                    self.settings_process = open_config_ui(self.runtime.config_path)
             except Exception:
-                logging.exception("Photo folder manager failed")
-                return
-            if updated is not None:
-                logging.info("Photo folders updated; restarting service")
-                self.runtime = self.runtime.restart()
-                print_startup_summary(self.runtime)
+                logging.exception("Config UI failed; falling back to photo folder manager")
+                try:
+                    updated = manage_photo_folders(self.runtime.config_path)
+                except Exception:
+                    logging.exception("Photo folder manager failed")
+                    return
+                if updated is None:
+                    return
+                returncode = 0
         elif command == CMD_TOGGLE_AUTOSTART:
             enabled = not is_autostart_enabled()
             set_autostart_enabled(enabled)
@@ -773,6 +833,14 @@ class NativeTrayIcon:
             user32.DestroyWindow(self.hwnd)
 
     def _wndproc(self, hwnd, msg, wparam, lparam):
+        if msg == WM_RESTART_SERVICE:
+            logging.info("Restart requested by config UI")
+            try:
+                self.runtime = self.runtime.restart()
+                print_startup_summary(self.runtime)
+            except Exception:
+                logging.exception("Failed to restart service after config change")
+            return 0
         if msg == WM_TRAYICON:
             if lparam == WM_RBUTTONUP:
                 self._show_menu()
