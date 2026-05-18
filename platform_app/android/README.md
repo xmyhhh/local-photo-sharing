@@ -1,22 +1,37 @@
 # Android Platform App
 
-这是一个本地 Android APK 封装工程。
+这是 Local Photo Sharing 的 Android 壳子。它不做原生图库 UI，也不把 WebView 当主界面；APK 负责启动打包在应用内的 Python `core` 服务，并把本机地址、局域网地址显示出来，供同一 Wi-Fi / 局域网里的其他设备访问。
 
-当前内容：
+## 内容
 
-- 原生 Android `app` 模块
-- 本机照片权限申请
-- 通过 `MediaStore` 读取本地图片
-- 使用原生网格展示本地图库缩略图
-- 使用项目 photo gallery 图标作为 APK 桌面图标
+- Android 原生控制面板
+- Foreground service 持有 Python 服务进程
+- Chaquopy 打包 `core/` 和 `plugins/`
+- APK 图标使用 `core/assets/icons8-photo-gallery-96.png`
+- 适配状态栏、导航栏和挖孔屏安全区域
 
-建议下一步：
+## 默认目录
 
-1. 用 Android Studio 打开这个目录
-2. 让 IDE 自动同步 Gradle
-3. 安装缺失的 Android SDK 组件
-4. 运行 `app` 或执行 `gradlew assembleDebug` 生成 APK
+首次启动服务时会在应用私有数据目录创建 `photo_share/config.json`。默认照片目录是应用外部私有 Pictures 目录：
 
-如果 Android Studio 提示缺少 Gradle Wrapper，可以直接用 IDE 的同步/修复提示生成。
+```text
+Android/data/org.example.localphotoandroid/files/Pictures
+```
 
-后续如果要复用 Python `core` 服务能力，可以再评估 Chaquopy 或独立后端同步方案。
+这个目录不需要额外授权，适合作为 Android APK 初始可写照片库。后续如果要直接分享系统相册/DCIM，可以在配置里把 `photo_folders` 改成设备可访问的路径，并按 Android 版本处理媒体权限或存储访问授权。
+
+## 编译
+
+用 Android Studio 打开 `platform_app/android` 后同步 Gradle，选择一个 Python flavor 编译：
+
+```text
+py311Debug
+```
+
+也可以用命令行：
+
+```powershell
+.\gradlew.bat :app:assemblePy311Debug
+```
+
+如果本机 Python/Chaquopy 环境更适合 3.10 或 3.12，可以切到 `py310Debug` 或 `py312Debug`。

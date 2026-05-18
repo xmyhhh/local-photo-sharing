@@ -27,6 +27,7 @@ class ServerRuntime:
     port: int
     folders: list[Path]
     server: BaseWSGIServer
+    thread: object | None = None
 
     @property
     def local_url(self) -> str:
@@ -38,6 +39,21 @@ class ServerRuntime:
     def shutdown(self) -> None:
         self.server.shutdown()
         self.server.server_close()
+
+    def start_background(self) -> None:
+        import threading
+
+        thread = threading.Thread(target=self.serve_forever, name="photo-share-server", daemon=True)
+        thread.start()
+        self.thread = thread
+
+    def restart(self) -> "ServerRuntime":
+        self.shutdown()
+        if self.thread is not None:
+            self.thread.join(timeout=3)
+        runtime = create_server_runtime(self.config_path)
+        runtime.start_background()
+        return runtime
 
 
 def create_server_runtime(config_path: Path, warmup: bool = False) -> ServerRuntime:

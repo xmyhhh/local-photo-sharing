@@ -14,8 +14,9 @@
   max-height: min(820px, calc(100vh - 24px));
   display: flex;
   flex-direction: column;
-  background: var(--panel-bg, #fff);
-  border: 1px solid var(--border, rgba(20, 35, 45, 0.12));
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
   border-radius: 8px;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24);
   overflow: hidden;
@@ -28,11 +29,11 @@
   justify-content: space-between;
   gap: 12px;
   padding: 16px 18px;
-  border-bottom: 1px solid var(--border, rgba(20, 35, 45, 0.12));
+  border-bottom: 1px solid var(--line);
 }
 
 .removable-sync-actions {
-  border-top: 1px solid var(--border, rgba(20, 35, 45, 0.12));
+  border-top: 1px solid var(--line);
   border-bottom: 0;
   justify-content: flex-end;
 }
@@ -84,9 +85,9 @@
 .removable-sync-stats div {
   min-width: 0;
   padding: 10px;
-  border: 1px solid var(--border, rgba(20, 35, 45, 0.12));
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--surface, rgba(245, 248, 250, 0.86));
+  background: var(--panel-soft);
 }
 
 .removable-sync-stats span {
@@ -106,7 +107,7 @@
 .removable-sync-progress {
   height: 8px;
   border-radius: 999px;
-  background: var(--surface, rgba(226, 232, 240, 0.9));
+  background: var(--panel-soft);
   overflow: hidden;
   margin-bottom: 10px;
 }
@@ -129,9 +130,9 @@
   grid-template-columns: minmax(0, 1fr);
   gap: 3px;
   padding: 9px 10px;
-  border: 1px solid var(--border, rgba(20, 35, 45, 0.12));
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--panel-bg, #fff);
+  background: var(--panel);
 }
 
 .removable-sync-row-name {
@@ -145,18 +146,18 @@
 
 .removable-sync-row[data-status="saved"] {
   border-color: rgba(22, 163, 74, 0.35);
-  background: rgba(240, 253, 244, 0.72);
+  background: color-mix(in srgb, #16a34a 14%, var(--panel));
 }
 
 .removable-sync-row[data-status="duplicate"] {
   border-color: rgba(100, 116, 139, 0.24);
-  background: rgba(248, 250, 252, 0.88);
+  background: var(--panel-soft);
 }
 
 .removable-sync-row[data-status="error"],
 .removable-sync-row[data-status="rejected"] {
   border-color: rgba(220, 38, 38, 0.35);
-  background: rgba(254, 242, 242, 0.76);
+  background: color-mix(in srgb, #dc2626 13%, var(--panel));
 }
 
 .removable-sync-row[data-status="hashing"],

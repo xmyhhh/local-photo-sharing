@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Any, Callable
 from uuid import uuid4
 
-import cv2
 import numpy as np
 from PIL import Image, ImageEnhance, ImageOps
 
@@ -24,6 +23,7 @@ def merge_bracket_groups(
     params: dict[str, Any],
     progress_callback: ProgressCallback | None = None,
 ) -> dict[str, Any]:
+    _require_cv2()
     selected_ids = set(group_ids)
     selected = [group for group in groups if int(group.get("id", -1)) in selected_ids]
     if not selected:
@@ -78,6 +78,7 @@ def create_output_dir() -> Path:
 
 
 def merge_one_group(source_paths: list[Path], output_path: Path, params: dict[str, Any]) -> str:
+    _require_cv2()
     if not source_paths:
         raise ValueError("Bracket group has no photos.")
     arrays = load_rgb_arrays(source_paths)
@@ -104,6 +105,15 @@ def get_algorithm(params: dict[str, Any]) -> str:
     if value in {"fusion", "debevec", "robertson"}:
         return value
     return "fusion"
+
+
+def _require_cv2():
+    try:
+        import cv2 as module
+    except ImportError as exc:
+        raise RuntimeError("OpenCV is not available in this build, so bracket merging cannot run.") from exc
+    globals()["cv2"] = module
+    return module
 
 
 def get_alignment(params: dict[str, Any]) -> str:

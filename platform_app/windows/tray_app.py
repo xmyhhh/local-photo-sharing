@@ -5,13 +5,12 @@ from ctypes import wintypes
 import logging
 import os
 import subprocess
-import threading
 import webbrowser
 from pathlib import Path
 import sys
 import winreg
 
-from core.photo_share.config import build_default_config, get_config_path, parse_args, write_config
+from core.photo_share.config import build_default_config, get_config_path, load_config, parse_args, write_config
 from core.photo_share.runtime import get_app_base_dir, get_resource_base_dir
 from core.photo_share.server import ServerRuntime, create_server_runtime
 
@@ -43,8 +42,9 @@ IMAGE_ICON = 1
 LR_LOADFROMFILE = 0x00000010
 TRAY_ICON_RELATIVE_PATH = Path("assets") / "icons8-photo-gallery-96.ico"
 CMD_OPEN = 1001
-CMD_TOGGLE_AUTOSTART = 1002
-CMD_EXIT = 1003
+CMD_MANAGE_FOLDERS = 1002
+CMD_TOGGLE_AUTOSTART = 1003
+CMD_EXIT = 1004
 
 LRESULT = ctypes.c_ssize_t
 WNDPROC = ctypes.WINFUNCTYPE(LRESULT, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM)
@@ -172,39 +172,398 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {{
     return Path(selected).expanduser()
 
 
-def write_initial_photo_config(config_path: Path, photo_root: Path) -> None:
-    photo_root.mkdir(parents=True, exist_ok=True)
-    write_config(config_path, build_default_config(photo_root))
+def choose_photo_roots(reason: str, default_path: Path) -> list[Path] | None:
+    escaped_reason = reason.replace("'", "''")
+    escaped_default = str(default_path).replace("'", "''")
+    ps_script = f"""
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$folders = New-Object System.Collections.Generic.List[string]
+$defaultPath = '{escaped_default}'
+$intro = [System.Windows.Forms.MessageBox]::Show(
+    '{escaped_reason}`n`n是 = 先添加默认目录`n否 = 自己选择目录`n取消 = 退出引导',
+    '{APP_NAME}',
+    [System.Windows.Forms.MessageBoxButtons]::YesNoCancel,
+    [System.Windows.Forms.MessageBoxIcon]::Question
+)
+if ($intro -eq [System.Windows.Forms.DialogResult]::Cancel) {{
+    Write-Output '__CANCEL__'
+    exit 0
+}}
+if ($intro -eq [System.Windows.Forms.DialogResult]::Yes) {{
+    $folders.Add($defaultPath)
+}}
+while ($true) {{
+    $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+    $dialog.Description = '选择要加入照片库的目录'
+    $dialog.SelectedPath = $defaultPath
+    $dialog.ShowNewFolderButton = $true
+    if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {{
+        if (-not $folders.Contains($dialog.SelectedPath)) {{
+            $folders.Add($dialog.SelectedPath)
+        }}
+    }}
+    $summary = if ($folders.Count -gt 0) {{ [string]::Join("`n", $folders.ToArray()) }} else {{ '(none yet)' }}
+    $again = [System.Windows.Forms.MessageBox]::Show(
+        "当前照片库目录:`n$summary`n`n继续添加目录吗？",
+        '{APP_NAME}',
+        [System.Windows.Forms.MessageBoxButtons]::YesNo,
+        [System.Windows.Forms.MessageBoxIcon]::Question
+    )
+    if ($again -ne [System.Windows.Forms.DialogResult]::Yes) {{
+        break
+    }}
+}}
+if ($folders.Count -eq 0) {{
+    Write-Output '__CANCEL__'
+}} else {{
+    $folders | ForEach-Object {{ Write-Output $_ }}
+}}
+"""
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    result = subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-STA",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            ps_script,
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        creationflags=creationflags,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Unable to open folder picker: {result.stderr.strip() or result.stdout.strip()}")
+    selected = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+    if not selected or selected == ["__CANCEL__"]:
+        return None
+    return [Path(item).expanduser() for item in selected if item != "__CANCEL__"]
+
+
+def manage_photo_folders(config_path: Path) -> list[Path] | None:
+    config = load_config(config_path)
+    if config is None:
+        return None
+    existing = [str(Path(item).expanduser()) for item in config.get("photo_folders", []) if isinstance(item, str) and item.strip()]
+    default_save = str(Path(config.get("default_save_folder") or (existing[0] if existing else default_photo_root())).expanduser())
+    escaped_config = str(config_path).replace("'", "''")
+    escaped_existing = "|".join(item.replace("|", " ") for item in existing).replace("'", "''")
+    escaped_default = default_save.replace("|", " ").replace("'", "''")
+    ps_script = f"""
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+[System.Windows.Forms.Application]::EnableVisualStyles()
+
+$form = New-Object System.Windows.Forms.Form
+$form.Text = '照片库目录'
+$form.StartPosition = 'CenterScreen'
+$form.Width = 780
+$form.Height = 560
+$form.MinimizeBox = $false
+$form.MaximizeBox = $false
+$form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
+$form.ShowIcon = $false
+$form.BackColor = [System.Drawing.Color]::FromArgb(246, 248, 250)
+$form.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9)
+
+$accent = [System.Drawing.Color]::FromArgb(23, 107, 135)
+$accentDark = [System.Drawing.Color]::FromArgb(15, 80, 101)
+$panel = [System.Drawing.Color]::White
+$muted = [System.Drawing.Color]::FromArgb(96, 113, 128)
+$line = [System.Drawing.Color]::FromArgb(215, 224, 232)
+
+function Set-ButtonStyle($button, [bool]$primary = $false) {{
+    $button.Height = 36
+    $button.FlatStyle = [System.Windows.Forms.FlatStyle]::Flat
+    $button.FlatAppearance.BorderSize = 1
+    $button.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 9, [System.Drawing.FontStyle]::Bold)
+    if ($primary) {{
+        $button.BackColor = $accent
+        $button.ForeColor = [System.Drawing.Color]::White
+        $button.FlatAppearance.BorderColor = $accentDark
+    }} else {{
+        $button.BackColor = [System.Drawing.Color]::White
+        $button.ForeColor = $accentDark
+        $button.FlatAppearance.BorderColor = $line
+    }}
+}}
+
+$title = New-Object System.Windows.Forms.Label
+$title.Text = '管理照片库目录'
+$title.Left = 24
+$title.Top = 22
+$title.Width = 320
+$title.Height = 34
+$title.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 18, [System.Drawing.FontStyle]::Bold)
+$title.ForeColor = [System.Drawing.Color]::FromArgb(28, 35, 43)
+$form.Controls.Add($title)
+
+$subtitle = New-Object System.Windows.Forms.Label
+$subtitle.Text = '这些本机目录会组合成网页中的照片库入口。修改后会自动重启本机服务。'
+$subtitle.Left = 26
+$subtitle.Top = 62
+$subtitle.Width = 660
+$subtitle.Height = 24
+$subtitle.ForeColor = $muted
+$form.Controls.Add($subtitle)
+
+$card = New-Object System.Windows.Forms.Panel
+$card.Left = 24
+$card.Top = 100
+$card.Width = 710
+$card.Height = 330
+$card.BackColor = $panel
+$card.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+$form.Controls.Add($card)
+
+$listLabel = New-Object System.Windows.Forms.Label
+$listLabel.Text = '照片库目录'
+$listLabel.Left = 18
+$listLabel.Top = 14
+$listLabel.Width = 160
+$listLabel.Height = 24
+$listLabel.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 10, [System.Drawing.FontStyle]::Bold)
+$card.Controls.Add($listLabel)
+
+$hintLabel = New-Object System.Windows.Forms.Label
+$hintLabel.Text = '第一项会作为默认浏览入口；可以用上移、下移调整顺序。'
+$hintLabel.Left = 18
+$hintLabel.Top = 40
+$hintLabel.Width = 520
+$hintLabel.Height = 22
+$hintLabel.ForeColor = $muted
+$card.Controls.Add($hintLabel)
+
+$list = New-Object System.Windows.Forms.ListBox
+$list.Left = 18
+$list.Top = 72
+$list.Width = 510
+$list.Height = 238
+$list.HorizontalScrollbar = $true
+$list.BorderStyle = [System.Windows.Forms.BorderStyle]::FixedSingle
+$list.BackColor = [System.Drawing.Color]::FromArgb(252, 253, 254)
+$card.Controls.Add($list)
+
+$addButton = New-Object System.Windows.Forms.Button
+$addButton.Text = '添加...'
+$addButton.Left = 552
+$addButton.Top = 72
+$addButton.Width = 126
+Set-ButtonStyle $addButton $true
+$card.Controls.Add($addButton)
+
+$removeButton = New-Object System.Windows.Forms.Button
+$removeButton.Text = '删除'
+$removeButton.Left = 552
+$removeButton.Top = 116
+$removeButton.Width = 126
+Set-ButtonStyle $removeButton
+$card.Controls.Add($removeButton)
+
+$upButton = New-Object System.Windows.Forms.Button
+$upButton.Text = '上移'
+$upButton.Left = 552
+$upButton.Top = 176
+$upButton.Width = 126
+Set-ButtonStyle $upButton
+$card.Controls.Add($upButton)
+
+$downButton = New-Object System.Windows.Forms.Button
+$downButton.Text = '下移'
+$downButton.Left = 552
+$downButton.Top = 220
+$downButton.Width = 126
+Set-ButtonStyle $downButton
+$card.Controls.Add($downButton)
+
+$defaultLabel = New-Object System.Windows.Forms.Label
+$defaultLabel.Text = '默认上传目录'
+$defaultLabel.Left = 26
+$defaultLabel.Top = 452
+$defaultLabel.Width = 170
+$defaultLabel.Height = 24
+$defaultLabel.Font = New-Object System.Drawing.Font('Microsoft YaHei UI', 10, [System.Drawing.FontStyle]::Bold)
+$form.Controls.Add($defaultLabel)
+
+$defaultBox = New-Object System.Windows.Forms.ComboBox
+$defaultBox.Left = 150
+$defaultBox.Top = 448
+$defaultBox.Width = 390
+$defaultBox.Height = 34
+$defaultBox.DropDownStyle = [System.Windows.Forms.ComboBoxStyle]::DropDownList
+$form.Controls.Add($defaultBox)
+
+$okButton = New-Object System.Windows.Forms.Button
+$okButton.Text = '保存并重启服务'
+$okButton.Left = 548
+$okButton.Top = 496
+$okButton.Width = 186
+$okButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
+$form.AcceptButton = $okButton
+Set-ButtonStyle $okButton $true
+$form.Controls.Add($okButton)
+
+$cancelButton = New-Object System.Windows.Forms.Button
+$cancelButton.Text = '取消'
+$cancelButton.Left = 412
+$cancelButton.Top = 496
+$cancelButton.Width = 120
+$cancelButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+$form.CancelButton = $cancelButton
+Set-ButtonStyle $cancelButton
+$form.Controls.Add($cancelButton)
+
+function Sync-DefaultBox {{
+    $current = $defaultBox.SelectedItem
+    $defaultBox.Items.Clear()
+    foreach ($item in $list.Items) {{ [void]$defaultBox.Items.Add($item) }}
+    if ($current -and $defaultBox.Items.Contains($current)) {{
+        $defaultBox.SelectedItem = $current
+    }} elseif ($defaultBox.Items.Count -gt 0) {{
+        $defaultBox.SelectedIndex = 0
+    }}
+    $removeButton.Enabled = $list.Items.Count -gt 1
+    $okButton.Enabled = $list.Items.Count -gt 0
+}}
+
+$initial = '{escaped_existing}'
+if ($initial.Length -gt 0) {{
+    foreach ($item in $initial.Split('|')) {{
+        if ($item.Trim().Length -gt 0 -and -not $list.Items.Contains($item)) {{ [void]$list.Items.Add($item) }}
+    }}
+}}
+Sync-DefaultBox
+$default = '{escaped_default}'
+if ($defaultBox.Items.Contains($default)) {{ $defaultBox.SelectedItem = $default }}
+
+$addButton.Add_Click({{
+    $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+    $dialog.Description = '选择要加入照片库的目录'
+    $dialog.ShowNewFolderButton = $true
+    if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {{
+        if (-not $list.Items.Contains($dialog.SelectedPath)) {{
+            [void]$list.Items.Add($dialog.SelectedPath)
+            $list.SelectedItem = $dialog.SelectedPath
+            Sync-DefaultBox
+        }} else {{
+            [System.Windows.Forms.MessageBox]::Show('这个目录已经在列表中。', '照片库目录', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
+        }}
+    }}
+}})
+
+$removeButton.Add_Click({{
+    $index = $list.SelectedIndex
+    if ($index -ge 0 -and $list.Items.Count -gt 1) {{
+        $list.Items.RemoveAt($index)
+        if ($list.Items.Count -gt 0) {{ $list.SelectedIndex = [Math]::Min($index, $list.Items.Count - 1) }}
+        Sync-DefaultBox
+    }}
+}})
+
+$upButton.Add_Click({{
+    $index = $list.SelectedIndex
+    if ($index -gt 0) {{
+        $item = $list.Items[$index]
+        $list.Items.RemoveAt($index)
+        $list.Items.Insert($index - 1, $item)
+        $list.SelectedIndex = $index - 1
+        Sync-DefaultBox
+    }}
+}})
+
+$downButton.Add_Click({{
+    $index = $list.SelectedIndex
+    if ($index -ge 0 -and $index -lt $list.Items.Count - 1) {{
+        $item = $list.Items[$index]
+        $list.Items.RemoveAt($index)
+        $list.Items.Insert($index + 1, $item)
+        $list.SelectedIndex = $index + 1
+        Sync-DefaultBox
+    }}
+}})
+
+if ($form.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) {{
+    Write-Output '__CANCEL__'
+    exit 0
+}}
+foreach ($item in $list.Items) {{ Write-Output "ROOT::$item" }}
+Write-Output "DEFAULT::$($defaultBox.SelectedItem)"
+"""
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    result = subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-STA",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            ps_script,
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        creationflags=creationflags,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Unable to open folder manager: {result.stderr.strip() or result.stdout.strip()}")
+    lines = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+    if not lines or lines == ["__CANCEL__"]:
+        return None
+    roots = [Path(line[len("ROOT::"):]).expanduser() for line in lines if line.startswith("ROOT::")]
+    default_lines = [line[len("DEFAULT::"):] for line in lines if line.startswith("DEFAULT::")]
+    if not roots:
+        return None
+    default = Path(default_lines[-1]).expanduser() if default_lines else roots[0]
+    config["photo_folders"] = [str(root) for root in roots]
+    config["default_save_folder"] = str(default)
+    for root in roots:
+        root.mkdir(parents=True, exist_ok=True)
+    default.mkdir(parents=True, exist_ok=True)
+    write_config(config_path, config)
+    return roots
+
+
+def write_initial_photo_config(config_path: Path, photo_roots: list[Path]) -> None:
+    for photo_root in photo_roots:
+        photo_root.mkdir(parents=True, exist_ok=True)
+    write_config(config_path, build_default_config(photo_roots))
 
 
 def ensure_tray_config_ready(config_path: Path) -> bool:
     if config_path.exists():
         return True
-    selected = choose_photo_root(
-        "First launch: choose a folder for your photo library.\n\n"
-        "Yes = use the default folder shown below\n"
-        "No = choose another folder",
+    selected = choose_photo_roots(
+        "首次启动：请选择一个或多个照片库目录。",
         default_photo_root(),
     )
     if selected is None:
         logging.info("Initial setup cancelled before config creation")
         return False
     write_initial_photo_config(config_path, selected)
-    logging.info("Created initial config at %s with photo root %s", config_path, selected)
+    logging.info("Created initial config at %s with photo roots %s", config_path, selected)
     return True
 
 
 def prompt_repair_photo_root(config_path: Path, error: Exception) -> bool:
     message = (
-        "The current photo library folder is missing or invalid.\n\n"
+        "当前照片库目录不存在或不可用。\n\n"
         f"{error}\n\n"
-        "Yes = use the default folder shown below\nNo = choose another folder"
+        "是 = 使用下面显示的默认目录\n否 = 选择另一个目录"
     )
     selected = choose_photo_root(message, default_photo_root())
     if selected is None:
         logging.info("Photo root repair cancelled")
         return False
-    write_initial_photo_config(config_path, selected)
+    write_initial_photo_config(config_path, [selected])
     logging.info("Updated config at %s with repaired photo root %s", config_path, selected)
     return True
 
@@ -375,11 +734,12 @@ class NativeTrayIcon:
     def _show_menu(self) -> None:
         menu = user32.CreatePopupMenu()
         check_windows_result(menu, "CreatePopupMenu")
-        user32.AppendMenuW(menu, MF_STRING, CMD_OPEN, "Open Web UI")
+        user32.AppendMenuW(menu, MF_STRING, CMD_OPEN, "打开网页")
+        user32.AppendMenuW(menu, MF_STRING, CMD_MANAGE_FOLDERS, "管理照片库目录...")
         checked = MF_CHECKED if is_autostart_enabled() else MF_UNCHECKED
-        user32.AppendMenuW(menu, MF_STRING | checked, CMD_TOGGLE_AUTOSTART, "Launch at startup")
+        user32.AppendMenuW(menu, MF_STRING | checked, CMD_TOGGLE_AUTOSTART, "开机启动")
         user32.AppendMenuW(menu, MF_SEPARATOR, 0, None)
-        user32.AppendMenuW(menu, MF_STRING, CMD_EXIT, "Exit")
+        user32.AppendMenuW(menu, MF_STRING, CMD_EXIT, "退出")
         point = POINT()
         user32.GetCursorPos(ctypes.byref(point))
         user32.SetForegroundWindow(self.hwnd)
@@ -392,6 +752,17 @@ class NativeTrayIcon:
         if command == CMD_OPEN:
             logging.info("Opening browser: %s", self.runtime.local_url)
             open_in_browser(self.runtime)
+        elif command == CMD_MANAGE_FOLDERS:
+            logging.info("Opening photo folder manager")
+            try:
+                updated = manage_photo_folders(self.runtime.config_path)
+            except Exception:
+                logging.exception("Photo folder manager failed")
+                return
+            if updated is not None:
+                logging.info("Photo folders updated; restarting service")
+                self.runtime = self.runtime.restart()
+                print_startup_summary(self.runtime)
         elif command == CMD_TOGGLE_AUTOSTART:
             enabled = not is_autostart_enabled()
             set_autostart_enabled(enabled)
@@ -436,8 +807,7 @@ def main() -> None:
     print_startup_summary(runtime)
     logging.info("Starting tray app with config %s", config_path)
 
-    server_thread = threading.Thread(target=runtime.serve_forever, name="photo-share-server", daemon=True)
-    server_thread.start()
+    runtime.start_background()
 
     logging.info("Tray window starting; log file: %s", log_path)
     NativeTrayIcon(runtime).run()

@@ -4,6 +4,14 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>拼图工作台</title>
+    <script>
+      (() => {
+        const mode = window.localStorage.getItem("themeMode");
+        if (["system", "light", "dark"].includes(mode)) {
+          document.documentElement.dataset.theme = mode;
+        }
+      })();
+    </script>
     <link rel="stylesheet" href="/static/styles.css" />
     <link rel="stylesheet" href="/plugin-assets/collage/collage.css" />
   </head>

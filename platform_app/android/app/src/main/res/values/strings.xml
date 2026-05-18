@@ -1,7 +1,21 @@
 <resources>
     <string name="app_name">Local Photo Sharing</string>
-    <string name="ready">正在准备本地图库</string>
-    <string name="refresh">刷新</string>
-    <string name="grant_permission">授权照片访问</string>
-    <string name="empty_gallery">没有找到照片</string>
+    <string name="service_shell_subtitle">在手机上启动 Python 服务，让同一局域网内的设备访问照片库。</string>
+    <string name="status">状态</string>
+    <string name="service_stopped">服务未启动</string>
+    <string name="service_starting">服务启动中</string>
+    <string name="service_running">服务运行中</string>
+    <string name="service_error">服务启动失败</string>
+    <string name="service_ready_hint">启动后会显示本机和局域网访问地址。</string>
+    <string name="service_running_hint">保持应用运行，其他设备可通过局域网地址访问。</string>
+    <string name="local_url">本机地址</string>
+    <string name="lan_url">局域网地址</string>
+    <string name="url_placeholder">-</string>
+    <string name="start_service">启动服务</string>
+    <string name="stop_service">停止服务</string>
+    <string name="copy_lan_url">复制局域网地址</string>
+    <string name="open_local">打开本机地址</string>
+    <string name="copied">已复制</string>
+    <string name="service_notification_title">Local Photo Sharing 正在运行</string>
+    <string name="service_notification_text">同一局域网设备可以访问照片服务。</string>
 </resources>

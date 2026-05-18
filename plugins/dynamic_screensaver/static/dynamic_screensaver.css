@@ -135,11 +135,11 @@
 .dynamic-screensaver-settings-card input,
 .dynamic-screensaver-settings-card select {
   min-height: 42px;
-  border: 1px solid rgba(154, 174, 187, 0.36);
+  border: 1px solid var(--input-border);
   border-radius: 10px;
   padding: 0 12px;
-  background: rgba(255, 255, 255, 0.92);
-  color: var(--text);
+  background: var(--input-bg);
+  color: var(--input-text);
   font: inherit;
 }
 
